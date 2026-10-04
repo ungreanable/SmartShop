@@ -33,7 +33,7 @@ dotnet run --project src/Hosts/SmartShop.Worker --launch-profile http   # :5090
 dotnet run --project src/Clients/SmartShop.Web --launch-profile http    # :5100 เปิดอันนี้ในเบราว์เซอร์
 ```
 
-ใน Development ใช้ปุ่ม **Dev login** ได้โดยไม่ต้องตั้งค่า LINE หรือใช้ .NET Aspire แทนก็ได้: `dotnet run --project src/Aspire/SmartShop.AppHost` รายละเอียดอยู่ใน [CONTRIBUTING.md](CONTRIBUTING.md)
+ใน Development ใช้ปุ่ม **Dev login** ได้โดยไม่ต้องตั้งค่า LINE · คู่มือติดตั้งฉบับเต็ม (สิ่งที่ต้องเตรียม, ตั้งค่า LINE, ขึ้น Server จริง): **[docs/07-installation.md](docs/07-installation.md)**
 
 ## Deploy
 
@@ -50,6 +50,7 @@ dotnet run --project src/Clients/SmartShop.Web --launch-profile http    # :5100 
 4. [Domain Model & Events](docs/04-domain-model.md): ERD, State Machine, Stock Logic, Event Catalog
 5. [Roadmap](docs/05-roadmap.md): สถานะแต่ละ Phase และ Decisions Log
 6. [Public API & Webhooks](docs/06-public-api.md): เชื่อมต่อ POS / เครื่องพิมพ์ / ระบบอื่น
+7. [Installation](docs/07-installation.md): สิ่งที่ต้องเตรียม และวิธีติดตั้งแต่ละแบบ
 
 ## Tech Stack (สรุป)
 

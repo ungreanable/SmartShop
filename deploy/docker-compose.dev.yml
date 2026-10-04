@@ -1,6 +1,6 @@
 # Local infrastructure for development without Aspire:
 #   docker compose -f deploy/docker-compose.dev.yml up -d
-# then run the services (see docs/development.md). Ports are fixed and match appsettings.Development.json.
+# then run the services (see docs/07-installation.md). Ports are fixed and match appsettings.Development.json.
 name: smartshop-dev
 
 services:
@@ -26,7 +26,12 @@ services:
 
   seaweedfs:
     image: chrislusf/seaweedfs:3.97
-    command: ["server", "-s3", "-dir=/data", "-master.volumeSizeLimitMB=256"]
+    # Same S3 identity as appsettings.Development.json (smartshop / smartshop).
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        printf '{"identities":[{"name":"smartshop","credentials":[{"accessKey":"smartshop","secretKey":"smartshop"}],"actions":["Admin","Read","Write","List","Tagging"]}]}' > /tmp/s3.json
+        exec /usr/bin/weed -logtostderr=true server -dir=/data -volume.max=0 -master.volumeSizeLimitMB=256 -s3 -s3.config=/tmp/s3.json
     ports: ["8333:8333"]
     volumes: [dev-seaweedfs:/data]
 

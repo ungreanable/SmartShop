@@ -120,16 +120,18 @@ public static class SmartShopHost
             configuration.GetValue(RowLevelSecurity.ConfigKey, false), logger, ct);
     }
 
+    /// <summary>Commands that need no configuration (run before the host is built): <c>vapid</c> prints new Web Push keys.</summary>
+    public static bool TryRunTool(string[] args)
+    {
+        if (!args.Contains("vapid", StringComparer.OrdinalIgnoreCase)) return false;
+        var (publicKey, privateKey) = SmartShop.Modules.Notifications.NotificationsModule.GenerateVapidKeys();
+        Console.WriteLine($"VAPID_PUBLIC_KEY={publicKey}");
+        Console.WriteLine($"VAPID_PRIVATE_KEY={privateKey}");
+        return true;
+    }
+
     public static async Task RunSmartShopAsync(this WebApplication app, string[] args)
     {
-        if (args.Contains("vapid", StringComparer.OrdinalIgnoreCase))
-        {
-            var (publicKey, privateKey) = SmartShop.Modules.Notifications.NotificationsModule.GenerateVapidKeys();
-            Console.WriteLine($"VAPID_PUBLIC_KEY={publicKey}");
-            Console.WriteLine($"VAPID_PRIVATE_KEY={privateKey}");
-            return;
-        }
-
         if (args.Contains("migrate", StringComparer.OrdinalIgnoreCase))
         {
             await MigrateAsync(app.Services);

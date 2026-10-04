@@ -2,6 +2,7 @@ using SmartShop.Bootstrap;
 using SmartShop.Infrastructure.Messaging;
 
 if (HealthProbe.IsRequested(args)) return await HealthProbe.RunAsync();
+if (SmartShopHost.TryRunTool(args)) return 0;
 
 var builder = WebApplication.CreateBuilder(args);
 

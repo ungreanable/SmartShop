@@ -5,7 +5,8 @@
 name: smartshop
 
 x-app-env: &app-env
-  ASPNETCORE_ENVIRONMENT: Production
+  ASPNETCORE_ENVIRONMENT: "${APP_ENVIRONMENT:-Production}"
+  Auth__DevLogin__Enabled: "${DEV_LOGIN_ENABLED:-false}"
   ConnectionStrings__smartshop: "Host=postgres;Database=smartshop;Username=smartshop;Password=${POSTGRES_PASSWORD}"
   ConnectionStrings__cache: "valkey:6379"
   ConnectionStrings__rabbitmq: "amqp://smartshop:${RABBITMQ_PASSWORD}@rabbitmq:5672"
@@ -26,8 +27,8 @@ x-app-env: &app-env
   Storage__Provider: S3
   Storage__ServiceUrl: "http://seaweedfs:8333"
   Storage__Bucket: smartshop
-  Storage__AccessKey: smartshop
-  Storage__SecretKey: smartshop
+  Storage__AccessKey: "${STORAGE_ACCESS_KEY}"
+  Storage__SecretKey: "${STORAGE_SECRET_KEY}"
   App__PublicUrl: "https://${DOMAIN}"
   OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
   Database__RowLevelSecurity: "${DATABASE_ROW_LEVEL_SECURITY:-false}"
@@ -52,10 +53,11 @@ services:
       web: { condition: service_started }
 
   web:
-    image: ghcr.io/${GITHUB_OWNER:-smartshop-village}/smartshop-web:${TAG:-latest}
+    image: ${IMAGE_PREFIX:-ghcr.io/smartshop-village}/smartshop-web:${TAG:-latest}
     restart: unless-stopped
     environment:
-      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_ENVIRONMENT: "${APP_ENVIRONMENT:-Production}"
+      Auth__DevLogin__Enabled: "${DEV_LOGIN_ENABLED:-false}"
       ReverseProxy__Clusters__api__Destinations__api__Address: "http://api:8080"
       # Public client settings served at /app-config.json
       Auth__Line__ChannelId: "${LINE_LOGIN_CHANNEL_ID}"
@@ -64,7 +66,7 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
 
   api:
-    image: ghcr.io/${GITHUB_OWNER:-smartshop-village}/smartshop-api:${TAG:-latest}
+    image: ${IMAGE_PREFIX:-ghcr.io/smartshop-village}/smartshop-api:${TAG:-latest}
     restart: unless-stopped
     environment:
       <<: *app-env
@@ -81,7 +83,7 @@ services:
       rabbitmq: { condition: service_healthy }
 
   worker:
-    image: ghcr.io/${GITHUB_OWNER:-smartshop-village}/smartshop-worker:${TAG:-latest}
+    image: ${IMAGE_PREFIX:-ghcr.io/smartshop-village}/smartshop-worker:${TAG:-latest}
     restart: unless-stopped
     environment:
       <<: *app-env
@@ -97,7 +99,7 @@ services:
 
   # Applies EF Core migrations of every module, then exits.
   migrator:
-    image: ghcr.io/${GITHUB_OWNER:-smartshop-village}/smartshop-api:${TAG:-latest}
+    image: ${IMAGE_PREFIX:-ghcr.io/smartshop-village}/smartshop-api:${TAG:-latest}
     restart: "no"
     command: ["migrate"]
     environment:
@@ -145,7 +147,15 @@ services:
   seaweedfs:
     image: chrislusf/seaweedfs:3.97
     restart: unless-stopped
-    command: ["server", "-s3", "-dir=/data", "-master.volumeSizeLimitMB=1024"]
+    # The S3 gateway only accepts signed requests from the identity in s3.json, written from .env at start.
+    environment:
+      S3_ACCESS_KEY: "${STORAGE_ACCESS_KEY}"
+      S3_SECRET_KEY: "${STORAGE_SECRET_KEY}"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        printf '{"identities":[{"name":"smartshop","credentials":[{"accessKey":"%s","secretKey":"%s"}],"actions":["Admin","Read","Write","List","Tagging"]}]}' "$$S3_ACCESS_KEY" "$$S3_SECRET_KEY" > /tmp/s3.json
+        exec /usr/bin/weed -logtostderr=true server -dir=/data -volume.max=0 -master.volumeSizeLimitMB=1024 -s3 -s3.config=/tmp/s3.json
     volumes: [seaweedfs-data:/data]
 
 volumes:
