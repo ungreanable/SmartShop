@@ -1,0 +1,28 @@
+name: Mobile
+
+# The MAUI app is built separately from the main CI: only when it changes, or on demand (Actions → Mobile → Run workflow).
+on:
+  push:
+    branches: [main]
+    paths: ["src/Clients/SmartShop.Mobile/**", ".github/workflows/mobile.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-java@v6
+        with:
+          distribution: microsoft
+          java-version: '17'
+      - name: Install MAUI workload
+        run: dotnet workload install maui-android
+      - name: Build Android app
+        run: dotnet build src/Clients/SmartShop.Mobile -f net10.0-android -c Release -v n

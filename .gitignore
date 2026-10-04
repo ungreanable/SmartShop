@@ -481,8 +481,8 @@ $RECYCLE.BIN/
 # Vim temporary swap files
 *.swp
 
-# SmartShop
-data/
+# SmartShop: runtime files of the hosts (local media storage). Not the modules' Data/ folders!
+/src/Hosts/*/data/
 deploy/.env
 *.local.json
 
