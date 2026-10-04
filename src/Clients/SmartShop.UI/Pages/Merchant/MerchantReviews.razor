@@ -1,0 +1,11 @@
+@page "/merchant/{ShopId:guid}/reviews"
+@layout MerchantLayout
+
+<div class="ss-page">
+    <MudText Typo="Typo.h5" Class="mb-2" Style="font-weight:700">@L["รีวิวจากลูกค้า", "Customer reviews"]</MudText>
+    <ReviewList ShopId="ShopId" CanReply="true" />
+</div>
+
+@code {
+    [Parameter] public Guid ShopId { get; set; }
+}

@@ -48,9 +48,9 @@ public interface IShopDirectory
 }
 
 public sealed record ShopApplicationSubmitted(Guid PlantId, Guid ApplicationId, Guid ApplicantId, string ShopName) : IntegrationEvent(PlantId);
-public sealed record ShopApplicationChangesRequested(Guid PlantId, Guid ApplicationId, Guid ApplicantId, string ShopName, string Note) : IntegrationEvent(PlantId);
-public sealed record ShopApplicationApproved(Guid PlantId, Guid ApplicationId, Guid ApplicantId, Guid ShopId, string ShopName) : IntegrationEvent(PlantId);
-public sealed record ShopApplicationRejected(Guid PlantId, Guid ApplicationId, Guid ApplicantId, string ShopName, string Reason) : IntegrationEvent(PlantId);
+public sealed record ShopApplicationChangesRequested(Guid PlantId, Guid ApplicationId, Guid ApplicantId, string ShopName, string Note, Guid ActorId) : IntegrationEvent(PlantId);
+public sealed record ShopApplicationApproved(Guid PlantId, Guid ApplicationId, Guid ApplicantId, Guid ShopId, string ShopName, Guid ActorId) : IntegrationEvent(PlantId);
+public sealed record ShopApplicationRejected(Guid PlantId, Guid ApplicationId, Guid ApplicantId, string ShopName, string Reason, Guid ActorId) : IntegrationEvent(PlantId);
 
 public sealed record ShopCreated(Guid PlantId, Guid ShopId, Guid OwnerId, string Name) : IntegrationEvent(PlantId);
 public sealed record ShopProfileUpdated(Guid PlantId, Guid ShopId) : IntegrationEvent(PlantId);

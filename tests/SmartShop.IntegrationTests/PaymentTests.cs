@@ -104,8 +104,14 @@ public class PaymentTests(SmartShopFactory factory)
         var s = await SetupAsync();
         await s.Owner.PutOkAsync($"/api/merchant/shops/{s.ShopId}/order-settings", new
         {
-            acceptMode = "Manual", acceptTimeoutMinutes = 15, reminderAfterMinutes = 3, autoCompleteHours = 12,
-            allowPreorderWhenClosed = false, prepTimeMinutes = 10, slotIntervalMinutes = 30, requirePaymentBeforePreparing = true,
+            acceptMode = "Manual",
+            acceptTimeoutMinutes = 15,
+            reminderAfterMinutes = 3,
+            autoCompleteHours = 12,
+            allowPreorderWhenClosed = false,
+            prepTimeMinutes = 10,
+            slotIntervalMinutes = 30,
+            requirePaymentBeforePreparing = true,
         });
         var order = await OrderAsync(s.Customer, s.ShopId, s.ItemId, s.PromptPayId);
         await s.Owner.PostOkAsync($"/api/merchant/orders/{order.Id}/accept");

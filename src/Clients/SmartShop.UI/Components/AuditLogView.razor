@@ -1,0 +1,76 @@
+@* Village audit log: who approved, suspended, hid or announced what. *@
+@inject Api Api
+
+<MudChipSet T="string" SelectedValue="_filter" SelectedValueChanged="FilterAsync" SelectionMode="SelectionMode.SingleSelection" CheckMark="false"
+            SelectedColor="Color.Primary" Variant="Variant.Outlined" Size="Size.Small">
+    <MudChip T="string" Value="@("")" Text="@L["ทั้งหมด", "All"]" />
+    <MudChip T="string" Value="@("membership.")" Text="@L["สมาชิก", "Members"]" />
+    <MudChip T="string" Value="@("shop")" Text="@L["ร้านค้า", "Shops"]" />
+    <MudChip T="string" Value="@("review.")" Text="@L["รีวิว", "Reviews"]" />
+</MudChipSet>
+
+@if (_page is null) { <Loading Rows="3" /> }
+else if (_page.Items.Count == 0) { <MudText Typo="Typo.body2" Class="ss-muted">@L["ยังไม่มีบันทึก", "Nothing recorded yet"]</MudText> }
+else
+{
+    @foreach (var e in _page.Items)
+    {
+        <div class="d-flex gap-2 py-1" style="border-bottom:1px solid var(--mud-palette-lines-default)">
+            <MudText Typo="Typo.caption" Class="ss-muted" Style="min-width:92px">@Fmt.DateTime(e.At)</MudText>
+            <MudText Typo="Typo.body2">
+                <b>@(e.ActorName ?? L["ระบบ", "System"])</b> @Describe(e.Action)
+                @if (e.SubjectName is not null) { <b> @e.SubjectName</b> }
+                @if (e.Detail is not null) { <span class="ss-muted"> — @e.Detail</span> }
+            </MudText>
+        </div>
+    }
+    @if (_page.Total > _page.Page * _page.PageSize)
+    {
+        <MudButton Size="Size.Small" Variant="Variant.Text" Class="mt-1" OnClick="MoreAsync">@L["ดูเพิ่ม", "More"]</MudButton>
+    }
+}
+
+@code {
+    private sealed record AuditEntry(Guid Id, string Action, Guid? ActorId, string? ActorName, string SubjectType, Guid SubjectId, string? SubjectName, string? Detail, DateTimeOffset At);
+    private sealed record AuditPage(List<AuditEntry> Items, int Total, int Page, int PageSize);
+
+    private string _filter = "";
+    private AuditPage? _page;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync(1);
+
+    private async Task FilterAsync(string filter)
+    {
+        _filter = filter ?? "";
+        await LoadAsync(1);
+    }
+
+    private async Task MoreAsync()
+    {
+        var current = _page!;
+        await LoadAsync(current.Page + 1);
+        if (_page is not null) _page = _page with { Items = [.. current.Items, .. _page.Items] };
+    }
+
+    private async Task LoadAsync(int page) =>
+        _page = await Api.Get<AuditPage>($"api/plant/admin/audit?page={page}&pageSize=50&action={Uri.EscapeDataString(_filter)}");
+
+    private string Describe(string action) => action switch
+    {
+        "membership.approved" => L["อนุมัติสมาชิก", "approved member"],
+        "membership.rejected" => L["ไม่อนุมัติ", "rejected"],
+        "membership.suspended" => L["ระงับสมาชิก", "suspended"],
+        "membership.reinstated" => L["คืนสิทธิ์สมาชิก", "reinstated"],
+        "membership.role_changed" => L["เปลี่ยนบทบาท", "changed role of"],
+        "announcement.published" => L["ประกาศ", "announced"],
+        "shop_application.approved" => L["อนุมัติร้าน", "approved shop"],
+        "shop_application.rejected" => L["ไม่อนุมัติร้าน", "rejected shop request"],
+        "shop_application.changes_requested" => L["ขอข้อมูลร้านเพิ่ม", "requested changes"],
+        "shop.suspended" => L["ระงับร้าน", "suspended a shop"],
+        "shop.reinstated" => L["เปิดร้านคืน", "reinstated a shop"],
+        "shop.ownership_transferred" => L["โอนร้านให้", "transferred a shop to"],
+        "review.hidden" => L["ซ่อนรีวิว", "hid a review"],
+        "review.unhidden" => L["แสดงรีวิว", "unhid a review"],
+        _ => action,
+    };
+}

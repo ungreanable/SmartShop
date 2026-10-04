@@ -25,12 +25,22 @@ public class CatalogTests(SmartShopFactory factory)
 
         await owner.PostOkAsync($"/api/merchant/shops/{shopId}/catalog/items", new
         {
-            kind = "Product", stockMode = "Tracked", name = "ข้าวมันไก่", price = 50, categoryId = category.Id,
-            imageIds = new[] { image.Id }, initialStock = 10, isRecommended = true,
+            kind = "Product",
+            stockMode = "Tracked",
+            name = "ข้าวมันไก่",
+            price = 50,
+            categoryId = category.Id,
+            imageIds = new[] { image.Id },
+            initialStock = 10,
+            isRecommended = true,
         });
         await owner.PostOkAsync($"/api/merchant/shops/{shopId}/catalog/items", new
         {
-            kind = "Service", stockMode = "Untracked", name = "นวดเท้า", price = 200, durationMinutes = 60,
+            kind = "Service",
+            stockMode = "Untracked",
+            name = "นวดเท้า",
+            price = 200,
+            durationMinutes = 60,
         });
 
         var customer = await factory.JoinAsync(plant, admin);
@@ -77,7 +87,10 @@ public class CatalogTests(SmartShopFactory factory)
         var to = TimeOnly.FromDateTime(now.AddHours(3).DateTime);
         await owner.PostOkAsync($"/api/merchant/shops/{shopId}/catalog/items", new
         {
-            kind = "Product", stockMode = "Untracked", name = "โจ๊ก", price = 35,
+            kind = "Product",
+            stockMode = "Untracked",
+            name = "โจ๊ก",
+            price = 35,
             windows = new[] { new { days = Array.Empty<int>(), from = from.ToString("HH:mm"), to = to.ToString("HH:mm") } },
         });
 
@@ -92,14 +105,20 @@ public class CatalogTests(SmartShopFactory factory)
         var (_, _, owner, shopId) = await factory.CreateShopAsync();
         var invalid = await owner.PostRawAsync($"/api/merchant/shops/{shopId}/catalog/items", new
         {
-            kind = "Product", stockMode = "Untracked", name = "ก๋วยเตี๋ยว", price = 40,
+            kind = "Product",
+            stockMode = "Untracked",
+            name = "ก๋วยเตี๋ยว",
+            price = 40,
             modifierGroups = new[] { new { name = "ขนาด", minSelect = 2, maxSelect = 1, options = new[] { new { name = "ธรรมดา", priceDelta = 0, isAvailable = true } } } },
         });
         invalid.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 
         var ok = await owner.PostAsync<MerchantItemDto>($"/api/merchant/shops/{shopId}/catalog/items", new
         {
-            kind = "Product", stockMode = "Untracked", name = "ก๋วยเตี๋ยว", price = 40,
+            kind = "Product",
+            stockMode = "Untracked",
+            name = "ก๋วยเตี๋ยว",
+            price = 40,
             modifierGroups = new[]
             {
                 new { name = "ขนาด", minSelect = 1, maxSelect = 1, options = new[] { new { name = "ธรรมดา", priceDelta = 0m, isAvailable = true }, new { name = "พิเศษ", priceDelta = 10m, isAvailable = true } } },

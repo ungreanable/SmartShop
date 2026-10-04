@@ -118,23 +118,36 @@ internal static class FlexMessages
                 ["size"] = "kilo",
                 ["header"] = new JsonObject
                 {
-                    ["type"] = "box", ["layout"] = "vertical", ["backgroundColor"] = color, ["paddingAll"] = "12px",
+                    ["type"] = "box",
+                    ["layout"] = "vertical",
+                    ["backgroundColor"] = color,
+                    ["paddingAll"] = "12px",
                     ["contents"] = new JsonArray(new JsonObject
                     {
-                        ["type"] = "text", ["text"] = title, ["color"] = "#FFFFFF", ["weight"] = "bold", ["size"] = "md", ["wrap"] = true,
+                        ["type"] = "text",
+                        ["text"] = title,
+                        ["color"] = "#FFFFFF",
+                        ["weight"] = "bold",
+                        ["size"] = "md",
+                        ["wrap"] = true,
                     }),
                 },
                 ["body"] = new JsonObject
                 {
-                    ["type"] = "box", ["layout"] = "vertical",
+                    ["type"] = "box",
+                    ["layout"] = "vertical",
                     ["contents"] = new JsonArray(new JsonObject { ["type"] = "text", ["text"] = body, ["wrap"] = true, ["size"] = "sm", ["color"] = "#333333" }),
                 },
                 ["footer"] = new JsonObject
                 {
-                    ["type"] = "box", ["layout"] = "vertical",
+                    ["type"] = "box",
+                    ["layout"] = "vertical",
                     ["contents"] = new JsonArray(new JsonObject
                     {
-                        ["type"] = "button", ["style"] = "primary", ["color"] = color, ["height"] = "sm",
+                        ["type"] = "button",
+                        ["style"] = "primary",
+                        ["color"] = color,
+                        ["height"] = "sm",
                         ["action"] = new JsonObject { ["type"] = "uri", ["label"] = "เปิดดู", ["uri"] = url },
                     }),
                 },

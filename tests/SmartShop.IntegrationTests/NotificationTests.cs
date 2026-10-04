@@ -89,7 +89,11 @@ public class NotificationTests(SmartShopFactory factory)
         var user = await factory.LoginAsync();
         await user.PostOkAsync("/api/notifications/devices", new
         {
-            kind = "WebPush", endpoint = $"https://push.example.com/{Guid.NewGuid()}", p256dh = "BElz6", auth = "abc", label = "มือถือแม่",
+            kind = "WebPush",
+            endpoint = $"https://push.example.com/{Guid.NewGuid()}",
+            p256dh = "BElz6",
+            auth = "abc",
+            label = "มือถือแม่",
         });
         var channels = await user.GetAsync<ChannelsDto>("/api/notifications/channels");
         channels.Devices.Single().Label.ShouldBe("มือถือแม่");

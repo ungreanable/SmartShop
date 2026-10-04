@@ -250,7 +250,10 @@ internal static class MerchantCatalogEndpoints
             MaxSelect = g.MaxSelect,
             Options = g.Options.Select(o => new ModifierOption
             {
-                Id = o.Id == Guid.Empty ? Ids.New() : o.Id, Name = o.Name, PriceDelta = o.PriceDelta, IsAvailable = o.IsAvailable,
+                Id = o.Id == Guid.Empty ? Ids.New() : o.Id,
+                Name = o.Name,
+                PriceDelta = o.PriceDelta,
+                IsAvailable = o.IsAvailable,
             }).ToList(),
         }).ToList(),
         r.PreOrderRoundId, r.IsRecommended);

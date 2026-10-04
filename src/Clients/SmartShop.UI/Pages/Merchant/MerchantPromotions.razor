@@ -1,0 +1,84 @@
+@page "/merchant/{ShopId:guid}/promotions"
+@layout MerchantLayout
+@inject Api Api
+@inject IDialogService Dialogs
+@inject Browser Browser
+
+<div class="ss-page">
+    <div class="d-flex align-center mb-2">
+        <MudText Typo="Typo.h5" Style="font-weight:700">@L["โปรโมชั่น", "Promotions"]</MudText>
+        <MudSpacer />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => EditAsync(null))">
+            @L["สร้าง", "New"]
+        </MudButton>
+    </div>
+
+    @if (_list is null) { <Loading /> }
+    else if (_list.Count == 0)
+    {
+        <EmptyState Title="@L["ยังไม่มีโปรโมชั่น", "No promotions yet"]" Icon="@Icons.Material.Outlined.LocalOffer"
+                    Text="@L["สร้างส่วนลดอัตโนมัติ หรือโค้ดส่วนลดไว้แจกในกลุ่มหมู่บ้าน", "Create an automatic discount or a coupon code to share with the village"]" />
+    }
+    else
+    {
+        @foreach (var p in _list)
+        {
+            <MudPaper Outlined="true" Class="@($"pa-3 mb-2 ss-card {(p.Active ? "" : "ss-muted")}")">
+                <div class="d-flex align-center gap-2">
+                    <MudIcon Icon="@Icons.Material.Filled.LocalOffer" Color="@(p.Active ? Color.Success : Color.Default)" />
+                    <div style="flex:1">
+                        <MudText Typo="Typo.subtitle1" Style="font-weight:600">@p.Title</MudText>
+                        <MudText Typo="Typo.caption" Class="ss-muted">@Summary(p)</MudText>
+                    </div>
+                    @if (p.Code is not null)
+                    {
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.ContentCopy" OnClick="@(() => Browser.CopyAsync(p.Code))">@p.Code</MudChip>
+                    }
+                    else
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Success">@L["อัตโนมัติ", "Auto"]</MudChip>
+                    }
+                </div>
+                <div class="d-flex align-center mt-1">
+                    <MudText Typo="Typo.caption">@L["ใช้แล้ว", "Used"] @p.UsedCount@(p.UsageLimit is { } u ? $"/{u}" : "")</MudText>
+                    <MudSpacer />
+                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => EditAsync(p))">@L["แก้ไข", "Edit"]</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => DeleteAsync(p))">@L["ลบ", "Delete"]</MudButton>
+                </div>
+            </MudPaper>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public Guid ShopId { get; set; }
+    private List<Promotion>? _list;
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync() => _list = await Api.Get<List<Promotion>>($"api/merchant/shops/{ShopId}/promotions") ?? [];
+
+    private string Summary(Promotion p)
+    {
+        var parts = new List<string> { p.Type == "Percent" ? $"-{p.Value:0.##}%" + (p.MaxDiscount is { } m ? $" ({L["สูงสุด", "max"]} {Fmt.Baht(m)})" : "") : $"-{Fmt.Baht(p.Value)}" };
+        if (p.MinOrder is { } min) parts.Add($"{L["ขั้นต่ำ", "min"]} {Fmt.Baht(min)}");
+        if (p.PerUserLimit is { } per) parts.Add(L[$"{per} ครั้ง/คน", $"{per}x per customer"]);
+        if (p.EndsAt is { } end) parts.Add($"{L["ถึง", "until"]} {Fmt.DateTime(end)}");
+        return string.Join(" · ", parts);
+    }
+
+    private async Task EditAsync(Promotion? p)
+    {
+        var parameters = new DialogParameters<PromotionDialog> { { x => x.ShopId, ShopId }, { x => x.Promotion, p } };
+        var result = await (await Dialogs.ShowAsync<PromotionDialog>(p is null ? L["โปรโมชั่นใหม่", "New promotion"] : p.Title, parameters)).Result;
+        if (result is { Canceled: false }) await LoadAsync();
+    }
+
+    private async Task DeleteAsync(Promotion p)
+    {
+        if (await Dialogs.ShowMessageBoxAsync(p.Title, L["ลบโปรโมชั่นนี้? (ถ้าเคยใช้แล้วจะปิดการใช้งานแทน)", "Delete this promotion? (Used promotions are switched off instead)"],
+                yesText: L["ลบ", "Delete"], cancelText: L["ยกเลิก", "Cancel"]) == true
+            && await Api.Delete($"api/merchant/promotions/{p.Id}"))
+            await LoadAsync();
+    }
+}

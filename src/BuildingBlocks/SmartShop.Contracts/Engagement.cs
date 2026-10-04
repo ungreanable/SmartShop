@@ -3,6 +3,7 @@ using System.Data.Common;
 namespace SmartShop.Contracts.Reviews
 {
     public sealed record ReviewSubmitted(Guid PlantId, Guid ReviewId, Guid OrderId, Guid ShopId, Guid CustomerId, int Rating, decimal Average, int Count) : IntegrationEvent(PlantId);
+    public sealed record ReviewModerated(Guid PlantId, Guid ReviewId, Guid ShopId, Guid ActorId, bool Hidden, decimal Average, int Count) : IntegrationEvent(PlantId);
     public sealed record ReviewReplied(Guid PlantId, Guid ReviewId, Guid ShopId, Guid CustomerId) : IntegrationEvent(PlantId);
 }
 

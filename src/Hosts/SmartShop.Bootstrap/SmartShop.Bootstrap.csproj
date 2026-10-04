@@ -19,5 +19,8 @@
     <ProjectReference Include="..\..\Modules\SmartShop.Modules.Payments\SmartShop.Modules.Payments.csproj" />
     <ProjectReference Include="..\..\Modules\SmartShop.Modules.Notifications\SmartShop.Modules.Notifications.csproj" />
     <ProjectReference Include="..\..\Modules\SmartShop.Modules.Search\SmartShop.Modules.Search.csproj" />
+    <ProjectReference Include="..\..\Modules\SmartShop.Modules.Reviews\SmartShop.Modules.Reviews.csproj" />
+    <ProjectReference Include="..\..\Modules\SmartShop.Modules.Promotions\SmartShop.Modules.Promotions.csproj" />
+    <ProjectReference Include="..\..\Modules\SmartShop.Modules.Audit\SmartShop.Modules.Audit.csproj" />
   </ItemGroup>
 </Project>

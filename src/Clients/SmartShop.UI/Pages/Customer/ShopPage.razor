@@ -35,6 +35,12 @@
                 @if (_shop.DeliveryEnabled) { <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">🛵 @L["ร้านไปส่ง (ไม่มีค่าส่ง)", "Shop delivers (free)"]</MudChip> }
                 @if (_shop.PickupEnabled) { <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">🏠 @L["รับที่ร้าน", "Pickup"]</MudChip> }
             </div>
+            @foreach (var promo in _promotions)
+            {
+                <MudAlert Severity="Severity.Success" Dense="true" Icon="@Icons.Material.Filled.LocalOffer" Class="mt-2">
+                    @promo.Description@(promo.MinOrder is { } min ? $" · {L["เมื่อสั่งครบ", "on orders from"]} {Fmt.Baht(min)}" : "")
+                </MudAlert>
+            }
             @if (_shop.VacationMessage is not null) { <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@_shop.VacationMessage</MudAlert> }
             @if (_shop.Description is not null) { <MudText Typo="Typo.body2" Class="mt-2">@_shop.Description</MudText> }
             <MudExpansionPanels Elevation="0" Class="mt-1">
@@ -118,6 +124,7 @@
     [Parameter] public Guid ShopId { get; set; }
 
     private ShopDetails? _shop;
+    private List<PromotionBadge> _promotions = [];
     private Menu? _menu;
     private Cart? _cart;
     private bool CartHere => _cart is { ItemCount: > 0 } && _cart.ShopId == ShopId;
@@ -136,7 +143,9 @@
         var shop = Api.Get<ShopDetails>($"api/shops/{ShopId}");
         var menu = Api.Get<Menu>($"api/shops/{ShopId}/menu", silent: true);
         var cart = Api.Get<Cart>("api/cart", silent: true);
+        var promotions = Api.Get<List<PromotionBadge>>($"api/shops/{ShopId}/promotions", silent: true);
         _shop = await shop;
+        _promotions = await promotions ?? [];
         _menu = await menu;
         _cart = await cart;
         if (_shop is null) Nav.NavigateTo("/");

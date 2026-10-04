@@ -127,4 +127,5 @@ public sealed record Review(Guid Id, Guid OrderId, Guid CustomerId, string Custo
 public sealed record ReviewSummary(decimal Average, int Count, Dictionary<int, int> Distribution, List<Review> Reviews);
 public sealed record Promotion(Guid Id, string? Code, string Title, string Type, decimal Value, decimal? MinOrder, decimal? MaxDiscount,
     DateTimeOffset? StartsAt, DateTimeOffset? EndsAt, int? UsageLimit, int? PerUserLimit, int UsedCount, bool AutoApply, bool Active);
+public sealed record PromotionBadge(Guid Id, string Title, string Description, decimal? MinOrder, DateTimeOffset? EndsAt);
 public sealed record DiscountPreview(Guid PromotionId, string? Code, decimal Discount, string Description);

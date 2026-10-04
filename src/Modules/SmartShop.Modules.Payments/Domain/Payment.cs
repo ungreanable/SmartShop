@@ -29,24 +29,30 @@ public sealed class Payment
 
     public static Payment Create(Guid orderId, string orderNo, Guid plantId, Guid shopId, Guid customerId, decimal amount,
         PaymentMethodInfo method, DateTimeOffset now) => new()
-    {
-        Id = Ids.New(),
-        OrderId = orderId,
-        OrderNo = orderNo,
-        PlantId = plantId,
-        ShopId = shopId,
-        CustomerId = customerId,
-        Amount = amount,
-        MethodType = method.Type,
-        Method = new MethodSnapshot
         {
-            DisplayName = method.DisplayName, PromptPayId = method.PromptPayId, QrImageId = method.QrImageId, BankName = method.BankName,
-            AccountNumber = method.AccountNumber, AccountName = method.AccountName, Instructions = method.Instructions,
-            ImageId = method.ImageId, RequiresProof = method.RequiresProof,
-        },
-        Status = amount == 0 ? PaymentStatus.Paid : PaymentStatus.Unpaid,
-        CreatedAt = now,
-    };
+            Id = Ids.New(),
+            OrderId = orderId,
+            OrderNo = orderNo,
+            PlantId = plantId,
+            ShopId = shopId,
+            CustomerId = customerId,
+            Amount = amount,
+            MethodType = method.Type,
+            Method = new MethodSnapshot
+            {
+                DisplayName = method.DisplayName,
+                PromptPayId = method.PromptPayId,
+                QrImageId = method.QrImageId,
+                BankName = method.BankName,
+                AccountNumber = method.AccountNumber,
+                AccountName = method.AccountName,
+                Instructions = method.Instructions,
+                ImageId = method.ImageId,
+                RequiresProof = method.RequiresProof,
+            },
+            Status = amount == 0 ? PaymentStatus.Paid : PaymentStatus.Unpaid,
+            CreatedAt = now,
+        };
 
     public PaymentProof AddProof(Guid mediaId, string sha256, string? slipReference, DateTimeOffset now)
     {

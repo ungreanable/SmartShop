@@ -1,0 +1,92 @@
+@inject Api Api
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField @bind-Value="_title" Label="@L["ชื่อโปรโมชั่น", "Title"]" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" MaxLength="100" />
+        <MudRadioGroup T="string" @bind-Value="_type" Class="mt-2">
+            <MudRadio Value="@("Amount")" Color="Color.Primary">@L["ลดเป็นบาท", "Baht off"]</MudRadio>
+            <MudRadio Value="@("Percent")" Color="Color.Primary">@L["ลดเป็น %", "Percent off"]</MudRadio>
+        </MudRadioGroup>
+        <div class="ss-grid-2">
+            <MudNumericField T="decimal" @bind-Value="_value" Label="@(_type == "Percent" ? "%" : L["บาท", "Baht"])" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Immediate="true" />
+            @if (_type == "Percent")
+            {
+                <MudNumericField T="decimal?" @bind-Value="_maxDiscount" Label="@L["ลดสูงสุด (บาท)", "Max discount"]" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" />
+            }
+            <MudNumericField T="decimal?" @bind-Value="_minOrder" Label="@L["ยอดขั้นต่ำ (บาท)", "Minimum order"]" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" />
+        </div>
+
+        <MudSwitch T="bool" @bind-Value="_useCode" Color="Color.Primary" Class="mt-2"
+                   Label="@L["ใช้โค้ดส่วนลด (ลูกค้าต้องกรอก)", "Requires a coupon code"]" />
+        @if (_useCode)
+        {
+            <MudTextField @bind-Value="_code" Label="@L["โค้ด", "Code"]" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" MaxLength="30"
+                          HelperText="@L["ตัวอักษรอังกฤษ ตัวเลข - _ (3-30 ตัว)", "Letters, digits, - or _ (3-30)"]" />
+        }
+        else
+        {
+            <MudText Typo="Typo.caption" Class="ss-muted">@L["ลดให้อัตโนมัติเมื่อสั่งครบเงื่อนไข", "Applied automatically when the order qualifies"]</MudText>
+        }
+
+        <div class="ss-grid-2 mt-2">
+            <MudDatePicker @bind-Date="_starts" Label="@L["เริ่ม", "Starts"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" />
+            <MudDatePicker @bind-Date="_ends" Label="@L["สิ้นสุด (ถึงสิ้นวัน)", "Ends (end of day)"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" />
+            <MudNumericField T="int?" @bind-Value="_usageLimit" Label="@L["จำนวนสิทธิ์ทั้งหมด", "Total uses"]" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" />
+            <MudNumericField T="int?" @bind-Value="_perUserLimit" Label="@L["สิทธิ์ต่อคน", "Uses per customer"]" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" />
+        </div>
+        <MudSwitch T="bool" @bind-Value="_active" Color="Color.Primary" Label="@L["เปิดใช้งาน", "Active"]" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["ยกเลิก", "Cancel"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_busy || string.IsNullOrWhiteSpace(_title) || _value <= 0 || (_useCode && string.IsNullOrWhiteSpace(_code)))"
+                   OnClick="SaveAsync">@L["บันทึก", "Save"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public Guid ShopId { get; set; }
+    [Parameter] public Promotion? Promotion { get; set; }
+
+    private string? _title, _code;
+    private string _type = "Amount";
+    private decimal _value;
+    private decimal? _minOrder, _maxDiscount;
+    private DateTime? _starts, _ends;
+    private int? _usageLimit, _perUserLimit;
+    private bool _useCode, _active = true, _busy;
+
+    protected override void OnParametersSet()
+    {
+        if (Promotion is not { } p) return;
+        (_title, _code, _type, _value, _minOrder, _maxDiscount) = (p.Title, p.Code, p.Type, p.Value, p.MinOrder, p.MaxDiscount);
+        (_starts, _ends) = (p.StartsAt?.ToLocalTime().Date, p.EndsAt?.ToLocalTime().AddTicks(-1).Date);
+        (_usageLimit, _perUserLimit, _useCode, _active) = (p.UsageLimit, p.PerUserLimit, p.Code is not null, p.Active);
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        var body = new
+        {
+            code = _useCode ? _code?.Trim() : null,
+            title = _title?.Trim(),
+            type = _type,
+            value = _value,
+            minOrder = _minOrder,
+            maxDiscount = _type == "Percent" ? _maxDiscount : null,
+            // Dates are picked in local time: from the start of the first day until the end of the last day.
+            startsAt = _starts is { } s ? new DateTimeOffset(s.Date, TimeZoneInfo.Local.GetUtcOffset(s.Date)) : (DateTimeOffset?)null,
+            endsAt = _ends is { } e ? new DateTimeOffset(e.Date.AddDays(1), TimeZoneInfo.Local.GetUtcOffset(e.Date)) : (DateTimeOffset?)null,
+            usageLimit = _usageLimit,
+            perUserLimit = _perUserLimit,
+            autoApply = !_useCode,
+            active = _active,
+        };
+        var ok = Promotion is null
+            ? await Api.Post($"api/merchant/shops/{ShopId}/promotions", body)
+            : await Api.Put($"api/merchant/promotions/{Promotion.Id}", body);
+        _busy = false;
+        if (ok) Dialog.Close(DialogResult.Ok(true));
+    }
+}

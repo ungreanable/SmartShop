@@ -52,3 +52,14 @@ public static class ReviewSubmittedHandler
         await bus.PublishAsync(new ShopRatingChanged(shop.PlantId, shop.Id, shop.RatingAverage, shop.RatingCount));
     }
 }
+
+public static class ReviewModeratedHandler
+{
+    public static async Task Handle(ReviewModerated e, ShopsDbContext db, IMessageBus bus, CancellationToken ct)
+    {
+        var shop = await db.Shops.FirstOrDefaultAsync(s => s.Id == e.ShopId, ct);
+        if (shop is null) return;
+        shop.UpdateRating(e.Average, e.Count);
+        await bus.PublishAsync(new ShopRatingChanged(shop.PlantId, shop.Id, shop.RatingAverage, shop.RatingCount));
+    }
+}

@@ -4,7 +4,12 @@
 @inject Browser Browser
 
 <div class="ss-page">
-    <MudText Typo="Typo.h5" Class="mb-2" Style="font-weight:700">@L["ยอดขาย", "Sales"]</MudText>
+    <div class="d-flex align-center mb-2">
+        <MudText Typo="Typo.h5" Style="font-weight:700">@L["ยอดขาย", "Sales"]</MudText>
+        <MudSpacer />
+        <MudButton Href="@($"/merchant/{ShopId}/promotions")" Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.LocalOffer" Class="mr-2">@L["โปรโมชั่น", "Promotions"]</MudButton>
+        <MudButton Href="@($"/merchant/{ShopId}/reviews")" Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Star">@L["รีวิว", "Reviews"]</MudButton>
+    </div>
     <div class="d-flex gap-2 align-center mb-3">
         <MudDatePicker @bind-Date="_from" Label="@L["ตั้งแต่", "From"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
         <MudDatePicker @bind-Date="_to" Label="@L["ถึง", "To"]" Variant="Variant.Outlined" Margin="Margin.Dense" />

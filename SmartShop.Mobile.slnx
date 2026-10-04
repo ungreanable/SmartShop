@@ -1,0 +1,7 @@
+<Solution>
+  <!-- Separate solution: building the app needs the MAUI workload (dotnet workload install maui). -->
+  <Folder Name="/src/Clients/">
+    <Project Path="src/Clients/SmartShop.Mobile/SmartShop.Mobile.csproj" />
+    <Project Path="src/Clients/SmartShop.UI/SmartShop.UI.csproj" />
+  </Folder>
+</Solution>

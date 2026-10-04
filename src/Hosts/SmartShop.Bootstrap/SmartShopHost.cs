@@ -1,7 +1,7 @@
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -52,7 +52,10 @@ public static class SmartShopHost
                 ctx.User.FindFirst("sub")?.Value ?? ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                 _ => new TokenBucketRateLimiterOptions
                 {
-                    TokenLimit = userPermits * 2, TokensPerPeriod = userPermits, ReplenishmentPeriod = TimeSpan.FromSeconds(10), QueueLimit = 0,
+                    TokenLimit = userPermits * 2,
+                    TokensPerPeriod = userPermits,
+                    ReplenishmentPeriod = TimeSpan.FromSeconds(10),
+                    QueueLimit = 0,
                 }));
         });
         builder.Services.AddCors(o => o.AddDefaultPolicy(p =>

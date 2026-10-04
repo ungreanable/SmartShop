@@ -43,7 +43,7 @@ internal static class AnnouncementEndpoints
             var now = clock.GetUtcNow();
             var announcement = Announcement.Create(plant.PlantId, req.Title, req.Body, req.ImageId, req.StartsAt ?? now, req.EndsAt, req.IsPinned, user.Id, now);
             outbox.DbContext.Announcements.Add(announcement);
-            await outbox.PublishAsync(new AnnouncementPublished(plant.PlantId, announcement.Id, announcement.Title, req.Notify));
+            await outbox.PublishAsync(new AnnouncementPublished(plant.PlantId, announcement.Id, announcement.Title, req.Notify, user.Id));
             await outbox.SaveChangesAndFlushMessagesAsync(ct);
             return Results.Ok(ToDto(announcement, media));
         });

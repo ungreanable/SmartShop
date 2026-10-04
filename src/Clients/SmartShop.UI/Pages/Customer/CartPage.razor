@@ -151,6 +151,7 @@
         _soi = Plant.Current?.Soi;
         var itemIds = _cart.Lines.Select(l => l.ItemId).ToHashSet();
         _round = _menu?.Categories.SelectMany(c => c.Items).FirstOrDefault(i => itemIds.Contains(i.Id) && i.Round is not null)?.Round;
+        await PreviewDiscountAsync();
     }
 
     private async Task ChangeAsync(CartLine line, int delta)
@@ -159,14 +160,16 @@
         _cart = quantity <= 0
             ? await Api.Send<Cart>(HttpMethod.Delete, $"api/cart/items/{line.Id}", null)
             : await Api.Put<Cart>($"api/cart/items/{line.Id}", new { quantity, optionIds = line.OptionIds, note = line.Note });
-        _discount = null;
+        await PreviewDiscountAsync();
     }
 
     private async Task PreviewDiscountAsync()
     {
+        // Without a code the server returns the best automatic promotion (or nothing), exactly as checkout will apply it.
         _discount = null;
-        if (string.IsNullOrWhiteSpace(_coupon) || _cart?.ShopId is not { } shopId) return;
-        _discount = await Api.Post<DiscountPreview>($"api/shops/{shopId}/promotions/preview", new { code = _coupon.Trim(), subtotal = _cart.Subtotal });
+        if (_cart?.ShopId is not { } shopId || _cart.Lines.Count == 0) return;
+        var code = string.IsNullOrWhiteSpace(_coupon) ? null : _coupon.Trim();
+        _discount = await Api.Post<DiscountPreview>($"api/shops/{shopId}/promotions/preview", new { code, subtotal = _cart.Subtotal }, silent: code is null);
     }
 
     private async Task PlaceAsync()

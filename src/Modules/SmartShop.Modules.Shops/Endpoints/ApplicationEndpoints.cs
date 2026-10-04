@@ -108,7 +108,7 @@ internal static class ApplicationEndpoints
             db.Shops.Add(shop);
             db.StatusTrackers.Add(new ShopStatusTracker(shop.Id));
 
-            await outbox.PublishAsync(new ShopApplicationApproved(plant.PlantId, application.Id, application.ApplicantId, shop.Id, shop.Name));
+            await outbox.PublishAsync(new ShopApplicationApproved(plant.PlantId, application.Id, application.ApplicantId, shop.Id, shop.Name, user.Id));
             await outbox.PublishAsync(new ShopCreated(plant.PlantId, shop.Id, application.ApplicantId, shop.Name));
             await outbox.PublishAsync(new EvaluateShopStatus(shop.Id));
             await outbox.SaveChangesAndFlushMessagesAsync(ct);
@@ -119,14 +119,14 @@ internal static class ApplicationEndpoints
             ctx.ReviewAsync(id, (a, actor, now) =>
             {
                 a.RequestChanges(actor, req.Note ?? "", now);
-                return new ShopApplicationChangesRequested(a.PlantId, a.Id, a.ApplicantId, a.Name, a.ReviewNote!);
+                return new ShopApplicationChangesRequested(a.PlantId, a.Id, a.ApplicantId, a.Name, a.ReviewNote!, actor);
             }, ct));
 
         admin.MapPost("/{id:guid}/reject", (Guid id, ReviewNoteRequest req, ReviewCtx ctx, CancellationToken ct) =>
             ctx.ReviewAsync(id, (a, actor, now) =>
             {
                 a.Reject(actor, req.Note ?? "", now);
-                return new ShopApplicationRejected(a.PlantId, a.Id, a.ApplicantId, a.Name, a.ReviewNote!);
+                return new ShopApplicationRejected(a.PlantId, a.Id, a.ApplicantId, a.Name, a.ReviewNote!, actor);
             }, ct));
     }
 

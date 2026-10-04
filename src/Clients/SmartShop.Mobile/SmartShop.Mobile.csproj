@@ -1,0 +1,60 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <!--
+    MAUI Blazor Hybrid shell around the shared SmartShop.UI components.
+    Android is the main target; Windows is handy for desktop testing (LINE login there needs a browser, use the web app).
+    iOS works the same way but must be built on a Mac: add net10.0-ios and a Platforms/iOS folder from the MAUI template.
+  -->
+  <PropertyGroup>
+    <TargetFramework></TargetFramework>
+    <TargetFrameworks>net10.0-android</TargetFrameworks>
+    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
+
+    <OutputType>Exe</OutputType>
+    <RootNamespace>SmartShop.Mobile</RootNamespace>
+    <UseMaui>true</UseMaui>
+    <SingleProject>true</SingleProject>
+    <EnableDefaultCssItems>false</EnableDefaultCssItems>
+    <MauiXamlInflator>SourceGen</MauiXamlInflator>
+    <!-- Platform glue code (Android activities, WinUI) does not follow our analyzer conventions. -->
+    <AnalysisLevel>latest-minimum</AnalysisLevel>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <NoWarn>$(NoWarn);XA0141;CA1416</NoWarn>
+
+    <ApplicationTitle>SmartShop</ApplicationTitle>
+    <ApplicationId>org.smartshop.village</ApplicationId>
+    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <ApplicationVersion>1</ApplicationVersion>
+    <WindowsPackageType>None</WindowsPackageType>
+
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
+    <TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#00A851" />
+    <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#00A851" BaseSize="128,128" />
+    <MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <!-- Firebase config is per deployment and never committed; push is simply unavailable without it. -->
+  <ItemGroup Condition="Exists('Platforms\Android\google-services.json') And $(TargetFramework.Contains('android'))">
+    <GoogleServicesJson Include="Platforms\Android\google-services.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Maui.Controls" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Debug" />
+  </ItemGroup>
+
+  <ItemGroup Condition="$(TargetFramework.Contains('android'))">
+    <PackageReference Include="Xamarin.Firebase.Messaging" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SmartShop.UI\SmartShop.UI.csproj" />
+  </ItemGroup>
+
+</Project>

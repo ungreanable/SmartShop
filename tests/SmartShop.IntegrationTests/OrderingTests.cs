@@ -32,7 +32,11 @@ public class OrderingTests(SmartShopFactory factory)
     private static Task<MerchantItemDto> AddItemAsync(Shop s, string name, decimal price, int? stock = null) =>
         s.Owner.PostAsync<MerchantItemDto>($"/api/merchant/shops/{s.ShopId}/catalog/items", new
         {
-            kind = "Product", stockMode = stock is null ? "Untracked" : "Tracked", name, price, initialStock = stock,
+            kind = "Product",
+            stockMode = stock is null ? "Untracked" : "Tracked",
+            name,
+            price,
+            initialStock = stock,
         });
 
     private static async Task<HttpResponseMessage> CheckoutRawAsync(TestClient c, object body, string? key = null)
@@ -178,8 +182,14 @@ public class OrderingTests(SmartShopFactory factory)
 
         await owner.PutOkAsync($"/api/merchant/shops/{shopId}/order-settings", new
         {
-            acceptMode = "Manual", acceptTimeoutMinutes = 15, reminderAfterMinutes = 3, autoCompleteHours = 12,
-            allowPreorderWhenClosed = true, prepTimeMinutes = 0, slotIntervalMinutes = 30, requirePaymentBeforePreparing = false,
+            acceptMode = "Manual",
+            acceptTimeoutMinutes = 15,
+            reminderAfterMinutes = 3,
+            autoCompleteHours = 12,
+            allowPreorderWhenClosed = true,
+            prepTimeMinutes = 0,
+            slotIntervalMinutes = 30,
+            requirePaymentBeforePreparing = false,
         });
         var needsTime = await CheckoutRawAsync(customer, new { fulfillmentType = "Pickup", paymentMethodId = cash });
         (await TestClient.ProblemCodeAsync(needsTime)).ShouldBe("schedule_required");
@@ -252,8 +262,14 @@ public class OrderingTests(SmartShopFactory factory)
         var s = await OpenShopAsync();
         await s.Owner.PutOkAsync($"/api/merchant/shops/{s.ShopId}/order-settings", new
         {
-            acceptMode = "Auto", acceptTimeoutMinutes = 15, reminderAfterMinutes = 3, autoCompleteHours = 12,
-            allowPreorderWhenClosed = false, prepTimeMinutes = 10, slotIntervalMinutes = 30, requirePaymentBeforePreparing = false,
+            acceptMode = "Auto",
+            acceptTimeoutMinutes = 15,
+            reminderAfterMinutes = 3,
+            autoCompleteHours = 12,
+            allowPreorderWhenClosed = false,
+            prepTimeMinutes = 10,
+            slotIntervalMinutes = 30,
+            requirePaymentBeforePreparing = false,
         });
         var item = await AddItemAsync(s, "น้ำแข็ง", 10);
         var customer = await factory.JoinAsync(s.Plant, s.Admin);

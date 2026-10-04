@@ -29,4 +29,4 @@ public sealed record MembershipSuspended(Guid PlantId, Guid MembershipId, Guid U
 public sealed record MembershipReinstated(Guid PlantId, Guid MembershipId, Guid UserId, Guid ActorId) : IntegrationEvent(PlantId);
 public sealed record MembershipLeft(Guid PlantId, Guid MembershipId, Guid UserId) : IntegrationEvent(PlantId);
 public sealed record MembershipRoleChanged(Guid PlantId, Guid UserId, PlantRole Role, Guid ActorId) : IntegrationEvent(PlantId);
-public sealed record AnnouncementPublished(Guid PlantId, Guid AnnouncementId, string Title, bool Notify) : IntegrationEvent(PlantId);
+public sealed record AnnouncementPublished(Guid PlantId, Guid AnnouncementId, string Title, bool Notify, Guid ActorId) : IntegrationEvent(PlantId);

@@ -74,8 +74,14 @@ internal sealed class CheckoutService(
             if (priced.Error is { } error) throw new DomainException("option_invalid", LinePricer.ErrorMessage(item.Name, error));
             lines.Add(new OrderLine
             {
-                Id = Ids.New(), ItemId = item.ItemId, Name = item.Name, Quantity = cl.Quantity, UnitPrice = priced.UnitPrice,
-                Options = priced.Options, Note = cl.Note, SlotStart = cl.SlotStart,
+                Id = Ids.New(),
+                ItemId = item.ItemId,
+                Name = item.Name,
+                Quantity = cl.Quantity,
+                UnitPrice = priced.UnitPrice,
+                Options = priced.Options,
+                Note = cl.Note,
+                SlotStart = cl.SlotStart,
             });
             reservations.Add(new ReserveLine(item.ItemId, cl.Quantity, cl.SlotStart));
         }

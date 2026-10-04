@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>SmartShop</title>
+    <base href="/" />
+    <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
+    <link href="_content/SmartShop.UI/css/app.css" rel="stylesheet" />
+    <style>
+        #app-loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #F6F7F9; }
+        #app-loading .ring { width: 48px; height: 48px; border: 4px solid #CDEFDC; border-top-color: #00A851; border-radius: 50%; animation: spin 0.9s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div id="app"><div id="app-loading"><div class="ring"></div></div></div>
+    <div id="blazor-error-ui" style="display:none; position:fixed; bottom:0; left:0; right:0; padding:12px; background:#FFE3E3; z-index:2000">
+        เกิดข้อผิดพลาด / An error occurred. <a href="" class="reload">โหลดใหม่ / Reload</a>
+    </div>
+    <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+    <script src="_content/SmartShop.UI/js/smartshop.js"></script>
+    <script src="_framework/blazor.webview.js" autostart="false"></script>
+</body>
+</html>
