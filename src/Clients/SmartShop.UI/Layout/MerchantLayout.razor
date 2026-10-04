@@ -8,18 +8,15 @@
 <MudLayout>
     <MudAppBar Elevation="0" Dense="true" Fixed="true" Class="border-b">
         <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="/" title="@L["กลับโหมดลูกค้า", "Back to customer mode"]" />
-        <MudMenu AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft">
-            <ActivatorContent>
-                <MudButton Variant="Variant.Text" Color="Color.Inherit" EndIcon="@Icons.Material.Filled.ExpandMore" Style="text-transform:none">
-                    <MudText Typo="Typo.subtitle1">@(Shop?.Name ?? L["ร้านของฉัน", "My shop"])</MudText>
-                </MudButton>
-            </ActivatorContent>
-            <ChildContent>
-                @foreach (var shop in Plant.MyShops)
-                {
-                    <MudMenuItem Href="@($"/merchant/{shop.Id}")">@shop.Name</MudMenuItem>
-                }
-            </ChildContent>
+        @* MudMenu's own button: a MudButton inside ActivatorContent swallows the click and the menu never opens. *@
+        <MudMenu Label="@(Shop?.Name ?? L["ร้านของฉัน", "My shop"])" EndIcon="@Icons.Material.Filled.ExpandMore" Variant="Variant.Text" Color="Color.Inherit"
+                 AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft" Class="ss-shop-switcher">
+            @foreach (var shop in Plant.MyShops)
+            {
+                <MudMenuItem Href="@($"/merchant/{shop.Id}")" Icon="@(shop.Id == ShopId ? Icons.Material.Filled.Check : Icons.Material.Filled.Storefront)">@shop.Name</MudMenuItem>
+            }
+            <MudDivider />
+            <MudMenuItem Href="/shop-applications" Icon="@Icons.Material.Filled.AddBusiness">@L["ขอเปิดร้านใหม่", "Open a new shop"]</MudMenuItem>
         </MudMenu>
         <MudSpacer />
         @if (Alarm.Ringing)

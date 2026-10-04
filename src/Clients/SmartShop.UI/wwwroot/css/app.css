@@ -103,3 +103,6 @@ body { overscroll-behavior-y: contain; }
 .ss-item-add-only { flex: none; display: flex; align-items: center; }
 .ss-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; color: var(--mud-palette-action-default); }
 .ss-icon-btn:hover { background: var(--mud-palette-action-default-hover); }
+
+/* Shop switcher in the merchant app bar: keep the shop name as typed */
+.ss-shop-switcher .mud-button-label { text-transform: none; font-size: 1.0625rem; font-weight: 600; }
