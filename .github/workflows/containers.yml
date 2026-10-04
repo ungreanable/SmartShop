@@ -1,6 +1,7 @@
 name: Containers
 
-# Builds multi-arch images with the .NET SDK container support (no Dockerfiles) and pushes them to GHCR.
+# Runs the full CI first; only when it passes, builds multi-arch images with the .NET SDK container support
+# (no Dockerfiles) and pushes them to GHCR: main -> :edge + :sha-xxxxxxx, tag v1.2.3 -> :1.2.3 + :latest.
 on:
   push:
     branches: [main]
@@ -11,8 +12,16 @@ permissions:
   contents: read
   packages: write
 
+concurrency:
+  group: containers-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   publish:
+    needs: ci
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -51,6 +60,6 @@ jobs:
           dotnet publish ${{ matrix.project }} -c Release
           /t:PublishContainer
           -p:ContainerRegistry=ghcr.io
-          -p:ContainerRepository=${{ github.repository_owner }}/$(basename ${{ matrix.project }} .csproj | tr '[:upper:]' '[:lower:]' | sed 's/\./-/g')
+          "-p:ContainerRepository=${{ github.repository_owner }}/$(basename ${{ matrix.project }} .csproj | tr '[:upper:]' '[:lower:]' | sed 's/\./-/g')"
           -p:ContainerImageTags='"${{ steps.tags.outputs.tags }}"'
           -p:ContainerRuntimeIdentifiers='"linux-x64;linux-arm64"'

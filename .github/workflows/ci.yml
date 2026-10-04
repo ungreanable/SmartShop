@@ -1,9 +1,12 @@
 name: CI
 
+# Pull requests and branches run CI here. Pushes to main and release tags run it through the Containers
+# workflow (workflow_call), which publishes images only when every CI job passed.
 on:
   push:
-    branches: [main]
+    branches-ignore: [main, "dependabot/**"]
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read

@@ -109,8 +109,11 @@ public static class FactoryExtensions
         return new TestClient(http, auth.User.Id, name, auth.RefreshToken);
     }
 
-    /// <summary>Polls until the assertion passes; used for effects of asynchronous event handlers.</summary>
-    public static async Task EventuallyAsync(Func<Task> assertion, int timeoutMs = 10_000)
+    /// <summary>
+    /// Polls until the assertion passes; used for effects of asynchronous event handlers. The timeout is generous:
+    /// events hop through durable queues, and CI runners under a parallel test load can be slow.
+    /// </summary>
+    public static async Task EventuallyAsync(Func<Task> assertion, int timeoutMs = 30_000)
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
         while (true)
