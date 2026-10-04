@@ -7,11 +7,20 @@ namespace SmartShop.UI.Services;
 /// <summary>
 /// Rings on every device of every shop member when a new order arrives, and stops as soon as anyone accepts,
 /// rejects or the order expires (order.claimed). Works anywhere in the app, not only in merchant mode.
+/// Real-time messages can arrive out of order or be missed (reconnects), so: claims seen before the order are
+/// remembered, the device that acts stops at once (<see cref="Dismiss"/>), and while ringing the order status is
+/// re-checked on the server every few seconds.
 /// </summary>
-public sealed class OrderAlarm(Realtime realtime, Browser browser, ISnackbar snackbar, NavigationManager nav, Loc l)
+public sealed class OrderAlarm(Realtime realtime, Browser browser, ISnackbar snackbar, NavigationManager nav, Loc l, Api api) : IDisposable
 {
-    private readonly Dictionary<Guid, (Guid ShopId, string OrderNo)> _pending = [];
+    private static readonly TimeSpan RecheckEvery = TimeSpan.FromSeconds(10);
+
+    private readonly Dictionary<Guid, string> _pending = [];
     private readonly Dictionary<Guid, Snackbar?> _toasts = [];
+    private readonly LinkedList<Guid> _claimedOrder = [];
+    private readonly HashSet<Guid> _claimed = [];
+    private Timer? _recheck;
+
     public IReadOnlyCollection<Guid> PendingOrderIds => _pending.Keys;
     public bool Ringing => _pending.Count > 0;
     public event Action? Changed;
@@ -26,10 +35,21 @@ public sealed class OrderAlarm(Realtime realtime, Browser browser, ISnackbar sna
 
     public async Task SilenceAsync()
     {
+        foreach (var id in _pending.Keys.ToList()) RememberClaimed(id);
         _pending.Clear();
         foreach (var toast in _toasts.Values) if (toast is not null) snackbar.Remove(toast);
         _toasts.Clear();
-        await browser.StopAlarmAsync();
+        await StopIfIdleAsync();
+        Changed?.Invoke();
+    }
+
+    /// <summary>This device accepted / rejected the order: stop right away instead of waiting for the server echo.</summary>
+    public async Task Dismiss(Guid orderId)
+    {
+        RememberClaimed(orderId);
+        if (_toasts.Remove(orderId, out var toast) && toast is not null) snackbar.Remove(toast);
+        if (!_pending.Remove(orderId)) return;
+        await StopIfIdleAsync();
         Changed?.Invoke();
     }
 
@@ -37,7 +57,10 @@ public sealed class OrderAlarm(Realtime realtime, Browser browser, ISnackbar sna
     {
         var orderId = e.GetProperty("orderId").GetGuid();
         var orderNo = e.GetProperty("orderNo").GetString() ?? "";
-        _pending[orderId] = (Guid.Empty, orderNo);
+        // Already accepted (auto-accept shops, or the claim overtook the new-order message): nothing to ring for.
+        if (_claimed.Contains(orderId) || _pending.ContainsKey(orderId)) return;
+
+        _pending[orderId] = orderNo;
         await browser.StartAlarmAsync();
         _toasts[orderId] = snackbar.Add(l[$"🛎️ ออเดอร์ใหม่ #{orderNo}", $"🛎️ New order #{orderNo}"], Severity.Warning, o =>
         {
@@ -49,16 +72,47 @@ public sealed class OrderAlarm(Realtime realtime, Browser browser, ISnackbar sna
                 return Task.CompletedTask;
             };
         });
+        _recheck ??= new Timer(_ => _ = RecheckAsync(), null, RecheckEvery, RecheckEvery);
         Changed?.Invoke();
     }
 
-    private async void OnClaimed(JsonElement e)
+    private async void OnClaimed(JsonElement e) => await Dismiss(e.GetProperty("orderId").GetGuid());
+
+    /// <summary>Safety net for missed claims: drop orders that are no longer waiting for acceptance.</summary>
+    private async Task RecheckAsync()
     {
-        var orderId = e.GetProperty("orderId").GetGuid();
-        // Someone (on any device) accepted, rejected or the order expired: stop ringing and drop the toast.
-        if (_toasts.Remove(orderId, out var toast) && toast is not null) snackbar.Remove(toast);
-        if (!_pending.Remove(orderId)) return;
-        if (_pending.Count == 0) await browser.StopAlarmAsync();
-        Changed?.Invoke();
+        foreach (var orderId in _pending.Keys.ToList())
+        {
+            try
+            {
+                var order = await api.Get<Order>($"api/orders/{orderId}", silent: true);
+                if (order is not null && order.Status != "PendingAcceptance") await Dismiss(orderId);
+            }
+            catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException)
+            {
+                // Offline for a moment: keep ringing, try again on the next tick.
+            }
+        }
     }
+
+    private async Task StopIfIdleAsync()
+    {
+        if (_pending.Count > 0) return;
+        await browser.StopAlarmAsync();
+        _recheck?.Dispose();
+        _recheck = null;
+    }
+
+    private void RememberClaimed(Guid orderId)
+    {
+        if (!_claimed.Add(orderId)) return;
+        _claimedOrder.AddLast(orderId);
+        if (_claimedOrder.Count > 500)
+        {
+            _claimed.Remove(_claimedOrder.First!.Value);
+            _claimedOrder.RemoveFirst();
+        }
+    }
+
+    public void Dispose() => _recheck?.Dispose();
 }

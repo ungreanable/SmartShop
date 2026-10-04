@@ -6,6 +6,7 @@
 @inject IDialogService Dialogs
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
+@inject OrderAlarm Alarm
 
 <div class="ss-page">
     @if (_order is null) { <Loading Rows="4" /> }
@@ -223,7 +224,9 @@
     private async Task ShopActionAsync(string action, object? body)
     {
         var updated = await Api.Post<Order>($"api/merchant/orders/{OrderId}/{action}", body ?? new { });
-        if (updated is not null) _order = updated;
+        if (updated is null) return;
+        _order = updated;
+        if (updated.Status != "PendingAcceptance") await Alarm.Dismiss(OrderId);
     }
 
     private async Task CustomerActionAsync(string action, object? body)

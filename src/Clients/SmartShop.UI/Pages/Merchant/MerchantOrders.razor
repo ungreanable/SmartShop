@@ -132,7 +132,7 @@
     {
         if (await Api.Post<Order>($"api/merchant/orders/{o.Id}/{action}") is not null)
         {
-            if (action == "accept" && Alarm.PendingOrderIds.Count <= 1) await Alarm.SilenceAsync();
+            await Alarm.Dismiss(o.Id); // stop ringing for this order on this device right away
             await LoadAsync(_tab);
         }
     }
