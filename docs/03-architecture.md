@@ -20,7 +20,7 @@ flowchart LR
     Caddy[Caddy<br/>Reverse Proxy + Auto HTTPS]
 
     subgraph App["SmartShop (.NET 10)"]
-        WEB[Web Host<br/>Blazor SSR/WASM]
+        WEB[Web Host<br/>Blazor WASM PWA + YARP]
         API[API Host<br/>ASP.NET Core + SignalR]
         WORKER[Worker Host<br/>Event Consumers + Scheduler]
     end
@@ -36,13 +36,14 @@ flowchart LR
 
     LIFF & MAUI --> Caddy
     Caddy --> WEB & API
-    Caddy -->|signed image URLs| S3
     API --> PG & VK & S3
     API -- Outbox --> MQ
     MQ --> WORKER
     WORKER --> PG & VK & S3
     WORKER -- Outbox --> MQ
     WORKER -->|Push| LINE
+    WORKER -->|Signed webhooks| EXT[ระบบของร้าน<br/>POS / Printer]
+    EXT -->|Public API + API key| Caddy
     API -->|Verify id_token| LINE
     WORKER -.->|notify via backplane| VK -.-> API
 ```
@@ -57,7 +58,10 @@ flowchart LR
 | **Catalog** | Category, Item, Options, Availability, **Inventory** (Stock, Reservation, Ledger) | `catalog` |
 | **Ordering** | Cart, Order, Order State Machine, Order Timeline | `ordering` |
 | **Payments** | Payment, Slip Attachment, Verification, PromptPay QR Generation | `payments` |
-| **Reviews** (P2) | Rating, Review, Reply | `reviews` |
+| **Reviews** | Rating, Review, Reply, Moderation | `reviews` |
+| **Promotions** | Coupon / Automatic promotion, Redemption (จองสิทธิ์ใน Transaction ของ Checkout) | `promotions` |
+| **Audit** | บันทึกการกระทำของ Admin/ร้าน สร้างจาก Integration Event | `audit` |
+| **Integrations** | API Keys, Public API v1, Webhook Endpoints + Deliveries | `integrations` |
 | **Notifications** | Inbox, Preferences, Recipient Fan-out, Device Registry, LINE Friendship (Webhook), Channel Dispatch + Fallback, Quota Guard | `notifications` |
 | **Media** | Upload, Resize/Thumbnail, Presigned URL, Access Control | `media` |
 | **Search** | Read Model สำหรับหน้า Home/ค้นหา (Denormalized จาก Event) | `search` |
@@ -67,19 +71,19 @@ flowchart LR
 | Layer | เลือกใช้ | License | หมายเหตุ |
 |---|---|---|---|
 | Runtime | **.NET 10** (LTS) | MIT | Support ถึง Nov 2028 |
-| API | ASP.NET Core Minimal APIs | MIT | + `Asp.Versioning`, OpenAPI built-in + **Scalar** UI (MIT) |
+| API | ASP.NET Core Minimal APIs | MIT | OpenAPI built-in + **Scalar** UI (MIT), Public API อยู่ใต้ `/api/public/v1` |
 | Real-time | ASP.NET Core **SignalR** | MIT | Backplane ผ่าน Valkey |
 | ORM | **EF Core** + Npgsql | MIT / PostgreSQL | Optimistic Concurrency ด้วย `xmin` |
 | Messaging / Mediator / Outbox / Scheduler | **[Wolverine](https://wolverinefx.net)** | MIT | ตัวเดียวครบ: In-process Handler, RabbitMQ Transport, EF Core Transactional Outbox/Inbox, Scheduled Messages, Retry/DLQ |
-| Validation | FluentValidation | Apache 2.0 | |
-| Mapping | Mapperly (Source Generator) | Apache 2.0 | เร็ว, ไม่มี Reflection |
+| Validation | Guard clauses ใน Domain (`SharedKernel.Guard`) | – | ไม่ใช้ Library: กฎอยู่กับ Entity และ Error มี `code` ให้ UI แปลภาษา |
+| Mapping | เขียนเอง (`ToDto`) | – | DTO น้อยและตรงไปตรงมา |
 | Cache | **HybridCache** (L1 Memory + L2 Valkey) | MIT | Stampede Protection + Tag Invalidation |
 | Auth | ASP.NET Core JWT Bearer + LINE OIDC | MIT | ระบบออก JWT เอง |
-| Image Processing | **NetVips** (libvips) | MIT / LGPL | ทำ Thumbnail/WebP เร็ว ใช้ RAM น้อย |
+| Image Processing | **SkiaSharp** | MIT | ย่อรูปเป็น WebP + ลบ EXIF, อ่าน QR บนสลิปด้วย **ZXing.Net** (Apache 2.0) |
 | QR | QRCoder + PromptPay EMVCo Payload (เขียนเอง ~100 บรรทัด) | MIT | |
-| Logging | Serilog → OpenTelemetry | Apache 2.0 | |
+| Logging | `Microsoft.Extensions.Logging` → OpenTelemetry | MIT | |
 | Observability | **OpenTelemetry** → Aspire Dashboard (dev) / Grafana + Prometheus + Loki + Tempo (prod, optional) | MIT / Apache / AGPL | AGPL เฉพาะตัว Loki/Tempo ที่รันแยก Container ไม่กระทบ License ของโปรเจกต์ |
-| Web Frontend | **Blazor Web App** (Interactive Auto + Prerender) + PWA | MIT | Prerender ช่วยให้ First Load เร็วบน LIFF (OG Preview เป็นแบบ Generic ไม่เปิดเผยข้อมูลร้าน) |
+| Web Frontend | **Blazor WebAssembly** (Standalone) + PWA | MIT | Host ด้วย ASP.NET Core ที่ Proxy `/api` และ `/hubs` ด้วย **YARP** (Same-origin, ไม่ต้องตั้ง CORS) และส่ง `/app-config.json` ให้ Client |
 | Mobile | **.NET MAUI Blazor Hybrid** | MIT | ใช้ Razor Class Library เดียวกับ Web |
 | UI Kit | MudBlazor | MIT | |
 | Database | **PostgreSQL 17+** | PostgreSQL | `pg_trgm` สำหรับค้นหาภาษาไทย |
@@ -88,7 +92,7 @@ flowchart LR
 | Object Storage | **SeaweedFS** (S3 API) | Apache 2.0 | เขียนผ่าน `AWSSDK.S3` เปลี่ยนเป็น S3/R2/Garage ได้ด้วย Config |
 | Reverse Proxy | **Caddy 2** | Apache 2.0 | Auto HTTPS (Let's Encrypt) |
 | Dev Orchestration | **.NET Aspire** | MIT | `dotnet run` รันทุกอย่างพร้อม Dashboard |
-| Testing | xUnit, **Testcontainers**, Shouldly, NetArchTest, bUnit, Playwright | Apache / MIT | |
+| Testing | xUnit v3 (Microsoft.Testing.Platform), **Testcontainers**, Shouldly, NetArchTest | Apache / MIT | E2E (Playwright) ยังไม่ได้ทำ |
 | CI/CD | GitHub Actions → GHCR, Dependabot/Renovate | – | Multi-arch image (amd64/arm64) |
 
 ### License Policy
@@ -99,10 +103,10 @@ flowchart LR
 |---|---|---|
 | MassTransit v9+ | Commercial License | Wolverine |
 | MediatR v13+ | Commercial License | Wolverine (In-process handler) |
-| AutoMapper v15+ | Commercial License | Mapperly |
+| AutoMapper v15+ | Commercial License | Mapping เขียนเอง (หรือ Mapperly) |
 | FluentAssertions v8+ | Commercial License | Shouldly |
 | Duende IdentityServer | Commercial License | JWT เอง (หรือ OpenIddict ถ้าต้องการ OIDC Server เต็มรูปแบบ) |
-| ImageSharp | Six Labors Split License | NetVips / SkiaSharp |
+| ImageSharp | Six Labors Split License | SkiaSharp |
 | MinIO | Community Edition ถูกลดฟีเจอร์และหยุดแจกจ่าย Binary | SeaweedFS / Garage |
 | Redis | เปลี่ยน License หลายรอบ (SSPL → AGPL) | Valkey (BSD) |
 
@@ -117,41 +121,37 @@ flowchart LR
 ```
 SmartShop/
 ├─ src/
-│  ├─ AppHost/                      # .NET Aspire orchestration (dev)
-│  ├─ ServiceDefaults/              # OpenTelemetry, Health checks, Resilience
+│  ├─ Aspire/
+│  │  ├─ SmartShop.AppHost/          # .NET Aspire orchestration (dev)
+│  │  └─ SmartShop.ServiceDefaults/  # OpenTelemetry, Health checks, Resilience
 │  ├─ BuildingBlocks/
-│  │  ├─ SmartShop.SharedKernel/    # Entity, AggregateRoot, DomainEvent, Result, Money, PlantId
-│  │  ├─ SmartShop.Infrastructure/  # EF base, Outbox wiring, Caching, Storage, Current User/Plant
-│  │  └─ SmartShop.Contracts/       # Integration Events (public contract ระหว่าง Module)
-│  ├─ Modules/
-│  │  ├─ Identity/  { Domain, Application, Infrastructure, Endpoints }
-│  │  ├─ Plants/
-│  │  ├─ Shops/
-│  │  ├─ Catalog/
-│  │  ├─ Ordering/
-│  │  ├─ Payments/
-│  │  ├─ Notifications/
-│  │  ├─ Media/
-│  │  └─ Search/
+│  │  ├─ SmartShop.SharedKernel/     # Exceptions (code + message), Ids (UUIDv7), Guard, Shop schedule evaluator
+│  │  ├─ SmartShop.Contracts/        # Integration Events + Interface สำหรับเรียกข้าม Module
+│  │  └─ SmartShop.Infrastructure/   # ModuleDbContext, Wolverine setup, Auth, Tenancy, Cache, Storage, Realtime, RLS
+│  ├─ Modules/                       # 1 Project = 1 Module = 1 Schema
+│  │  ├─ SmartShop.Modules.Identity/   Plants/  Shops/  Catalog/  Ordering/  Payments/
+│  │  ├─ SmartShop.Modules.Notifications/  Media/  Search/
+│  │  └─ SmartShop.Modules.Reviews/  Promotions/  Audit/  Integrations/
 │  ├─ Hosts/
-│  │  ├─ SmartShop.Api/             # รวม Endpoints ทุก Module + SignalR Hub
-│  │  └─ SmartShop.Worker/          # Wolverine consumers + scheduled jobs
+│  │  ├─ SmartShop.Bootstrap/        # รวม Module (ModuleCatalog), Middleware, migrate / vapid commands
+│  │  ├─ SmartShop.Api/              # Endpoints ทุก Module + SignalR Hub (Messaging role: Api)
+│  │  └─ SmartShop.Worker/           # Consumers + Scheduled messages + Recurring jobs
 │  └─ Clients/
-│     ├─ SmartShop.UI/              # Razor Class Library (Pages, Components, Typed API Client)
-│     ├─ SmartShop.Web/             # Blazor Web App host (PWA + LIFF)
-│     └─ SmartShop.Mobile/          # .NET MAUI Blazor Hybrid
+│     ├─ SmartShop.UI/               # Razor Class Library (Pages, Components, Api client) ใช้ร่วม Web + Mobile
+│     ├─ SmartShop.Web.Client/       # Blazor WebAssembly (PWA, LIFF, Web Push)
+│     ├─ SmartShop.Web/              # Host ของ PWA + YARP proxy
+│     └─ SmartShop.Mobile/           # .NET MAUI Blazor Hybrid (แยก SmartShop.Mobile.slnx)
 ├─ tests/
-│  ├─ Modules.*.UnitTests/
-│  ├─ IntegrationTests/             # Testcontainers: Postgres, Valkey, RabbitMQ
-│  ├─ ArchitectureTests/            # บังคับกฎ Module boundary
-│  └─ E2E/                          # Playwright
+│  ├─ SmartShop.UnitTests/
+│  ├─ SmartShop.ArchitectureTests/   # กฎ Module boundary + ชื่อ Handler
+│  └─ SmartShop.IntegrationTests/    # WebApplicationFactory + Testcontainers (เปิด RLS ทั้งชุด)
 ├─ deploy/
-│  ├─ docker-compose.yml
-│  ├─ docker-compose.observability.yml
-│  ├─ Caddyfile
-│  └─ .env.example
+│  ├─ docker-compose.yml  docker-compose.dev.yml  docker-compose.observability.yml
+│  ├─ Caddyfile  .env.example
+│  └─ helm/smartshop/
+├─ scripts/                          # add-migration, check-licenses, check-razor-params, dev-api
 ├─ docs/
-├─ Directory.Packages.props         # Central Package Management
+├─ Directory.Packages.props          # Central Package Management
 └─ SmartShop.slnx
 ```
 
@@ -160,7 +160,7 @@ SmartShop/
 2. แต่ละ Module มี `DbContext` ของตัวเอง ชี้ไปที่ Schema ของตัวเองเท่านั้น
 3. การสื่อสารข้าม Module: **Async** ผ่าน Integration Event (ค่าเริ่มต้น) หรือ **Sync** ผ่าน Interface ใน Contracts (เฉพาะกรณีที่ต้องการคำตอบทันที เช่น Reserve Stock)
 
-ภายใน Module ใช้ **Vertical Slice** (1 Feature = Endpoint + Command/Query + Handler + Validator อยู่ด้วยกัน)
+ภายใน Module แบ่งเป็น `Domain` (Entity + กฎ), `Data` (DbContext + Migrations), `Endpoints`, `Handlers` (Wolverine), `Services` ส่วน Module เล็กอยู่ในไฟล์เดียว
 
 ## 4. Event-Driven Design
 
@@ -248,18 +248,20 @@ flowchart LR
 
 **อื่น ๆ**
 - **ไม่มี Public Endpoint ของข้อมูลร้าน** ทุก Endpoint ต้องมี JWT + Active Membership (ยกเว้น Auth, LINE Webhook, Health, หน้า Landing แบบ Generic)
-- **Image Caching:** รูปสินค้า/ร้านใช้ Content-hash Key (`{hash}.webp`) แต่ให้บริการผ่าน **Signed URL อายุ 1 ชม.** (ออกให้หลังตรวจ Membership) + `Cache-Control: private, max-age=3600` เพื่อให้ Browser Cache ได้ แต่ห้าม Shared/CDN Cache เพราะคนนอกหมู่บ้านต้องเข้าไม่ได้
-- **Idempotency Keys** (Place Order, Upload Slip) เก็บใน Valkey 24 ชม.
-- **Rate Limiting** ด้วย ASP.NET Core Rate Limiter (ต่อ User / ต่อ IP)
+- **Image Caching:** รูปสินค้า/ร้านให้บริการผ่าน API ด้วย **Signed URL (HMAC) อายุ 1–2 ชม.** (ปัดเป็นชั่วโมงเพื่อให้ URL เดิมใช้ Cache ซ้ำได้) (ออกให้หลังตรวจ Membership) + `Cache-Control: private, max-age=3600` เพื่อให้ Browser Cache ได้ แต่ห้าม Shared/CDN Cache เพราะคนนอกหมู่บ้านต้องเข้าไม่ได้
+- **Idempotency-Key** ของ Checkout เก็บกับ Order (Unique ต่อผู้ใช้) ส่งซ้ำได้ Order เดิมกลับไป
+- **Rate Limiting** ด้วย ASP.NET Core Rate Limiter (ต่อ User / ต่อ IP, Login ต่อ IP, Public API ต่อ API key)
 - **SignalR Backplane** บน Valkey เพื่อ Scale API ได้หลาย Instance
 
 ## 6. Security & Multi-tenancy
 
 - **Tenant Resolution:** Client ส่ง Header `X-Plant-Id` → Middleware ตรวจว่า User เป็นสมาชิก **Active** (จาก Cache) → ใส่ใน `ICurrentPlant` สมาชิก `Pending` / `Suspended` ได้ `403` ทุก Endpoint ของ Plant ยกเว้นดูสถานะคำขอของตัวเอง
 - **ไม่มี Public Shop Page:** คนนอกหมู่บ้านไม่เห็นข้อมูลใด ๆ, Link Preview เป็นแบบ Generic, รูปสินค้าและร้านให้บริการผ่าน **Presigned URL / Signed Path ที่ตรวจ Membership** (ไม่เปิด Bucket เป็น Public)
-- **EF Core Global Query Filter** `WHERE plant_id = @current` บนทุก Entity ที่เป็นของ Plant (P3: เสริมด้วย PostgreSQL Row-Level Security)
+- **กรองตาม Plant ทุก Query** (`plant_id = ICurrentPlant.PlantId`) และเปิด **PostgreSQL Row-Level Security** เพิ่มได้ (`Database:RowLevelSecurity=true`): Migrator สร้าง Policy `tenant_isolation` ให้ทุกตารางที่มี `plant_id` ระหว่าง Request ที่อยู่ในหมู่บ้าน Connection จะ `SET ROLE smartshop_app` และตั้ง `smartshop.plant_id` ทำให้ Query ที่ลืมกรองก็อ่านข้ามหมู่บ้านไม่ได้ (Integration test ทั้งชุดรันโดยเปิด RLS)
 - **Authorization:** Policy-based (`PlantAdmin`, `PlantMember`) + Resource-based (`ShopRole >= Staff | Manager | Owner` ตรวจกับ Shop ที่ถูกเรียก)
 - **LINE Webhook:** ตรวจ `X-Line-Signature` (HMAC-SHA256 ด้วย Channel Secret) ทุก Request
+- **Public API:** API key ต่อร้าน (เก็บแค่ SHA-256), Scope, Revoke, Rate limit ต่อ Key
+- **Outgoing Webhooks:** ลงลายเซ็น HMAC-SHA256, กัน **SSRF** (https เท่านั้น, ปฏิเสธ IP ภายใน/Link-local/Metadata ทั้งตอนบันทึกและตอนเชื่อมต่อ, ไม่ตาม Redirect) ดู [06-public-api.md](06-public-api.md)
 - **ไฟล์สลิป/รูปส่งของ:** Private Bucket เข้าถึงผ่าน **Presigned URL อายุสั้น** หลังตรวจสิทธิ์ (ผู้ซื้อ / ร้าน / Plant Admin)
 - **Upload:** ตรวจ Magic Bytes, จำกัดขนาด, ลบ EXIF (ตำแหน่ง GPS) ก่อนเก็บ
 - **Secrets:** ผ่าน Environment Variables / Docker Secrets ห้าม Commit (มี `.env.example`)
@@ -270,13 +272,13 @@ flowchart LR
 ### Production (VPS เครื่องเดียว 2 vCPU / 4 GB RAM รองรับได้หลายหมู่บ้าน)
 
 ```yaml
-# deploy/docker-compose.yml (โครงคร่าว ๆ)
+# deploy/docker-compose.yml (ย่อ)
 services:
-  caddy:     { image: caddy:2, ports: ["80:80", "443:443"] }
+  caddy:     { image: caddy:2.10-alpine, ports: ["80:80", "443:443"] }   # /api /hubs /health → api, ที่เหลือ → web
   web:       { image: ghcr.io/<owner>/smartshop-web:${TAG} }
-  api:       { image: ghcr.io/<owner>/smartshop-api:${TAG} }
+  api:       { image: ghcr.io/<owner>/smartshop-api:${TAG} }               # Messaging__Role=Api
   worker:    { image: ghcr.io/<owner>/smartshop-worker:${TAG} }
-  migrator:  { image: ghcr.io/<owner>/smartshop-migrator:${TAG}, restart: "no" }  # EF Core migration bundle
+  migrator:  { image: ghcr.io/<owner>/smartshop-api:${TAG}, command: ["migrate"], restart: "no" }
   postgres:  { image: postgres:17 }
   valkey:    { image: valkey/valkey:8 }
   rabbitmq:  { image: rabbitmq:4-management }
@@ -284,20 +286,21 @@ services:
 ```
 
 - Build Image ด้วย **.NET SDK Container Publish** (`dotnet publish /t:PublishContainer`) ไม่ต้องเขียน Dockerfile ได้ Image แบบ **Chiseled** (เล็ก, Non-root, Attack Surface ต่ำ)
-- Health Checks (`/health/live`, `/health/ready`) ใช้ใน `depends_on: condition: service_healthy`
+- Health Checks (`/health/live`, `/health/ready`) ใช้ใน `depends_on: condition: service_healthy` (Image แบบ Chiseled ไม่มี curl จึงใช้ `dotnet <app>.dll --healthcheck`)
 - Backup: `pg_dump` ตามรอบ + Sync SeaweedFS ไป Off-site Storage
-- **Aspire** สามารถ Generate Docker Compose จาก AppHost ได้ (`aspire publish`) ทำให้ Config Dev/Prod ตรงกัน
+- **Observability:** `docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d` (Grafana + Tempo + Loki + Prometheus ใน otel-lgtm)
+- **Kubernetes:** Helm chart `deploy/helm/smartshop` (api + HPA, worker, web, Ingress, Migration Job เป็น pre-install/upgrade hook) ใช้ Postgres/Valkey/RabbitMQ/S3 ภายนอก
 
 ### Scale-out Path (เมื่อจำเป็น)
 1. เพิ่ม Instance ของ `api` / `worker` (Stateless อยู่แล้ว: Valkey Backplane + Postgres Outbox)
 2. แยก Module ที่โหลดสูง (เช่น Notifications, Media) เป็น Service แยก: เปลี่ยนแค่ Host + Connection String เพราะสื่อสารผ่าน RabbitMQ อยู่แล้ว
-3. ย้ายไป Kubernetes ด้วย Helm Chart (P3)
+3. ย้ายไป Kubernetes ด้วย Helm Chart ที่มีให้แล้ว
 
 ## 8. CI/CD (GitHub Actions)
 
 ```
-PR:    build → unit tests → architecture tests → integration tests (Testcontainers) → format/analyzers
-main:  + build multi-arch images → push GHCR (tag: sha, edge)
-tag v*: + release images (semver) + GitHub Release notes + SBOM
+PR / main:  restore → dotnet format (verify) → build → Razor parameter check → unit + architecture tests
+            → integration tests (Testcontainers) | Android build (MAUI) | Helm lint + compose config | license check
+main / tag: containers.yml → multi-arch images (SDK container publish, chiseled) → GHCR
 ```
 พร้อม: CodeQL, Dependabot/Renovate, Conventional Commits, `CONTRIBUTING.md`, Issue/PR Templates, `CODE_OF_CONDUCT.md`

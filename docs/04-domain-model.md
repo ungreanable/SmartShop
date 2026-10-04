@@ -312,19 +312,30 @@ Integration Events ทั้งหมดอยู่ใน `SmartShop.Contracts`
 | `ShopMemberAdded` / `ShopMemberRemoved` / `ShopMemberRoleChanged` | Shops | Cache, Notifications → สมาชิกที่ถูกเพิ่ม/ลบ |
 | `ShopMemberNotificationToggled` | Shops | Cache (`notify-recipients`) |
 | `ShopOwnershipTransferred` | Shops | Cache, Notifications, Audit |
+| `AnnouncementPublished` | Plants | Notifications → สมาชิก (ถ้าเลือกแจ้งเตือน), Audit |
 | `LineFriendshipChanged` | Notifications (จาก LINE Webhook) | Cache (`user:{id}:channels`) |
 | `ItemCreated` / `ItemUpdated` / `ItemDeleted` | Catalog | Search, Cache |
 | `ItemSoldOut` / `ItemBackInStock` | Catalog | Search, Cache, SignalR (Shop page) |
 | `StockLow` | Catalog | Notifications → ร้าน |
-| `OrderPlaced` | Ordering | Payments (Create Payment), Notifications → **สมาชิกร้านทุกคนที่เปิดรับ**, Worker (Schedule Expire / Reminder / Auto-accept) |
+| `OrderPlaced` | Ordering | Payments (Create Payment), Integrations (Webhook), Notifications → **สมาชิกร้านทุกคนที่เปิดรับ**, Worker (Schedule Expire / Reminder / Auto-accept) |
 | `OrderAccepted` | Ordering | Notifications → ลูกค้า, SignalR → หยุดเสียงเตือนบนเครื่องสมาชิกร้านคนอื่น |
-| `OrderRejected` / `OrderCancelled` / `OrderExpired` | Ordering | Catalog (Release Stock), Payments (Void/Refund flag), Notifications |
+| `OrderRejected` / `OrderCancelled` / `OrderExpired` | Ordering | Catalog (Release Stock), Promotions (คืนสิทธิ์คูปอง), Payments (Void/Refund flag), Integrations, Notifications |
 | `OrderPreparing` / `OrderReady` / `OrderOutForDelivery` | Ordering | Notifications, SignalR |
 | `OrderDelivered` | Ordering | Notifications → ลูกค้า, Worker (Schedule AutoComplete) |
 | `OrderCompleted` | Ordering | Catalog (**Commit Stock**), Reviews (เปิดให้รีวิว), Analytics |
-| `PaymentProofUploaded` | Payments | Notifications → ร้าน, (P2) Slip Duplicate Check |
-| `PaymentVerified` / `PaymentRejected` | Payments | Ordering (อาจปลด Gate "จ่ายก่อนทำ"), Notifications |
-| `ReviewSubmitted` | Reviews | Shops (Update Rating Aggregate), Search, Notifications |
+| `PaymentProofUploaded` | Payments | Notifications → ร้าน (ตรวจสลิปซ้ำทำตอนอัปโหลด) |
+| `PaymentVerified` / `PaymentRejected` | Payments | Ordering (อาจปลด Gate "จ่ายก่อนทำ"), Integrations (`payment.verified`), Notifications |
+| `ReviewSubmitted` | Reviews | Shops (Update Rating Aggregate → `ShopRatingChanged`), Notifications → ร้าน |
+| `ReviewReplied` | Reviews | Notifications → ลูกค้า |
+| `ReviewModerated` | Reviews | Shops (คำนวณ Rating ใหม่), Audit |
+| `ShopRatingChanged` | Shops | Search |
+| `UserErased` | Identity | ทุก Module ที่เก็บข้อมูลส่วนบุคคล (ลบ/ทำให้ไม่ระบุตัวตน) |
+
+**Command แบบ Async / ตั้งเวลา** (`IScheduledCommand` ส่งไป Worker): `EvaluateShopStatus`, `ExpireOrderIfNotAccepted`, `RemindShopPendingOrder`, `AutoCompleteOrder`,
+`VerifySlip` (ส่งสลิปไปตรวจกับบริการภายนอก), `DeliverWebhook` (ส่ง/ส่งซ้ำ Webhook แบบ Backoff), `SendTestNotification`
+
+**Audit log** (Module `Audit`) สร้างจาก Event ของการอนุมัติ/ระงับสมาชิก, คำขอเปิดร้าน, ระงับร้าน, โอนร้าน, ประกาศ และการซ่อนรีวิว
+จึงไม่มี Module ไหนต้องจำว่าต้องเขียน Audit เอง (Idempotent ด้วย `EventId`)
 
 ### ตัวอย่าง Contract
 
