@@ -47,13 +47,18 @@ public static class SlipReader
 /// </summary>
 public interface ISlipVerifier
 {
+    bool Enabled { get; }
+
     Task<SlipVerification> VerifyAsync(string slipReference, decimal expectedAmount, CancellationToken ct);
 }
 
+/// <param name="Checked">The service gave a verdict (false: not configured or unreachable, nothing is recorded).</param>
 public sealed record SlipVerification(bool Checked, bool Valid, string? Message);
 
 internal sealed class ManualSlipVerifier : ISlipVerifier
 {
+    public bool Enabled => false;
+
     public Task<SlipVerification> VerifyAsync(string slipReference, decimal expectedAmount, CancellationToken ct) =>
         Task.FromResult(new SlipVerification(false, false, null));
 }

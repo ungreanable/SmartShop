@@ -1,0 +1,33 @@
+{{- if .Values.migrations.enabled }}
+# Applies the EF Core migrations of every module before the new version starts.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "smartshop.fullname" . }}-migrate-{{ .Release.Revision }}
+  labels: {{ include "smartshop.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      {{- include "smartshop.podSpecCommon" . | nindent 6 }}
+      containers:
+        - name: migrate
+          image: {{ include "smartshop.image" (dict "root" . "name" "api") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["migrate"]
+          env:
+            {{- include "smartshop.appEnv" . | nindent 12 }}
+            - name: Messaging__Role
+              value: Standalone
+          securityContext: {{ toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+{{- end }}

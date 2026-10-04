@@ -108,7 +108,8 @@ public sealed record OrderReport(Guid Id, Guid OrderId, string OrderNo, Guid Sho
     string Reason, string Status, string? Resolution, DateTimeOffset CreatedAt, DateTimeOffset? ResolvedAt);
 
 // ---- payments ----
-public sealed record Proof(Guid Id, string? Url, string? ThumbnailUrl, string ContentType, DateTimeOffset UploadedAt, string? DuplicateOfOrderNo, bool HasSlipReference);
+public sealed record Proof(Guid Id, string? Url, string? ThumbnailUrl, string ContentType, DateTimeOffset UploadedAt, string? DuplicateOfOrderNo, bool HasSlipReference,
+    bool? SystemVerified, string? VerificationMessage);
 public sealed record Payment(Guid Id, Guid OrderId, string OrderNo, decimal Amount, string MethodType, string DisplayName, string? PromptPayId,
     string? PromptPayQrDataUrl, string? QrImageUrl, string? BankName, string? AccountNumber, string? AccountName, string? Instructions,
     string? ImageUrl, bool RequiresProof, string Status, string? RejectReason, DateTimeOffset? VerifiedAt, bool RefundRequired,

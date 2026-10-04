@@ -1,0 +1,14 @@
+SmartShop {{ .Chart.AppVersion }} is deployed as "{{ .Release.Name }}".
+
+{{- if .Values.ingress.enabled }}
+Open {{ .Values.publicUrl }} (ingress host {{ .Values.ingress.host }}).
+{{- else }}
+  kubectl port-forward svc/{{ include "smartshop.fullname" . }}-web 8080:8080
+{{- end }}
+
+LINE setup:
+  - LINE Login callback URL:    {{ .Values.publicUrl }}/auth/callback
+                                {{ .Values.publicUrl }}/api/auth/line/mobile-callback   (mobile app)
+  - Messaging API webhook URL:  {{ .Values.publicUrl }}/api/webhooks/line
+
+The first user whose LINE id matches config.systemAdminLineUserId becomes System Admin and can create villages.

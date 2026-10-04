@@ -1,0 +1,9 @@
+apiVersion: v2
+name: smartshop
+description: SmartShop - village shop ordering (web, API, worker). PostgreSQL, Valkey/Redis, RabbitMQ and S3 storage are provided externally.
+type: application
+version: 0.1.0
+appVersion: "latest"
+home: https://github.com/smartshop-village/smartshop
+license: MIT
+keywords: [ordering, line, community, blazor, dotnet]

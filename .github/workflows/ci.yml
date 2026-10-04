@@ -58,6 +58,21 @@ jobs:
       - name: Build Android app
         run: dotnet build src/Clients/SmartShop.Mobile -f net10.0-android -c Release
 
+  deploy-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Helm lint & render
+        run: |
+          helm lint deploy/helm/smartshop
+          helm template ci deploy/helm/smartshop --set api.autoscaling.enabled=true > /dev/null
+      - name: Compose config
+        working-directory: deploy
+        run: |
+          docker compose --env-file .env.example config -q
+          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.observability.yml config -q
+
   license-check:
     runs-on: ubuntu-latest
     steps:

@@ -3,7 +3,7 @@ using SmartShop.IntegrationTests.Infrastructure;
 
 namespace SmartShop.IntegrationTests;
 
-public sealed record ProofDto(Guid Id, string? Url, string ContentType, string? DuplicateOfOrderNo);
+public sealed record ProofDto(Guid Id, string? Url, string ContentType, string? DuplicateOfOrderNo, bool HasSlipReference, bool? SystemVerified, string? VerificationMessage);
 public sealed record PaymentDto(Guid Id, Guid OrderId, decimal Amount, string MethodType, string? PromptPayQrDataUrl, string Status,
     string? RejectReason, List<ProofDto> Proofs, bool CanUploadProof, bool CanVerify, bool RefundRequired);
 
@@ -130,5 +130,38 @@ public class PaymentTests(SmartShopFactory factory)
 
         await FactoryExtensions.EventuallyAsync(async () =>
             (await s.Customer.GetAsync<PaymentDto>($"/api/orders/{order.Id}/payment")).Status.ShouldBe("Voided"));
+    }
+
+    private static byte[] SlipWithQr(string reference) => new QRCoder.PngByteQRCode(
+        new QRCoder.QRCodeGenerator().CreateQrCode(reference, QRCoder.QRCodeGenerator.ECCLevel.M)).GetGraphic(8);
+
+    [Fact]
+    public async Task Slip_verifier_plugin_auto_confirms_genuine_slips_and_flags_wrong_ones()
+    {
+        var s = await SetupAsync();
+        var genuine = await OrderAsync(s.Customer, s.ShopId, s.ItemId, s.PromptPayId);
+        var wrong = await OrderAsync(s.Customer, s.ShopId, s.ItemId, s.PromptPayId);
+        await PaymentAsync(s.Customer, genuine.Id);
+        await PaymentAsync(s.Customer, wrong.Id);
+
+        var slip = await s.Customer.UploadAsync("PaymentSlip", SlipWithQr("VALID-" + Guid.NewGuid().ToString("N")));
+        (await s.Customer.PostAsync<PaymentDto>($"/api/orders/{genuine.Id}/payment/proofs", new { mediaId = slip.Id })).Proofs.Single().HasSlipReference.ShouldBeTrue();
+        await FactoryExtensions.EventuallyAsync(async () =>
+        {
+            var payment = await s.Owner.GetAsync<PaymentDto>($"/api/orders/{genuine.Id}/payment");
+            payment.Status.ShouldBe("Paid");
+            payment.Proofs.Single().SystemVerified.ShouldBe(true);
+            payment.Proofs.Single().VerificationMessage.ShouldBe("ตรวจสอบกับธนาคารแล้ว");
+        });
+
+        var badSlip = await s.Customer.UploadAsync("PaymentSlip", SlipWithQr("WRONGAMOUNT-" + Guid.NewGuid().ToString("N")));
+        await s.Customer.PostOkAsync($"/api/orders/{wrong.Id}/payment/proofs", new { mediaId = badSlip.Id });
+        await FactoryExtensions.EventuallyAsync(async () =>
+        {
+            var payment = await s.Owner.GetAsync<PaymentDto>($"/api/orders/{wrong.Id}/payment");
+            payment.Proofs.Single().SystemVerified.ShouldBe(false);
+            payment.Proofs.Single().VerificationMessage!.ShouldContain("ไม่ตรง");
+            payment.Status.ShouldBe("PendingVerification"); // the shop decides
+        });
     }
 }

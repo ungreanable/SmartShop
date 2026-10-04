@@ -1,0 +1,58 @@
+{{- $component := dict "root" . "component" "web" -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "smartshop.fullname" . }}-web
+  labels:
+    {{- include "smartshop.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  replicas: {{ .Values.web.replicas }}
+  selector:
+    matchLabels: {{ include "smartshop.selector" $component | nindent 6 }}
+  template:
+    metadata:
+      labels: {{ include "smartshop.selector" $component | nindent 8 }}
+    spec:
+      {{- include "smartshop.podSpecCommon" . | nindent 6 }}
+      containers:
+        - name: web
+          image: {{ include "smartshop.image" (dict "root" . "name" "web") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - { name: http, containerPort: 8080 }
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: Production
+            - name: ReverseProxy__Clusters__api__Destinations__api__Address
+              value: {{ printf "http://%s-api:8080" (include "smartshop.fullname" .) | quote }}
+            - name: Auth__Line__ChannelId
+              value: {{ .Values.config.lineLoginChannelId | quote }}
+            - name: Auth__Line__LiffId
+              value: {{ .Values.config.lineLiffId | quote }}
+            - name: Line__AddFriendUrl
+              value: {{ .Values.config.lineAddFriendUrl | quote }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.config.otlpEndpoint | quote }}
+          livenessProbe:
+            httpGet: { path: /health/live, port: http }
+            periodSeconds: 20
+          readinessProbe:
+            httpGet: { path: /health/live, port: http }
+            periodSeconds: 10
+          resources: {{ toYaml .Values.web.resources | nindent 12 }}
+          securityContext: {{ toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "smartshop.fullname" . }}-web
+  labels: {{ include "smartshop.labels" . | nindent 4 }}
+spec:
+  selector: {{ include "smartshop.selector" $component | nindent 4 }}
+  ports:
+    - { name: http, port: 8080, targetPort: http }

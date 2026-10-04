@@ -139,5 +139,17 @@ public sealed class PaymentProof
     public Guid? DuplicateOfPaymentId { get; private set; }
     public DateTimeOffset UploadedAt { get; private set; }
 
+    /// <summary>Verdict of the external slip verifier (null = not checked).</summary>
+    public bool? SystemVerified { get; private set; }
+    public string? VerificationMessage { get; private set; }
+    public DateTimeOffset? SystemVerifiedAt { get; private set; }
+
     public void MarkDuplicateOf(Guid paymentId) => DuplicateOfPaymentId = paymentId;
+
+    public void RecordVerification(bool valid, string? message, DateTimeOffset now)
+    {
+        SystemVerified = valid;
+        VerificationMessage = message is { Length: > 300 } ? message[..300] : message;
+        SystemVerifiedAt = now;
+    }
 }

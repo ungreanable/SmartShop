@@ -17,6 +17,8 @@ x-app-env: &app-env
   Line__MessagingChannelAccessToken: "${LINE_MESSAGING_ACCESS_TOKEN}"
   Line__MessagingChannelSecret: "${LINE_MESSAGING_CHANNEL_SECRET}"
   Line__MonthlyQuota: "${LINE_MONTHLY_QUOTA:-300}"
+  Line__AddFriendUrl: "${LINE_ADD_FRIEND_URL:-}"
+  Firebase__CredentialsJson: "${FIREBASE_CREDENTIALS_JSON:-}"
   Identity__SystemAdminLineUserIds__0: "${SYSTEM_ADMIN_LINE_USER_ID}"
   WebPush__Subject: "mailto:${ADMIN_EMAIL}"
   WebPush__PublicKey: "${VAPID_PUBLIC_KEY}"
@@ -28,6 +30,9 @@ x-app-env: &app-env
   Storage__SecretKey: smartshop
   App__PublicUrl: "https://${DOMAIN}"
   OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
+  Payments__SlipVerifier__Url: "${SLIP_VERIFIER_URL:-}"
+  Payments__SlipVerifier__ApiKey: "${SLIP_VERIFIER_API_KEY:-}"
+  Payments__SlipVerifier__AutoConfirm: "${SLIP_VERIFIER_AUTO_CONFIRM:-false}"
 
 services:
   caddy:
@@ -51,6 +56,11 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ReverseProxy__Clusters__api__Destinations__api__Address: "http://api:8080"
+      # Public client settings served at /app-config.json
+      Auth__Line__ChannelId: "${LINE_LOGIN_CHANNEL_ID}"
+      Auth__Line__LiffId: "${LINE_LIFF_ID}"
+      Line__AddFriendUrl: "${LINE_ADD_FRIEND_URL:-}"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
 
   api:
     image: ghcr.io/${GITHUB_OWNER:-smartshop-village}/smartshop-api:${TAG:-latest}

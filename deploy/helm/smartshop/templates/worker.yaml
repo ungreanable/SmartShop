@@ -1,0 +1,36 @@
+{{- $component := dict "root" . "component" "worker" -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "smartshop.fullname" . }}-worker
+  labels:
+    {{- include "smartshop.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.worker.replicas }}
+  selector:
+    matchLabels: {{ include "smartshop.selector" $component | nindent 6 }}
+  template:
+    metadata:
+      labels: {{ include "smartshop.selector" $component | nindent 8 }}
+      annotations:
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+    spec:
+      {{- include "smartshop.podSpecCommon" . | nindent 6 }}
+      containers:
+        - name: worker
+          image: {{ include "smartshop.image" (dict "root" . "name" "worker") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - { name: http, containerPort: 8080 }
+          env:
+            {{- include "smartshop.appEnv" . | nindent 12 }}
+            - name: Database__MigrateOnStartup
+              value: "false"
+          {{- include "smartshop.probes" . | nindent 10 }}
+          resources: {{ toYaml .Values.worker.resources | nindent 12 }}
+          securityContext: {{ toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }

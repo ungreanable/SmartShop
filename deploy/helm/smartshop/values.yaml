@@ -1,0 +1,105 @@
+# SmartShop Helm values. Backing services are external on purpose (use your cloud's managed services or
+# operators such as CloudNativePG / RabbitMQ Cluster Operator); point the connection settings below at them.
+
+image:
+  registry: ghcr.io
+  owner: smartshop-village
+  # Defaults to the chart appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+publicUrl: https://smartshop.example.com
+
+# Secret values. Set them here (rendered into a Secret) or create your own Secret with the same keys
+# and reference it with existingSecret.
+existingSecret: ""
+secrets:
+  # Npgsql connection string, e.g. Host=pg;Database=smartshop;Username=smartshop;Password=...
+  postgresConnection: ""
+  # host:port[,password=...] for Valkey / Redis
+  cacheConnection: ""
+  # amqp://user:password@host:5672
+  rabbitmqConnection: ""
+  jwtSigningKey: ""
+  mediaSigningKey: ""
+  lineLoginChannelSecret: ""
+  lineMessagingAccessToken: ""
+  lineMessagingChannelSecret: ""
+  vapidPrivateKey: ""
+  storageSecretKey: ""
+  slipVerifierApiKey: ""
+  # Firebase service account JSON (push to the Android app)
+  firebaseCredentialsJson: ""
+
+config:
+  lineLoginChannelId: ""
+  lineLiffId: ""
+  lineMonthlyQuota: 300
+  # "Add friend" link of the LINE Official Account (https://lin.ee/...)
+  lineAddFriendUrl: ""
+  systemAdminLineUserId: ""
+  adminEmail: admin@example.com
+  vapidPublicKey: ""
+  storage:
+    provider: S3
+    serviceUrl: ""
+    bucket: smartshop
+    accessKey: ""
+  slipVerifier:
+    url: ""
+    autoConfirm: false
+  otlpEndpoint: ""
+  # Extra environment variables for api, worker and migrations (ASP.NET Core configuration keys, e.g. Foo__Bar).
+  extraEnv: {}
+
+api:
+  replicas: 2
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 512Mi }
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+
+worker:
+  # Wolverine coordinates durable work across nodes; 1-2 replicas is plenty for most villages.
+  replicas: 1
+  resources:
+    requests: { cpu: 50m, memory: 256Mi }
+    limits: { memory: 512Mi }
+
+web:
+  replicas: 2
+  resources:
+    requests: { cpu: 25m, memory: 96Mi }
+    limits: { memory: 256Mi }
+
+migrations:
+  # Runs `migrate` as a pre-install/pre-upgrade hook before new pods start.
+  enabled: true
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations: {}
+    # cert-manager.io/cluster-issuer: letsencrypt
+    # nginx.ingress.kubernetes.io/proxy-body-size: 20m
+  host: smartshop.example.com
+  tls:
+    enabled: true
+    secretName: smartshop-tls
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile: { type: RuntimeDefault }
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities: { drop: [ALL] }
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

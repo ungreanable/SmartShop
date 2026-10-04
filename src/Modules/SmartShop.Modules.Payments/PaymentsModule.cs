@@ -23,7 +23,8 @@ using Wolverine.EntityFrameworkCore;
 
 namespace SmartShop.Modules.Payments;
 
-public sealed record ProofDto(Guid Id, string? Url, string? ThumbnailUrl, string ContentType, DateTimeOffset UploadedAt, string? DuplicateOfOrderNo, bool HasSlipReference);
+public sealed record ProofDto(Guid Id, string? Url, string? ThumbnailUrl, string ContentType, DateTimeOffset UploadedAt, string? DuplicateOfOrderNo, bool HasSlipReference,
+    bool? SystemVerified, string? VerificationMessage);
 public sealed record PaymentDto(
     Guid Id, Guid OrderId, string OrderNo, decimal Amount, PaymentMethodType MethodType, string DisplayName,
     string? PromptPayId, string? PromptPayQrDataUrl, string? QrImageUrl, string? BankName, string? AccountNumber, string? AccountName,
@@ -42,7 +43,11 @@ public sealed class PaymentsModule : IModule
     {
         builder.Services.AddModuleDbContext<PaymentsDbContext>(PaymentsDbContext.SchemaName);
         builder.Services.AddScoped<IPaymentDirectory, PaymentDirectory>();
-        builder.Services.AddSingleton<ISlipVerifier, ManualSlipVerifier>();
+        builder.Services.Configure<SlipVerifierOptions>(builder.Configuration.GetSection(SlipVerifierOptions.Section));
+        if (string.IsNullOrWhiteSpace(builder.Configuration[$"{SlipVerifierOptions.Section}:Url"]))
+            builder.Services.AddSingleton<ISlipVerifier, ManualSlipVerifier>();
+        else
+            builder.Services.AddHttpClient<ISlipVerifier, HttpSlipVerifier>();
         builder.Services.AddScoped<Access>();
     }
 
@@ -57,7 +62,7 @@ public sealed class PaymentsModule : IModule
         });
 
         customer.MapPost("/proofs", async (Guid orderId, ProofRequest req, Access access, IMediaService mediaService, IMediaUrls media,
-            IDbContextOutbox<PaymentsDbContext> outbox, TimeProvider clock, CancellationToken ct) =>
+            IDbContextOutbox<PaymentsDbContext> outbox, ISlipVerifier verifier, TimeProvider clock, CancellationToken ct) =>
         {
             var (payment, role) = await access.LoadAsync(orderId, ct, tracked: true);
             if (role != "customer") throw new ForbiddenException("Only the customer attaches payment slips.");
@@ -85,6 +90,9 @@ public sealed class PaymentsModule : IModule
             }
 
             outbox.DbContext.Proofs.Add(proof);
+            // External verification runs in the worker: it is a network call to a third party.
+            if (verifier.Enabled && reference is not null && proof.DuplicateOfPaymentId is null)
+                await outbox.PublishAsync(new VerifySlip(proof.Id));
             await outbox.SaveChangesAndFlushMessagesAsync(ct);
             return await ToDtoAsync(payment, role, outbox.DbContext, media, mediaService, ct);
         });
@@ -133,7 +141,8 @@ public sealed class PaymentsModule : IModule
             var isImage = info?.ContentType.StartsWith("image/", StringComparison.Ordinal) == true;
             proofs.Add(new ProofDto(proof.Id, media.For(proof.MediaId, MediaVariant.Original), isImage ? media.For(proof.MediaId, MediaVariant.Small) : null,
                 info?.ContentType ?? "application/octet-stream", proof.UploadedAt,
-                proof.DuplicateOfPaymentId is { } d ? duplicateOrders.GetValueOrDefault(d) : null, proof.SlipReference is not null));
+                proof.DuplicateOfPaymentId is { } d ? duplicateOrders.GetValueOrDefault(d) : null, proof.SlipReference is not null,
+                proof.SystemVerified, proof.VerificationMessage));
         }
 
         string? qr = null;

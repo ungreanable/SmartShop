@@ -40,11 +40,16 @@ public sealed class SmartShopFactory : WebApplicationFactory<Program>, IAsyncLif
         builder.UseSetting("Line:MessagingChannelSecret", LineChannelSecret);
         builder.UseSetting("RateLimiting:AuthPerMinute", "100000");
         builder.UseSetting("RateLimiting:UserTokensPer10Seconds", "100000");
+        builder.UseSetting("Payments:SlipVerifier:Url", "http://slip-verifier.test/verify");
+        builder.UseSetting("Payments:SlipVerifier:AutoConfirm", "true");
 
         builder.ConfigureServices(services =>
         {
             // Recurring jobs are triggered explicitly by tests (RunJobAsync) for determinism.
             services.RemoveAll<Microsoft.Extensions.Hosting.IHostedService>(typeof(RecurringJobRunner));
+            // The slip verification plug-in talks to a fake service (only slips with a readable QR reach it).
+            services.AddHttpClient(nameof(SmartShop.Modules.Payments.Services.ISlipVerifier))
+                .ConfigurePrimaryHttpMessageHandler(() => new FakeSlipVerifierHandler());
         });
     }
 

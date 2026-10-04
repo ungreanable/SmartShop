@@ -65,6 +65,14 @@
                     {
                         <MudAlert Severity="Severity.Error" Dense="true">⚠️ @L[$"สลิปนี้เคยใช้กับออเดอร์ #{proof.DuplicateOfOrderNo}", $"This slip was already used for order #{proof.DuplicateOfOrderNo}"]</MudAlert>
                     }
+                    @if (proof.SystemVerified == true)
+                    {
+                        <MudAlert Severity="Severity.Success" Dense="true">✅ @L["ระบบตรวจสลิปแล้ว: ถูกต้อง", "Slip checked automatically: genuine"] @proof.VerificationMessage</MudAlert>
+                    }
+                    else if (proof.SystemVerified == false)
+                    {
+                        <MudAlert Severity="Severity.Warning" Dense="true">⚠️ @L["ระบบตรวจสลิปไม่ผ่าน", "Automatic slip check failed"]: @proof.VerificationMessage</MudAlert>
+                    }
                 }
             </div>
         }
