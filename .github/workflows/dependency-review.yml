@@ -1,0 +1,21 @@
+name: Dependency review
+
+# Separate from CI so CI can be called by the Containers workflow without pull-request permissions.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  dependency-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/dependency-review-action@v5
+        with:
+          deny-licenses: GPL-2.0, GPL-3.0, AGPL-3.0, LGPL-3.0, SSPL-1.0, BUSL-1.1
