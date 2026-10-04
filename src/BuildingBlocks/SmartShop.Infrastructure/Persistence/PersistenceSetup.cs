@@ -31,8 +31,14 @@ public static class PersistenceSetup
     public static IServiceCollection AddModuleDbContext<TContext>(this IServiceCollection services, string schema)
         where TContext : ModuleDbContext
     {
+        services.TryAddSingleton<TenantConnectionInterceptor>();
         services.AddDbContextWithWolverineIntegration<TContext>(
-            (sp, options) => Configure(options, sp.GetRequiredService<NpgsqlDataSource>(), schema),
+            (sp, options) =>
+            {
+                Configure(options, sp.GetRequiredService<NpgsqlDataSource>(), schema);
+                if (sp.GetRequiredService<IConfiguration>().GetValue(RowLevelSecurity.ConfigKey, false))
+                    options.AddInterceptors(sp.GetRequiredService<TenantConnectionInterceptor>());
+            },
             ModuleDbContext.WolverineSchema);
         return services;
     }

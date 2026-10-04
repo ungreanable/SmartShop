@@ -8,11 +8,13 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 using Scalar.AspNetCore;
 using SmartShop.Infrastructure;
 using SmartShop.Infrastructure.Jobs;
 using SmartShop.Infrastructure.Messaging;
 using SmartShop.Infrastructure.Modules;
+using SmartShop.Infrastructure.Persistence;
 using SmartShop.Infrastructure.Realtime;
 
 namespace SmartShop.Bootstrap;
@@ -101,15 +103,21 @@ public static class SmartShopHost
     {
         using var scope = services.CreateScope();
         var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Migrations");
+        var schemas = new List<string>();
         foreach (var module in Modules)
         {
             foreach (var contextType in module.DbContexts)
             {
-                var context = (DbContext)scope.ServiceProvider.GetRequiredService(contextType);
+                var context = (ModuleDbContext)scope.ServiceProvider.GetRequiredService(contextType);
                 logger.LogInformation("Migrating {Module} ({Context})", module.Name, contextType.Name);
                 await context.Database.MigrateAsync(ct);
+                schemas.Add(context.Schema);
             }
         }
+
+        var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+        await RowLevelSecurity.ApplyAsync(scope.ServiceProvider.GetRequiredService<NpgsqlDataSource>(), schemas,
+            configuration.GetValue(RowLevelSecurity.ConfigKey, false), logger, ct);
     }
 
     public static async Task RunSmartShopAsync(this WebApplication app, string[] args)

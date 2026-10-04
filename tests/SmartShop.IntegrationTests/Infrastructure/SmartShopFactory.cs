@@ -32,6 +32,8 @@ public sealed class SmartShopFactory : WebApplicationFactory<Program>, IAsyncLif
         builder.UseSetting("ConnectionStrings:smartshop", _postgres.GetConnectionString());
         builder.UseSetting("Messaging:Role", "Standalone");
         builder.UseSetting("Database:MigrateOnStartup", "true");
+        // The whole suite runs with row-level security on, proving the app works under tenant policies.
+        builder.UseSetting("Database:RowLevelSecurity", "true");
         builder.UseSetting("Auth:Jwt:SigningKey", "integration-tests-signing-key-0123456789abcdef");
         builder.UseSetting("Auth:DevLogin:Enabled", "true");
         builder.UseSetting("Storage:Provider", "FileSystem");

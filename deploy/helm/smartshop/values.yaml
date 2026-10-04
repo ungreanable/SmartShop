@@ -50,6 +50,8 @@ config:
     url: ""
     autoConfirm: false
   otlpEndpoint: ""
+  # PostgreSQL row-level security per village (defence in depth), applied by the migration job.
+  rowLevelSecurity: false
   # Extra environment variables for api, worker and migrations (ASP.NET Core configuration keys, e.g. Foo__Bar).
   extraEnv: {}
 

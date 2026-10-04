@@ -62,6 +62,8 @@ app.kubernetes.io/component: {{ .component }}
   value: {{ .Values.config.slipVerifier.autoConfirm | quote }}
 - name: OTEL_EXPORTER_OTLP_ENDPOINT
   value: {{ .Values.config.otlpEndpoint | quote }}
+- name: Database__RowLevelSecurity
+  value: {{ .Values.config.rowLevelSecurity | quote }}
 {{- range $key, $secretKey := dict "ConnectionStrings__smartshop" "postgresConnection" "ConnectionStrings__cache" "cacheConnection" "ConnectionStrings__rabbitmq" "rabbitmqConnection" "Auth__Jwt__SigningKey" "jwtSigningKey" "Media__SigningKey" "mediaSigningKey" "Auth__Line__ChannelSecret" "lineLoginChannelSecret" "Line__MessagingChannelAccessToken" "lineMessagingAccessToken" "Line__MessagingChannelSecret" "lineMessagingChannelSecret" "WebPush__PrivateKey" "vapidPrivateKey" "Storage__SecretKey" "storageSecretKey" "Payments__SlipVerifier__ApiKey" "slipVerifierApiKey" "Firebase__CredentialsJson" "firebaseCredentialsJson" }}
 - name: {{ $key }}
   valueFrom:

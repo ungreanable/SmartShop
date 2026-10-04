@@ -23,6 +23,9 @@ public interface ICurrentPlant
 
     MembershipInfo Membership { get; }
 
+    /// <summary>The verified plant, or null when the request is not (yet) scoped to a village.</summary>
+    Guid? ResolvedPlantId { get; }
+
     Task<MembershipInfo> RequireMemberAsync(CancellationToken ct = default);
 
     Task<MembershipInfo> RequireAdminAsync(CancellationToken ct = default);
@@ -37,6 +40,8 @@ internal sealed class CurrentPlant(
     private MembershipInfo? _membership;
 
     public Guid PlantId => Membership.PlantId;
+
+    public Guid? ResolvedPlantId => _membership?.PlantId;
 
     public MembershipInfo Membership =>
         _membership ?? throw new InvalidOperationException("Plant membership has not been resolved for this request.");
