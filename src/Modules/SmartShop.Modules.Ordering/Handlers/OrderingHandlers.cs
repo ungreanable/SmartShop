@@ -74,22 +74,30 @@ public static class PreOrderRoundClosedHandler
     }
 }
 
-/// <summary>Keeps the payment status on the order for list views and the "pay before preparing" rule.</summary>
+/// <summary>
+/// Keeps the payment status on the order for list views and the "pay before preparing" rule.
+/// Events can arrive out of order (e.g. "slip uploaded" after "verified"), so the status is always taken from
+/// the Payments module; the event only says that something changed and who did it.
+/// </summary>
 public static class PaymentStatusHandler
 {
-    public static Task Handle(PaymentProofUploaded e, OrderingDbContext db, TimeProvider clock, CancellationToken ct) =>
-        Set(db, e.OrderId, PaymentStatus.PendingVerification, clock, e.CustomerId, null, ct);
+    public static Task Handle(PaymentProofUploaded e, OrderingDbContext db, IPaymentDirectory payments, TimeProvider clock, CancellationToken ct) =>
+        Sync(db, payments, e.OrderId, PaymentStatus.PendingVerification, clock, e.CustomerId, null, ct);
 
-    public static Task Handle(PaymentVerified e, OrderingDbContext db, TimeProvider clock, CancellationToken ct) =>
-        Set(db, e.OrderId, PaymentStatus.Paid, clock, e.ActorId, null, ct);
+    public static Task Handle(PaymentVerified e, OrderingDbContext db, IPaymentDirectory payments, TimeProvider clock, CancellationToken ct) =>
+        Sync(db, payments, e.OrderId, PaymentStatus.Paid, clock, e.ActorId, null, ct);
 
-    public static Task Handle(PaymentRejected e, OrderingDbContext db, TimeProvider clock, CancellationToken ct) =>
-        Set(db, e.OrderId, PaymentStatus.Rejected, clock, e.ActorId, e.Reason, ct);
+    public static Task Handle(PaymentRejected e, OrderingDbContext db, IPaymentDirectory payments, TimeProvider clock, CancellationToken ct) =>
+        Sync(db, payments, e.OrderId, PaymentStatus.Rejected, clock, e.ActorId, e.Reason, ct);
 
-    private static async Task Set(OrderingDbContext db, Guid orderId, PaymentStatus status, TimeProvider clock, Guid? actor, string? note, CancellationToken ct)
+    private static async Task Sync(OrderingDbContext db, IPaymentDirectory payments, Guid orderId, PaymentStatus reported, TimeProvider clock,
+        Guid? actor, string? note, CancellationToken ct)
     {
         var order = await db.Orders.FirstOrDefaultAsync(o => o.Id == orderId, ct);
-        order?.SetPaymentStatus(status, clock.GetUtcNow(), actor, note);
+        if (order is null) return;
+        var current = await payments.GetStatusAsync(orderId, ct) ?? reported;
+        // Actor and note only belong to the change this event reports.
+        order.SetPaymentStatus(current, clock.GetUtcNow(), current == reported ? actor : null, current == reported ? note : null);
     }
 }
 

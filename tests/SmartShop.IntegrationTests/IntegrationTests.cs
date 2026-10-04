@@ -126,6 +126,7 @@ public class IntegrationTests(SmartShopFactory factory)
             var d = deliveries.Single();
             d.EventType.ShouldBe("order.ready");
             d.Attempts.ShouldBe(1);
+            d.Error.ShouldBe("HTTP 500");
             d.ResponseStatus.ShouldBe(500);
             d.Status.ShouldBe("Pending"); // retried later with backoff
         });
