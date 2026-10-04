@@ -1,0 +1,24 @@
+@inherits LayoutComponentBase
+@inject PlantContext Plant
+
+<MudLayout>
+    <MudAppBar Elevation="0" Dense="true" Fixed="true" Class="border-b">
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="/" />
+        <MudText Typo="Typo.subtitle1">@L["ผู้ดูแล", "Admin"] · @Plant.Current?.PlantName</MudText>
+    </MudAppBar>
+    <MudMainContent Style="padding-top:48px">
+        <AppGuard RequirePlantAdmin="true">
+            @Body
+        </AppGuard>
+    </MudMainContent>
+</MudLayout>
+
+<nav class="ss-bottom-nav">
+    <div class="ss-nav-inner">
+        <NavLink href="/admin" Match="NavLinkMatch.All"><MudIcon Icon="@Icons.Material.Filled.Dashboard" />@L["ภาพรวม", "Overview"]</NavLink>
+        <NavLink href="/admin/members"><MudIcon Icon="@Icons.Material.Filled.People" />@L["สมาชิก", "Members"]</NavLink>
+        <NavLink href="/admin/applications"><MudIcon Icon="@Icons.Material.Filled.AddBusiness" />@L["คำขอร้าน", "Requests"]</NavLink>
+        <NavLink href="/admin/shops"><MudIcon Icon="@Icons.Material.Filled.Store" />@L["ร้านค้า", "Shops"]</NavLink>
+        <NavLink href="/admin/more"><MudIcon Icon="@Icons.Material.Filled.MoreHoriz" />@L["อื่นๆ", "More"]</NavLink>
+    </div>
+</nav>

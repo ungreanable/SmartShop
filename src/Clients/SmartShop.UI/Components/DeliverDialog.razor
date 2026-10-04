@@ -1,0 +1,17 @@
+@* Shop confirms hand-over; a photo (e.g. the bag at the door) is optional. *@
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-3">@L["แนบรูปการส่งได้ (ไม่บังคับ) เช่น รูปของที่วางหน้าบ้าน", "Attach a delivery photo (optional), e.g. the bag at the door"]</MudText>
+        @if (_photo?.ThumbnailUrl is not null) { <img src="@_photo.ThumbnailUrl" alt="" style="width:160px; border-radius:8px" class="mb-2" /> }
+        <ImageUploader Purpose="DeliveryPhoto" Uploaded="@(f => _photo = f)" Label="@L["ถ่าย / เลือกรูป", "Take / choose photo"]" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["ยกเลิก", "Cancel"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => Dialog.Close(DialogResult.Ok(_photo?.Id)))">@L["ยืนยันส่งมอบ", "Confirm"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    private UploadResult? _photo;
+}

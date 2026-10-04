@@ -1,0 +1,72 @@
+@page "/join/{Code}"
+@layout BareLayout
+@inject Api Api
+@inject PlantContext Plant
+@inject NavigationManager Nav
+
+<AppGuard RequirePlant="false">
+    @if (_preview is null)
+    {
+        <Loading Rows="1" />
+    }
+    else if (_sent)
+    {
+        <div class="ss-center">
+            <MudIcon Icon="@Icons.Material.Filled.HourglassTop" Color="Color.Warning" Size="Size.Large" />
+            <MudText Typo="Typo.h6">@L["ส่งคำขอแล้ว", "Request sent"]</MudText>
+            <MudText Class="ss-muted">@L[$"รอผู้ดูแล {_preview.Name} อนุมัติ ระบบจะแจ้งเตือนเมื่อได้รับอนุมัติ", $"Waiting for an admin of {_preview.Name} to approve. You will be notified."]</MudText>
+            <MudButton Href="/villages" Variant="Variant.Outlined">@L["หมู่บ้านของฉัน", "My villages"]</MudButton>
+        </div>
+    }
+    else
+    {
+        <MudText Typo="Typo.overline">@L["ขอเข้าหมู่บ้าน", "Join village"]</MudText>
+        <MudText Typo="Typo.h5" Style="font-weight:700">@_preview.Name</MudText>
+        @if (_preview.Description is not null) { <MudText Class="ss-muted mb-2">@_preview.Description</MudText> }
+        <MudAlert Severity="Severity.Info" Dense="true" Class="my-3">
+            @L["ผู้ดูแลหมู่บ้านจะตรวจสอบว่าคุณอยู่ในหมู่บ้านนี้ก่อนอนุมัติ", "A village admin checks that you live here before approving."]
+        </MudAlert>
+        <MudForm @ref="_form">
+            <MudTextField @bind-Value="_houseNo" Label="@L["บ้านเลขที่ *", "House number *"]" Required="true" Variant="Variant.Outlined" Class="mb-2" />
+            <MudTextField @bind-Value="_soi" Label="@L["ซอย", "Soi / street"]" Variant="Variant.Outlined" Class="mb-2" />
+            <MudTextField @bind-Value="_nickname" Label="@L["ชื่อเล่น (ที่เพื่อนบ้านรู้จัก)", "Nickname neighbours know"]" Variant="Variant.Outlined" Class="mb-2" />
+            <MudTextField @bind-Value="_message" Label="@L["ข้อความถึงผู้ดูแล", "Message to admin"]" Lines="2" Variant="Variant.Outlined" Class="mb-4" />
+        </MudForm>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large" Disabled="_busy" OnClick="SubmitAsync">
+            @L["ส่งคำขอเข้าหมู่บ้าน", "Send request"]
+        </MudButton>
+    }
+</AppGuard>
+
+@code {
+    [Parameter] public string Code { get; set; } = "";
+
+    private JoinPreview? _preview;
+    private MudForm? _form;
+    private string? _houseNo, _soi, _nickname, _message;
+    private bool _busy, _sent;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _preview = await Api.Get<JoinPreview>($"api/plants/join/{Uri.EscapeDataString(Code.Trim())}");
+        if (_preview is null) { Nav.NavigateTo("/villages"); return; }
+        await Plant.LoadAsync(force: true);
+        var existing = Plant.Memberships.FirstOrDefault(m => m.PlantId == _preview.PlantId);
+        if (existing?.IsActive == true)
+        {
+            await Plant.SelectAsync(existing.PlantId);
+            Nav.NavigateTo("/");
+        }
+        _sent = existing?.Status == "Pending";
+    }
+
+    private async Task SubmitAsync()
+    {
+        await _form!.ValidateAsync();
+        if (!_form.IsValid) return;
+        _busy = true;
+        _sent = await Api.Post("api/plants/join", new { joinCode = Code.Trim(), houseNo = _houseNo, soi = _soi, nickname = _nickname, message = _message });
+        if (_sent) await Plant.LoadAsync(force: true);
+        _busy = false;
+    }
+}

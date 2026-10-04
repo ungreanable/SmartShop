@@ -1,0 +1,71 @@
+@page "/merchant/{ShopId:guid}/sales"
+@layout MerchantLayout
+@inject Api Api
+@inject Browser Browser
+
+<div class="ss-page">
+    <MudText Typo="Typo.h5" Class="mb-2" Style="font-weight:700">@L["ยอดขาย", "Sales"]</MudText>
+    <div class="d-flex gap-2 align-center mb-3">
+        <MudDatePicker @bind-Date="_from" Label="@L["ตั้งแต่", "From"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+        <MudDatePicker @bind-Date="_to" Label="@L["ถึง", "To"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+        <MudIconButton Icon="@Icons.Material.Filled.Search" OnClick="LoadAsync" />
+    </div>
+
+    @if (_report is null) { <Loading Rows="2" /> }
+    else
+    {
+        <div class="ss-grid-2 mb-3">
+            <MudPaper Outlined="true" Class="pa-3 ss-card"><MudText Typo="Typo.caption" Class="ss-muted">@L["ยอดขาย", "Revenue"]</MudText><MudText Typo="Typo.h5">@Fmt.Baht(_report.Revenue)</MudText></MudPaper>
+            <MudPaper Outlined="true" Class="pa-3 ss-card"><MudText Typo="Typo.caption" Class="ss-muted">@L["ออเดอร์สำเร็จ", "Completed orders"]</MudText><MudText Typo="Typo.h5">@_report.Orders</MudText></MudPaper>
+            <MudPaper Outlined="true" Class="pa-3 ss-card"><MudText Typo="Typo.caption" Class="ss-muted">@L["เฉลี่ยต่อออเดอร์", "Average order"]</MudText><MudText Typo="Typo.h5">@Fmt.Baht(_report.AverageOrder)</MudText></MudPaper>
+            <MudPaper Outlined="true" Class="pa-3 ss-card"><MudText Typo="Typo.caption" Class="ss-muted">@L["ยกเลิก/ปฏิเสธ", "Cancelled"]</MudText><MudText Typo="Typo.h5">@_report.Cancelled</MudText></MudPaper>
+        </div>
+
+        @if (_report.Days.Count > 0)
+        {
+            var max = Math.Max(1, _report.Days.Max(d => d.Revenue));
+            <MudText Typo="Typo.subtitle1" Style="font-weight:600">@L["รายวัน", "Daily"]</MudText>
+            @foreach (var d in _report.Days)
+            {
+                <div class="d-flex align-center gap-2 my-1">
+                    <MudText Typo="Typo.caption" Style="width:72px">@d.Day.ToString("d MMM")</MudText>
+                    <div style="flex:1; background:var(--mud-palette-lines-default); border-radius:6px; height:14px">
+                        <div style="width:@((int)(d.Revenue / max * 100))%; background:var(--mud-palette-primary); height:14px; border-radius:6px"></div>
+                    </div>
+                    <MudText Typo="Typo.caption" Style="width:90px; text-align:right">@Fmt.Baht(d.Revenue)</MudText>
+                </div>
+            }
+        }
+
+        <MudText Typo="Typo.subtitle1" Class="mt-3" Style="font-weight:600">@L["ขายดี", "Top items"]</MudText>
+        <MudSimpleTable Dense="true" Elevation="0">
+            <tbody>
+                @foreach (var t in _report.TopItems)
+                {
+                    <tr><td>@t.Name</td><td>@t.Quantity</td><td style="text-align:right">@Fmt.Baht(t.Revenue)</td></tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" Class="mt-3" OnClick="ExportAsync">@L["ดาวน์โหลด CSV", "Download CSV"]</MudButton>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid ShopId { get; set; }
+
+    private DateTime? _from = DateTime.Today.AddDays(-6), _to = DateTime.Today;
+    private SalesReport? _report;
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private string Range => $"from={_from:yyyy-MM-dd}&to={_to:yyyy-MM-dd}";
+
+    private async Task LoadAsync() => _report = await Api.Get<SalesReport>($"api/merchant/shops/{ShopId}/orders/report?{Range}");
+
+    private async Task ExportAsync()
+    {
+        var bytes = await Api.DownloadAsync($"api/merchant/shops/{ShopId}/orders/export.csv?{Range}");
+        if (bytes is not null) await Browser.DownloadAsync($"orders-{_from:yyyyMMdd}-{_to:yyyyMMdd}.csv", bytes, "text/csv");
+    }
+}

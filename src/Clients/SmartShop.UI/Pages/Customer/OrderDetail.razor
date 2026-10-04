@@ -1,0 +1,335 @@
+@page "/orders/{OrderId:guid}"
+@page "/merchant/{ShopId:guid}/orders/{OrderId:guid}"
+@implements IDisposable
+@inject Api Api
+@inject Realtime Realtime
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<div class="ss-page">
+    @if (_order is null) { <Loading Rows="4" /> }
+    else
+    {
+        <div class="d-flex align-center mb-1">
+            <MudText Typo="Typo.h5" Style="font-weight:700">#@_order.OrderNo</MudText>
+            <MudSpacer />
+            <OrderStatusChip Status="@_order.Status" />
+        </div>
+        <MudText Typo="Typo.body2" Class="ss-muted">
+            @(IsShop ? $"{_order.Customer.Name}" : _order.ShopName) · @Fmt.DateTime(_order.PlacedAt)
+        </MudText>
+
+        @if (!Terminal)
+        {
+            <div class="ss-steps">
+                @foreach (var (step, i) in Steps.Select((s, i) => (s, i)))
+                {
+                    <div class="ss-step @(i < StepIndex ? "done" : "") @(i == StepIndex ? "done current" : "")">
+                        <div class="dot">@(i <= StepIndex ? "✓" : "")</div>
+                        <span>@step</span>
+                    </div>
+                }
+            </div>
+            <MudText Typo="Typo.body2" Align="Align.Center" Class="mb-3">@Headline</MudText>
+        }
+        else if (_order.CancelReason is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Class="my-3">@_order.CancelReason</MudAlert>
+        }
+
+        @* ---------------- shop actions ---------------- *@
+        @if (IsShop && !Terminal)
+        {
+            <MudPaper Elevation="0" Class="@($"pa-3 mb-3 ss-card {(_order.Status == "PendingAcceptance" ? "ss-new-order" : "")}")" Outlined="true">
+                @if (_order.CancelRequestedAt is not null)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@L["ลูกค้าขอยกเลิก", "Customer asks to cancel"]: @_order.CancelRequestReason</MudAlert>
+                    <div class="d-flex gap-2 mb-2">
+                        <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="@(() => ShopActionAsync("cancel", new { reason = _order.CancelRequestReason }))">@L["อนุมัติยกเลิก", "Approve cancel"]</MudButton>
+                        <MudButton Variant="Variant.Outlined" OnClick="@(() => ShopActionAsync("decline-cancel", new { }))">@L["ไม่อนุมัติ", "Decline"]</MudButton>
+                    </div>
+                }
+                @switch (_order.Status)
+                {
+                    case "PendingAcceptance":
+                        @if (_order.ExpiresAt is { } exp) { <MudText Typo="Typo.caption" Color="Color.Warning">⏳ @L["ต้องรับก่อน", "Accept before"] @Fmt.Time(exp)</MudText> }
+                        <div class="d-flex gap-2 mt-1">
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true" OnClick="@(() => ShopActionAsync("accept", null))">@L["รับออเดอร์", "Accept"]</MudButton>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Large" OnClick="RejectAsync">@L["ปฏิเสธ", "Reject"]</MudButton>
+                        </div>
+                        break;
+                    case "Accepted":
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large" OnClick="@(() => ShopActionAsync("start", null))">@L["เริ่มทำ", "Start preparing"]</MudButton>
+                        <MudButton Variant="Variant.Text" FullWidth="true" OnClick="DeliverAsync">@L["ส่งมอบเลย (ข้ามขั้นตอน)", "Hand over now"]</MudButton>
+                        break;
+                    case "Preparing":
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large" OnClick="@(() => ShopActionAsync("ready", null))">@L["พร้อมแล้ว", "Ready"]</MudButton>
+                        break;
+                    case "Ready":
+                        @if (_order.FulfillmentType == "Delivery")
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large" OnClick="@(() => ShopActionAsync("dispatch", null))">🛵 @L["ออกไปส่ง", "Out for delivery"]</MudButton>
+                        }
+                        <MudButton Variant="@(_order.FulfillmentType == "Delivery" ? Variant.Text : Variant.Filled)" Color="Color.Primary" FullWidth="true" Size="Size.Large" OnClick="DeliverAsync">@L["ลูกค้ารับของแล้ว", "Handed over"]</MudButton>
+                        break;
+                    case "OutForDelivery":
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large" OnClick="DeliverAsync">📦 @L["ส่งถึงแล้ว (แนบรูปได้)", "Delivered (photo optional)"]</MudButton>
+                        break;
+                    case "Delivered":
+                        <MudText Typo="Typo.body2" Class="ss-muted">@L["รอลูกค้ากดยืนยันรับ หรือระบบยืนยันอัตโนมัติ", "Waiting for the customer to confirm (or auto-confirm)"] @(_order.AutoCompleteAt is { } ac ? Fmt.DateTime(ac) : "")</MudText>
+                        break;
+                }
+                @if (_order.Status is "Accepted" or "Preparing" or "Ready" or "OutForDelivery")
+                {
+                    <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" Class="mt-1" OnClick="ShopCancelAsync">@L["ยกเลิกออเดอร์", "Cancel order"]</MudButton>
+                }
+            </MudPaper>
+        }
+
+        @* ---------------- details ---------------- *@
+        <MudPaper Outlined="true" Class="pa-3 mb-3 ss-card">
+            <MudText Typo="Typo.subtitle2">@(_order.FulfillmentType == "Delivery" ? L["🛵 ให้ร้านไปส่ง", "🛵 Shop delivers"] : L["🏠 รับเองที่ร้าน", "🏠 Pick up at shop"])</MudText>
+            @if (_order.ScheduledFrom is { } from && _order.ScheduledTo is { } to) { <MudText Typo="Typo.body2">🕐 @Fmt.Window(from, to)</MudText> }
+            else { <MudText Typo="Typo.body2">⚡ @L["เร็วที่สุด", "As soon as possible"]</MudText> }
+            @if (_order.DeliveryAddress is { } a)
+            {
+                <MudText Typo="Typo.body2">📍 @L["บ้านเลขที่", "House"] @a.HouseNo @(a.Soi is null ? "" : L[$"ซอย {a.Soi}", $"Soi {a.Soi}"]) @(a.Note is null ? "" : $"· {a.Note}")</MudText>
+            }
+            @if (IsShop)
+            {
+                <MudText Typo="Typo.body2">👤 @_order.Customer.Name @if (_order.Customer.Phone is { } phone) { <MudLink Href="@($"tel:{phone}")">📞 @phone</MudLink> }</MudText>
+            }
+            @if (_order.Note is not null) { <MudAlert Severity="Severity.Normal" Dense="true" Class="mt-2">📝 @_order.Note</MudAlert> }
+        </MudPaper>
+
+        <MudPaper Outlined="true" Class="pa-3 mb-3 ss-card">
+            @foreach (var line in _order.Lines)
+            {
+                <div class="d-flex py-1">
+                    <MudText Style="min-width:32px">@line.Quantity×</MudText>
+                    <div style="flex:1">
+                        <MudText>@line.Name</MudText>
+                        @if (line.Options.Count > 0) { <MudText Typo="Typo.caption" Class="ss-muted">@string.Join(", ", line.Options.Select(o => o.Name))</MudText> }
+                        @if (line.SlotStart is { } s) { <MudText Typo="Typo.caption" Color="Color.Info">⏰ @Fmt.Day(s) @Fmt.Time(s)</MudText> }
+                        @if (line.Note is not null) { <MudText Typo="Typo.caption" Class="ss-muted">📝 @line.Note</MudText> }
+                    </div>
+                    <MudText>@Fmt.Baht(line.LineTotal)</MudText>
+                </div>
+            }
+            <MudDivider Class="my-2" />
+            @if (_order.Discount > 0) { <div class="d-flex"><MudText Color="Color.Success">@L["ส่วนลด", "Discount"] @_order.PromotionCode</MudText><MudSpacer /><MudText Color="Color.Success">-@Fmt.Baht(_order.Discount)</MudText></div> }
+            <div class="d-flex"><MudText Typo="Typo.subtitle1" Style="font-weight:700">@L["รวม", "Total"]</MudText><MudSpacer /><MudText Typo="Typo.subtitle1" Style="font-weight:700">@Fmt.Baht(_order.Total)</MudText></div>
+        </MudPaper>
+
+        <PaymentPanel OrderId="OrderId" @ref="_payment" />
+
+        @if (_order.DeliveryPhotoUrl is not null)
+        {
+            <MudText Typo="Typo.subtitle2" Class="mt-3">@L["รูปการส่ง", "Delivery photo"]</MudText>
+            <img src="@_order.DeliveryPhotoUrl" alt="" style="width:100%; border-radius:12px" />
+        }
+
+        @* ---------------- customer actions ---------------- *@
+        @if (IsCustomer)
+        {
+            <div class="d-flex flex-column gap-2 mt-3">
+                @if (_order.Status == "Delivered")
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" OnClick="@(() => CustomerActionAsync("confirm-received", null))">✅ @L["ยืนยันได้รับสินค้าแล้ว", "I received my order"]</MudButton>
+                }
+                @if (_order.Status == "PendingAcceptance")
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="CancelAsync">@L["ยกเลิกออเดอร์", "Cancel order"]</MudButton>
+                }
+                @if (_order.Status is "Accepted" or "Preparing" or "Ready" && _order.CancelRequestedAt is null)
+                {
+                    <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="RequestCancelAsync">@L["ขอยกเลิก", "Ask to cancel"]</MudButton>
+                }
+                @if (_order.Status == "Completed")
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="ReviewAsync">⭐ @L["ให้คะแนนร้าน", "Rate the shop"]</MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="ReorderAsync">🔁 @L["สั่งอีกครั้ง", "Order again"]</MudButton>
+                }
+                <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="ReportAsync">🚩 @L["แจ้งปัญหาให้ผู้ดูแลหมู่บ้าน", "Report a problem"]</MudButton>
+            </div>
+        }
+
+        <ChatPanel OrderId="OrderId" IsShop="IsShop" />
+
+        <MudExpansionPanels Elevation="0" Class="mt-3">
+            <MudExpansionPanel Text="@L["ประวัติออเดอร์", "Order history"]">
+                <MudTimeline TimelinePosition="TimelinePosition.Start" TimelineAlign="TimelineAlign.Start">
+                    @foreach (var t in _order.Timeline)
+                    {
+                        <MudTimelineItem Size="Size.Small" Color="Color.Primary">
+                            <MudText Typo="Typo.body2">@EventText(t.Type) @(t.ActorName is null ? "" : $"· {t.ActorName}")</MudText>
+                            <MudText Typo="Typo.caption" Class="ss-muted">@Fmt.DateTime(t.At) @t.Note</MudText>
+                        </MudTimelineItem>
+                    }
+                </MudTimeline>
+            </MudExpansionPanel>
+        </MudExpansionPanels>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid OrderId { get; set; }
+    [Parameter] public Guid? ShopId { get; set; }
+
+    private Order? _order;
+    private PaymentPanel? _payment;
+
+    private bool IsShop => _order?.ViewerRole == "shop";
+    private bool IsCustomer => _order?.ViewerRole == "customer";
+    private bool Terminal => _order?.Status is "Completed" or "Rejected" or "Cancelled" or "Expired";
+
+    private string[] Steps => _order?.FulfillmentType == "Delivery"
+        ? [L["สั่งแล้ว", "Placed"], L["ร้านรับ", "Accepted"], L["กำลังทำ", "Preparing"], L["กำลังส่ง", "On the way"], L["ได้รับ", "Received"]]
+        : [L["สั่งแล้ว", "Placed"], L["ร้านรับ", "Accepted"], L["กำลังทำ", "Preparing"], L["พร้อมรับ", "Ready"], L["ได้รับ", "Received"]];
+
+    private int StepIndex => _order?.Status switch
+    {
+        "PendingAcceptance" => 0,
+        "Accepted" => 1,
+        "Preparing" => 2,
+        "Ready" or "OutForDelivery" => 3,
+        "Delivered" or "Completed" => 4,
+        _ => 0,
+    };
+
+    private string Headline => _order?.Status switch
+    {
+        "PendingAcceptance" => IsShop ? L["ออเดอร์ใหม่! กรุณากดรับ", "New order! Please accept"] : L["รอร้านกดรับออเดอร์...", "Waiting for the shop to accept..."],
+        "Accepted" => L["ร้านรับออเดอร์แล้ว", "The shop accepted your order"],
+        "Preparing" => L["ร้านกำลังเตรียม", "The shop is preparing"],
+        "Ready" => _order.FulfillmentType == "Pickup" ? L["พร้อมแล้ว มารับได้เลย", "Ready for pickup"] : L["พร้อมแล้ว กำลังจะไปส่ง", "Ready, delivering soon"],
+        "OutForDelivery" => L["ร้านกำลังไปส่ง", "On the way"],
+        "Delivered" => IsCustomer ? L["ร้านส่งแล้ว กรุณากดยืนยันว่าได้รับ", "Delivered, please confirm you received it"] : L["ส่งแล้ว", "Delivered"],
+        _ => "",
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Realtime.OrderUpdated -= OnChanged;
+        Realtime.PaymentUpdated -= OnPaymentChanged;
+        Realtime.OrderUpdated += OnChanged;
+        Realtime.PaymentUpdated += OnPaymentChanged;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync() => _order = await Api.Get<Order>($"api/orders/{OrderId}");
+
+    private async Task ShopActionAsync(string action, object? body)
+    {
+        var updated = await Api.Post<Order>($"api/merchant/orders/{OrderId}/{action}", body ?? new { });
+        if (updated is not null) _order = updated;
+    }
+
+    private async Task CustomerActionAsync(string action, object? body)
+    {
+        var updated = await Api.Post<Order>($"api/orders/{OrderId}/{action}", body ?? new { });
+        if (updated is not null) _order = updated;
+    }
+
+    private async Task<string?> AskAsync(string title, string label, bool required = true)
+    {
+        var parameters = new DialogParameters<TextPromptDialog> { { x => x.Label, label }, { x => x.Required, required } };
+        var result = await (await Dialogs.ShowAsync<TextPromptDialog>(title, parameters)).Result;
+        return result is { Canceled: false, Data: string text } ? text : null;
+    }
+
+    private async Task RejectAsync()
+    {
+        var reason = await AskAsync(L["ปฏิเสธออเดอร์", "Reject order"], L["เหตุผล (ลูกค้าจะเห็น)", "Reason (shown to customer)"]);
+        if (reason is not null) await ShopActionAsync("reject", new { reason });
+    }
+
+    private async Task ShopCancelAsync()
+    {
+        var reason = await AskAsync(L["ยกเลิกออเดอร์", "Cancel order"], L["เหตุผล", "Reason"]);
+        if (reason is not null) await ShopActionAsync("cancel", new { reason });
+    }
+
+    private async Task DeliverAsync()
+    {
+        var result = await (await Dialogs.ShowAsync<DeliverDialog>(L["ยืนยันการส่งมอบ", "Confirm hand-over"])).Result;
+        if (result is { Canceled: false }) await ShopActionAsync("deliver", new { photoId = result.Data as Guid? });
+    }
+
+    private async Task CancelAsync()
+    {
+        var reason = await AskAsync(L["ยกเลิกออเดอร์", "Cancel order"], L["เหตุผล (ไม่บังคับ)", "Reason (optional)"], required: false);
+        if (reason is not null) await CustomerActionAsync("cancel", new { reason });
+    }
+
+    private async Task RequestCancelAsync()
+    {
+        var reason = await AskAsync(L["ขอยกเลิกออเดอร์", "Ask to cancel"], L["เหตุผล", "Reason"]);
+        if (reason is not null) await CustomerActionAsync("request-cancel", new { reason });
+    }
+
+    private async Task ReorderAsync()
+    {
+        if (await Api.Post<Cart>($"api/orders/{OrderId}/reorder") is { ItemCount: > 0 }) Nav.NavigateTo("/cart");
+        else Snackbar.Add(L["สินค้าในออเดอร์นี้ไม่พร้อมขายแล้ว", "These items are no longer available"], Severity.Info);
+    }
+
+    private async Task ReviewAsync()
+    {
+        var parameters = new DialogParameters<ReviewDialog> { { x => x.OrderId, OrderId } };
+        await Dialogs.ShowAsync<ReviewDialog>(L["ให้คะแนนร้าน", "Rate the shop"], parameters);
+    }
+
+    private async Task ReportAsync()
+    {
+        var reason = await AskAsync(L["แจ้งปัญหา", "Report a problem"], L["เล่าปัญหาที่เกิดขึ้น", "Describe the problem"]);
+        if (reason is not null && await Api.Post($"api/orders/{OrderId}/report", new { reason }))
+            Snackbar.Add(L["ส่งเรื่องถึงผู้ดูแลหมู่บ้านแล้ว", "Sent to the village admins"], Severity.Success);
+    }
+
+    private string EventText(string type) => type switch
+    {
+        "Placed" => L["สั่งซื้อ", "Placed"],
+        "Accepted" => L["ร้านรับออเดอร์", "Accepted"],
+        "AutoAccepted" => L["ร้านรับออเดอร์อัตโนมัติ", "Auto-accepted"],
+        "Rejected" => L["ร้านปฏิเสธ", "Rejected"],
+        "Preparing" => L["เริ่มทำ", "Preparing"],
+        "Ready" => L["พร้อม", "Ready"],
+        "OutForDelivery" => L["ออกไปส่ง", "Out for delivery"],
+        "Delivered" => L["ส่งมอบ", "Delivered"],
+        "Received" => L["ลูกค้ายืนยันรับ", "Received"],
+        "AutoCompleted" => L["ยืนยันรับอัตโนมัติ", "Auto-completed"],
+        "Expired" => L["หมดเวลา", "Expired"],
+        "CancelledByCustomer" => L["ลูกค้ายกเลิก", "Cancelled by customer"],
+        "CancelledByShop" => L["ร้านยกเลิก", "Cancelled by shop"],
+        "CancelledBySystem" => L["ระบบยกเลิก", "Cancelled by system"],
+        "CancelRequested" => L["ลูกค้าขอยกเลิก", "Cancellation requested"],
+        "CancelRequestDeclined" => L["ร้านไม่อนุมัติการยกเลิก", "Cancellation declined"],
+        "PaymentPendingVerification" => L["แนบสลิป", "Slip attached"],
+        "PaymentPaid" => L["ยืนยันการชำระเงิน", "Payment confirmed"],
+        "PaymentRejected" => L["สลิปไม่ผ่าน", "Slip rejected"],
+        _ => type,
+    };
+
+    private async void OnChanged(JsonElement e)
+    {
+        if (e.TryGetProperty("orderId", out var id) && id.GetGuid() != OrderId) return;
+        await LoadAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async void OnPaymentChanged(JsonElement e)
+    {
+        if (e.TryGetProperty("orderId", out var id) && id.GetGuid() != OrderId) return;
+        if (_payment is not null) await _payment.ReloadAsync();
+        await LoadAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        Realtime.OrderUpdated -= OnChanged;
+        Realtime.PaymentUpdated -= OnPaymentChanged;
+    }
+}

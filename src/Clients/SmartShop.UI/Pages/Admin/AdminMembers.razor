@@ -1,0 +1,88 @@
+@page "/admin/members"
+@layout AdminLayout
+@inject Api Api
+@inject Session Session
+@inject IDialogService Dialogs
+
+<div class="ss-page">
+    <MudText Typo="Typo.h5" Class="mb-2" Style="font-weight:700">@L["สมาชิกหมู่บ้าน", "Members"]</MudText>
+    <MudTabs @bind-ActivePanelIndex="_tab" Elevation="0" Color="Color.Transparent" SliderColor="Color.Primary" ApplyEffectsToContainer="true">
+        <MudTabPanel Text="@L["รออนุมัติ", "Pending"]" OnClick="@(() => LoadAsync(0))" />
+        <MudTabPanel Text="@L["สมาชิก", "Active"]" OnClick="@(() => LoadAsync(1))" />
+        <MudTabPanel Text="@L["ระงับ", "Suspended"]" OnClick="@(() => LoadAsync(2))" />
+    </MudTabs>
+    <MudTextField T="string" @bind-Value="_q" Placeholder="@L["ค้นหาบ้านเลขที่ / ชื่อเล่น", "Search house no. / nickname"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" OnKeyUp="@(async e => { if (e.Key == "Enter") await LoadAsync(_tab); })" Class="mb-2" />
+
+    @if (_rows is null) { <Loading /> }
+    else if (_rows.Count == 0) { <EmptyState Title="@L["ไม่มีรายการ", "Nothing here"]" Icon="@Icons.Material.Outlined.People" /> }
+    else
+    {
+        @foreach (var m in _rows)
+        {
+            <MudPaper Outlined="true" Class="pa-3 mb-2 ss-card">
+                <div class="d-flex gap-3 align-center">
+                    <MudAvatar>@if (m.PictureUrl is not null) { <MudImage Src="@m.PictureUrl" /> } else { @m.DisplayName[..1] }</MudAvatar>
+                    <div style="flex:1; min-width:0">
+                        <MudText Typo="Typo.subtitle1">@m.DisplayName @(m.Nickname is null ? "" : $"({m.Nickname})") @(m.Role == "PlantAdmin" ? "🛡️" : "")</MudText>
+                        <MudText Typo="Typo.body2">🏠 @L["บ้านเลขที่", "House"] @m.HouseNo @(m.Soi is null ? "" : L[$"ซอย {m.Soi}", $"Soi {m.Soi}"])</MudText>
+                        @if (m.RequestMessage is not null) { <MudText Typo="Typo.caption" Class="ss-muted">💬 @m.RequestMessage</MudText> }
+                        <MudText Typo="Typo.caption" Class="ss-muted">@Fmt.DateTime(m.RequestedAt)</MudText>
+                    </div>
+                </div>
+                <div class="d-flex gap-2 mt-2 justify-end">
+                    @switch (m.Status)
+                    {
+                        case "Pending":
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => DecideAsync(m, "reject", true))">@L["ไม่อนุมัติ", "Reject"]</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => DecideAsync(m, "approve", false))">@L["อนุมัติ", "Approve"]</MudButton>
+                            break;
+                        case "Active" when m.UserId != Session.User?.Id:
+                            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => RoleAsync(m))">@(m.Role == "PlantAdmin" ? L["ถอดผู้ดูแล", "Remove admin"] : L["ตั้งเป็นผู้ดูแล", "Make admin"])</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => DecideAsync(m, "suspend", true))">@L["ระงับ", "Suspend"]</MudButton>
+                            break;
+                        case "Suspended":
+                            <MudText Typo="Typo.caption" Class="ss-muted me-auto">@m.DecisionReason</MudText>
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => DecideAsync(m, "reinstate", false))">@L["คืนสถานะ", "Reinstate"]</MudButton>
+                            break;
+                    }
+                </div>
+            </MudPaper>
+        }
+    }
+</div>
+
+@code {
+    private int _tab;
+    private string? _q;
+    private List<MemberRow>? _rows;
+    private static readonly string[] Statuses = ["Pending", "Active", "Suspended"];
+
+    protected override async Task OnInitializedAsync() => await LoadAsync(0);
+
+    private async Task LoadAsync(int tab)
+    {
+        _tab = tab;
+        _rows = null;
+        var q = string.IsNullOrWhiteSpace(_q) ? "" : $"&q={Uri.EscapeDataString(_q)}";
+        _rows = (await Api.Get<PagedResult<MemberRow>>($"api/plant/admin/members?status={Statuses[tab]}{q}&pageSize=200"))?.Items ?? [];
+    }
+
+    private async Task DecideAsync(MemberRow m, string action, bool askReason)
+    {
+        string? reason = null;
+        if (askReason)
+        {
+            var parameters = new DialogParameters<TextPromptDialog> { { x => x.Label, L["เหตุผล (ผู้ขอจะเห็น)", "Reason (shown to the person)"] }, { x => x.Required, false } };
+            var result = await (await Dialogs.ShowAsync<TextPromptDialog>(m.DisplayName, parameters)).Result;
+            if (result is not { Canceled: false, Data: string text }) return;
+            reason = text;
+        }
+        if (await Api.Post($"api/plant/admin/members/{m.MembershipId}/{action}", new { reason })) await LoadAsync(_tab);
+    }
+
+    private async Task RoleAsync(MemberRow m)
+    {
+        if (await Api.Put($"api/plant/admin/members/{m.MembershipId}/role", new { role = m.Role == "PlantAdmin" ? "Member" : "PlantAdmin" })) await LoadAsync(_tab);
+    }
+}

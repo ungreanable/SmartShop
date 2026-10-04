@@ -1,0 +1,73 @@
+@inject Api Api
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField @bind-Value="_name" Label="@L["ชื่อที่ลูกค้าเห็น", "Display name"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+        @switch (Type)
+        {
+            case "PromptPayQr":
+                <MudTextField @bind-Value="_promptPayId" Label="@L["พร้อมเพย์ (เบอร์ / เลขบัตร)", "PromptPay ID (phone / citizen ID)"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                              HelperText="@L["ระบบจะสร้าง QR พร้อมยอดเงินของแต่ละออเดอร์ให้อัตโนมัติ", "We generate a QR with the exact order amount"]" />
+                <MudText Typo="Typo.caption" Class="d-block mt-2">@L["หรืออัปโหลดรูป QR ของร้าน", "or upload your own QR image"]</MudText>
+                @if (_qrUrl is not null) { <img src="@_qrUrl" alt="" style="width:120px; border-radius:8px" /> }
+                <ImageUploader Purpose="PaymentQr" Label="@L["อัปโหลด QR", "Upload QR"]" Uploaded="@(f => { if (f is not null) { _qrImageId = f.Id; _qrUrl = f.ThumbnailUrl; } })" />
+                break;
+            case "BankTransfer":
+                <MudSelect T="string" @bind-Value="_bank" Label="@L["ธนาคาร", "Bank"]" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    @foreach (var b in Banks) { <MudSelectItem Value="b">@b</MudSelectItem> }
+                </MudSelect>
+                <MudTextField @bind-Value="_accountNumber" Label="@L["เลขที่บัญชี", "Account number"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudTextField @bind-Value="_accountName" Label="@L["ชื่อบัญชี", "Account name"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                break;
+            case "Custom":
+                @if (_imageUrl is not null) { <img src="@_imageUrl" alt="" style="width:120px; border-radius:8px" /> }
+                <ImageUploader Purpose="PaymentQr" Label="@L["รูปประกอบ (ไม่บังคับ)", "Picture (optional)"]" Uploaded="@(f => { if (f is not null) { _imageId = f.Id; _imageUrl = f.ThumbnailUrl; } })" />
+                break;
+        }
+        <MudTextField @bind-Value="_instructions" Label="@L["คำแนะนำ", "Instructions"]" Lines="2" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+        @if (Type != "Cash") { <MudSwitch T="bool" @bind-Value="_requiresProof" Color="Color.Primary" Label="@L["ให้ลูกค้าแนบสลิป", "Ask customers for a slip"]" /> }
+        <MudSwitch T="bool" @bind-Value="_enabled" Color="Color.Primary" Label="@L["เปิดใช้งาน", "Enabled"]" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["ยกเลิก", "Cancel"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="SaveAsync">@L["บันทึก", "Save"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public Guid ShopId { get; set; }
+    [Parameter] public PaymentMethod? Method { get; set; }
+    [Parameter] public string Type { get; set; } = "Custom";
+
+    private static readonly string[] Banks = ["กสิกรไทย", "ไทยพาณิชย์", "กรุงเทพ", "กรุงไทย", "กรุงศรีอยุธยา", "ทหารไทยธนชาต", "ออมสิน", "ธ.ก.ส.", "ยูโอบี", "ซีไอเอ็มบี", "เกียรตินาคินภัทร", "แลนด์ แอนด์ เฮ้าส์", "อื่นๆ"];
+
+    private string? _name, _promptPayId, _bank, _accountNumber, _accountName, _instructions, _qrUrl, _imageUrl;
+    private Guid? _qrImageId, _imageId;
+    private bool _requiresProof = true, _enabled = true, _busy;
+
+    protected override void OnParametersSet()
+    {
+        var m = Method;
+        _name = m?.DisplayName ?? Type switch { "PromptPayQr" => "พร้อมเพย์", "BankTransfer" => "โอนเงิน", "Cash" => "เงินสด", _ => "" };
+        (_promptPayId, _qrImageId, _qrUrl, _bank, _accountNumber, _accountName) = (m?.PromptPayId, m?.QrImageId, m?.QrImageUrl, m?.BankName, m?.AccountNumber, m?.AccountName);
+        (_instructions, _imageId, _imageUrl) = (m?.Instructions, m?.ImageId, m?.ImageUrl);
+        _requiresProof = m?.RequiresProof ?? Type is "PromptPayQr" or "BankTransfer";
+        _enabled = m?.Enabled ?? true;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        var body = new
+        {
+            type = Type, displayName = _name, promptPayId = _promptPayId, qrImageId = _qrImageId, bankName = _bank, accountNumber = _accountNumber,
+            accountName = _accountName, instructions = _instructions, imageId = _imageId, requiresProof = _requiresProof, enabled = _enabled,
+        };
+        var saved = Method is null
+            ? await Api.Post<PaymentMethod>($"api/merchant/shops/{ShopId}/payment-methods", body)
+            : await Api.Put<PaymentMethod>($"api/merchant/shops/{ShopId}/payment-methods/{Method.Id}", body);
+        _busy = false;
+        if (saved is not null) Dialog.Close(DialogResult.Ok(saved));
+    }
+}

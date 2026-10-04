@@ -1,0 +1,161 @@
+@page "/merchant/{ShopId:guid}/menu"
+@layout MerchantLayout
+@inject Api Api
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<div class="ss-page">
+    <div class="d-flex align-center mb-2">
+        <MudText Typo="Typo.h5" Style="font-weight:700">@L["เมนู & สต็อก", "Menu & stock"]</MudText>
+        <MudSpacer />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="@($"/merchant/{ShopId}/menu/new")">@L["เพิ่ม", "Add"]</MudButton>
+    </div>
+
+    <div class="ss-hscroll mb-2">
+        @foreach (var f in Filters)
+        {
+            <MudChip T="string" Color="@(_filter == f.Key ? Color.Primary : Color.Default)" Variant="@(_filter == f.Key ? Variant.Filled : Variant.Outlined)" OnClick="@(() => _filter = f.Key)">@f.Value</MudChip>
+        }
+    </div>
+
+    @if (_items is null) { <Loading /> }
+    else if (_items.Count == 0)
+    {
+        <EmptyState Icon="@Icons.Material.Outlined.RestaurantMenu" Title="@L["ยังไม่มีสินค้า/บริการ", "No items yet"]">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@($"/merchant/{ShopId}/menu/new")">@L["เพิ่มรายการแรก", "Add your first item"]</MudButton>
+        </EmptyState>
+    }
+    else
+    {
+        @foreach (var m in Filtered)
+        {
+            var i = m.Item;
+            <div class="ss-item" style="cursor:default">
+                @if (i.ThumbnailUrl is not null) { <img class="ss-item-img" src="@i.ThumbnailUrl" alt="" style="width:64px;height:64px" /> }
+                <div style="flex:1; min-width:0">
+                    <MudLink Href="@($"/merchant/{ShopId}/menu/{i.Id}")" Typo="Typo.subtitle1" Style="font-weight:600">@i.Name</MudLink>
+                    <MudText Typo="Typo.body2">@Fmt.Baht(i.Price) @(i.Kind == "Service" ? L["· บริการ", "· service"] : "")</MudText>
+                    @if (!i.IsOrderable && m.IsAvailable) { <MudText Typo="Typo.caption" Color="Color.Warning">@i.UnavailableReason</MudText> }
+                    @if (m.OnHand is { } onHand)
+                    {
+                        <div class="d-flex align-center gap-1">
+                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Remove" Disabled="@(onHand - (m.Reserved ?? 0) <= 0)" OnClick="@(() => SetStockAsync(m, onHand - 1))" />
+                            <MudText Typo="Typo.body2" Style="min-width:84px; text-align:center">@L["คงเหลือ", "left"] <b>@(onHand - (m.Reserved ?? 0))</b></MudText>
+                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Add" OnClick="@(() => AddStockAsync(m, 1))" />
+                            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => RestockAsync(m))">@L["เติม", "Restock"]</MudButton>
+                            @if (m.Reserved > 0) { <MudText Typo="Typo.caption" Class="ss-muted">(@L["จอง", "reserved"] @m.Reserved)</MudText> }
+                        </div>
+                    }
+                </div>
+                <div class="d-flex flex-column align-end">
+                    <MudSwitch T="bool" Value="m.IsAvailable" ValueChanged="@(v => AvailabilityAsync(m, v))" Color="Color.Success" Size="Size.Small" Label="@L["ขาย", "On"]" />
+                    @if (i.StockMode == "Untracked")
+                    {
+                        <MudSwitch T="bool" Value="m.IsSoldOut" ValueChanged="@(v => SoldOutAsync(m, v))" Color="Color.Error" Size="Size.Small" Label="@L["หมด", "Sold out"]" />
+                    }
+                </div>
+            </div>
+        }
+    }
+
+    <MudExpansionPanels Elevation="0" Class="mt-4">
+        <MudExpansionPanel Text="@L["หมวดหมู่ในร้าน", "Categories"]">
+            @foreach (var c in _categories)
+            {
+                <div class="d-flex align-center">
+                    <MudText>@c.Name</MudText>
+                    <MudSpacer />
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => RenameCategoryAsync(c))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="@(() => DeleteCategoryAsync(c))" />
+                </div>
+            }
+            <MudButton StartIcon="@Icons.Material.Filled.Add" Size="Size.Small" OnClick="AddCategoryAsync">@L["เพิ่มหมวดหมู่", "Add category"]</MudButton>
+        </MudExpansionPanel>
+        <MudExpansionPanel Text="@L["รอบสั่งล่วงหน้า / ซื้อกลุ่ม", "Pre-order rounds / group buys"]">
+            <RoundsEditor ShopId="ShopId" />
+        </MudExpansionPanel>
+    </MudExpansionPanels>
+</div>
+
+@code {
+    [Parameter] public Guid ShopId { get; set; }
+
+    private List<MerchantItem>? _items;
+    private List<Category> _categories = [];
+    private string _filter = "all";
+
+    private Dictionary<string, string> Filters => new()
+    {
+        ["all"] = L["ทั้งหมด", "All"],
+        ["low"] = L["ใกล้หมด", "Low stock"],
+        ["soldout"] = L["หมด", "Sold out"],
+        ["off"] = L["ปิดขาย", "Off"],
+    };
+
+    private IEnumerable<MerchantItem> Filtered => _filter switch
+    {
+        "low" => _items!.Where(m => m.OnHand is { } h && h - (m.Reserved ?? 0) <= (m.LowStockThreshold ?? 5) && h - (m.Reserved ?? 0) > 0),
+        "soldout" => _items!.Where(m => m.Item.UnavailableReason == "sold_out"),
+        "off" => _items!.Where(m => !m.IsAvailable),
+        _ => _items!,
+    };
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var items = Api.Get<List<MerchantItem>>($"api/merchant/shops/{ShopId}/catalog/items");
+        var categories = Api.Get<List<Category>>($"api/merchant/shops/{ShopId}/catalog/categories");
+        _items = await items ?? [];
+        _categories = await categories ?? [];
+    }
+
+    private string Base(Guid itemId) => $"api/merchant/shops/{ShopId}/catalog/items/{itemId}";
+
+    private async Task AvailabilityAsync(MerchantItem m, bool on)
+    {
+        if (await Api.Put($"{Base(m.Item.Id)}/availability", new { isAvailable = on })) await LoadAsync();
+    }
+
+    private async Task SoldOutAsync(MerchantItem m, bool soldOut)
+    {
+        if (await Api.Put($"{Base(m.Item.Id)}/sold-out", new { soldOut })) await LoadAsync();
+    }
+
+    private async Task SetStockAsync(MerchantItem m, int onHand)
+    {
+        if (await Api.Post<StockResult>($"{Base(m.Item.Id)}/stock", new { action = "set", quantity = onHand }) is not null) await LoadAsync();
+    }
+
+    private async Task AddStockAsync(MerchantItem m, int quantity)
+    {
+        if (await Api.Post<StockResult>($"{Base(m.Item.Id)}/stock", new { action = "add", quantity }) is not null) await LoadAsync();
+    }
+
+    private async Task RestockAsync(MerchantItem m)
+    {
+        var parameters = new DialogParameters<TextPromptDialog> { { x => x.Label, L["จำนวนที่เติม", "Quantity to add"] } };
+        var result = await (await Dialogs.ShowAsync<TextPromptDialog>(m.Item.Name, parameters)).Result;
+        if (result is { Canceled: false, Data: string text } && int.TryParse(text, out var qty) && qty > 0) await AddStockAsync(m, qty);
+    }
+
+    private async Task AddCategoryAsync()
+    {
+        var parameters = new DialogParameters<TextPromptDialog> { { x => x.Label, L["ชื่อหมวดหมู่", "Category name"] } };
+        var result = await (await Dialogs.ShowAsync<TextPromptDialog>(L["เพิ่มหมวดหมู่", "Add category"], parameters)).Result;
+        if (result is { Canceled: false, Data: string name } && await Api.Post($"api/merchant/shops/{ShopId}/catalog/categories", new { name })) await LoadAsync();
+    }
+
+    private async Task RenameCategoryAsync(Category c)
+    {
+        var parameters = new DialogParameters<TextPromptDialog> { { x => x.Label, L["ชื่อหมวดหมู่", "Category name"] }, { x => x.Initial, c.Name } };
+        var result = await (await Dialogs.ShowAsync<TextPromptDialog>(L["แก้ไขหมวดหมู่", "Rename"], parameters)).Result;
+        if (result is { Canceled: false, Data: string name } && await Api.Put($"api/merchant/shops/{ShopId}/catalog/categories/{c.Id}", new { name })) await LoadAsync();
+    }
+
+    private async Task DeleteCategoryAsync(Category c)
+    {
+        if (await Dialogs.ShowMessageBoxAsync(L["ลบหมวดหมู่?", "Delete category?"], c.Name, yesText: L["ลบ", "Delete"], cancelText: L["ยกเลิก", "Cancel"]) == true
+            && await Api.Delete($"api/merchant/shops/{ShopId}/catalog/categories/{c.Id}")) await LoadAsync();
+    }
+}

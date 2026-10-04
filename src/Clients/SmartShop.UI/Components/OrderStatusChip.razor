@@ -1,0 +1,39 @@
+<MudChip T="string" Size="Size.Small" Color="@ColorOf(Status)" Variant="Variant.Outlined" Class="ma-0">@TextOf(Status, L)</MudChip>
+
+@code {
+    [Parameter, EditorRequired] public string Status { get; set; } = "";
+
+    public static Color ColorOf(string status) => status switch
+    {
+        "PendingAcceptance" => Color.Warning,
+        "Accepted" or "Preparing" or "Ready" or "OutForDelivery" => Color.Info,
+        "Delivered" => Color.Primary,
+        "Completed" => Color.Success,
+        _ => Color.Default,
+    };
+
+    public static string TextOf(string status, Loc l) => status switch
+    {
+        "PendingAcceptance" => l["รอร้านรับ", "Waiting for shop"],
+        "Accepted" => l["ร้านรับแล้ว", "Accepted"],
+        "Preparing" => l["กำลังเตรียม", "Preparing"],
+        "Ready" => l["พร้อมแล้ว", "Ready"],
+        "OutForDelivery" => l["กำลังไปส่ง", "On the way"],
+        "Delivered" => l["ส่งแล้ว รอยืนยัน", "Delivered"],
+        "Completed" => l["สำเร็จ", "Completed"],
+        "Rejected" => l["ร้านปฏิเสธ", "Rejected"],
+        "Cancelled" => l["ยกเลิก", "Cancelled"],
+        "Expired" => l["หมดเวลา", "Expired"],
+        _ => status,
+    };
+
+    public static string PaymentText(string status, Loc l) => status switch
+    {
+        "Unpaid" => l["ยังไม่ชำระ", "Unpaid"],
+        "PendingVerification" => l["รอร้านตรวจสลิป", "Slip under review"],
+        "Paid" => l["ชำระแล้ว", "Paid"],
+        "Rejected" => l["สลิปไม่ผ่าน", "Slip rejected"],
+        "Voided" => l["ยกเลิกการชำระ", "Voided"],
+        _ => status,
+    };
+}

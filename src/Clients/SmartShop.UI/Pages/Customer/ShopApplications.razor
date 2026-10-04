@@ -1,0 +1,112 @@
+@page "/shop-applications"
+@inject Api Api
+@inject PlantContext Plant
+@inject ISnackbar Snackbar
+
+<div class="ss-page">
+    <MudText Typo="Typo.h5" Class="mb-2" Style="font-weight:700">@L["ขอเปิดร้านในหมู่บ้าน", "Open a shop"]</MudText>
+    <MudText Typo="Typo.body2" Class="ss-muted mb-3">@L["ผู้ดูแลหมู่บ้านจะตรวจสอบคำขอก่อนเปิดร้าน", "A village admin reviews your request before the shop opens."]</MudText>
+
+    @foreach (var a in _mine)
+    {
+        <MudPaper Outlined="true" Class="pa-3 mb-2 ss-card">
+            <div class="d-flex align-center">
+                <MudText Typo="Typo.subtitle1">@a.Name</MudText>
+                <MudSpacer />
+                <MudChip T="string" Size="Size.Small" Color="@(a.Status switch { "Approved" => Color.Success, "Rejected" => Color.Error, "ChangesRequested" => Color.Warning, _ => Color.Default })">@StatusText(a.Status)</MudChip>
+            </div>
+            @if (a.ReviewNote is not null) { <MudText Typo="Typo.body2">💬 @a.ReviewNote</MudText> }
+            @if (a.Status == "ChangesRequested") { <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => Edit(a))">@L["แก้ไขและส่งใหม่", "Edit & resubmit"]</MudButton> }
+            @if (a.Status == "Approved" && a.ShopId is { } shopId) { <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Href="@($"/merchant/{shopId}")">@L["ไปที่ร้าน", "Go to shop"]</MudButton> }
+            @if (a.Status is "Submitted" or "ChangesRequested") { <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => WithdrawAsync(a))">@L["ถอนคำขอ", "Withdraw"]</MudButton> }
+        </MudPaper>
+    }
+
+    @if (_showForm)
+    {
+        <MudPaper Outlined="true" Class="pa-3 mt-3 ss-card">
+            <MudForm @ref="_form">
+                <MudTextField @bind-Value="_name" Label="@L["ชื่อร้าน *", "Shop name *"]" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudAutocomplete T="string" @bind-Value="_category" Label="@L["ประเภท", "Category"]" Variant="Variant.Outlined" Margin="Margin.Dense" CoerceText="false" CoerceValue="true"
+                                 SearchFunc="@((v, _) => Task.FromResult(Categories.Where(c => string.IsNullOrEmpty(v) || c.Contains(v, StringComparison.OrdinalIgnoreCase))))" />
+                <MudTextField @bind-Value="_description" Label="@L["ขายอะไร / รายละเอียด", "What do you sell?"]" Lines="3" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <div class="ss-grid-2">
+                    <MudTextField @bind-Value="_houseNo" Label="@L["บ้านเลขที่ *", "House no. *"]" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    <MudTextField @bind-Value="_phone" Label="@L["เบอร์โทร", "Phone"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </div>
+                <MudText Typo="Typo.subtitle2" Class="mt-2">@L["รูปตัวอย่างสินค้า", "Sample pictures"]</MudText>
+                <div class="d-flex flex-wrap gap-2 my-2">
+                    @foreach (var img in _images)
+                    {
+                        <div style="position:relative">
+                            <img src="@img.ThumbnailUrl" alt="" style="width:80px;height:80px;object-fit:cover;border-radius:8px" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Style="position:absolute;top:-8px;right:-8px;background:#fff" OnClick="@(() => _images.Remove(img))" />
+                        </div>
+                    }
+                </div>
+                @if (_images.Count < 6) { <ImageUploader Purpose="ApplicationSample" Uploaded="@(f => { if (f is not null) _images.Add(f); })" /> }
+            </MudForm>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Class="mt-3" Disabled="_busy" OnClick="SubmitAsync">@L["ส่งคำขอ", "Submit"]</MudButton>
+        </MudPaper>
+    }
+    else if (!_mine.Any(a => a.Status is "Submitted" or "ChangesRequested"))
+    {
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.AddBusiness" OnClick="@(() => { _showForm = true; _editing = null; })">@L["กรอกคำขอเปิดร้าน", "Start a request"]</MudButton>
+    }
+</div>
+
+@code {
+    private static readonly string[] Categories = ["อาหาร", "ขนม", "เครื่องดื่ม", "ของใช้", "ผัก ผลไม้", "บริการ", "ซักรีด", "ความงาม", "ซ่อมแซม", "อื่นๆ"];
+
+    private List<ShopApplication> _mine = [];
+    private MudForm? _form;
+    private bool _showForm, _busy;
+    private ShopApplication? _editing;
+    private string? _name, _category, _description, _houseNo, _phone;
+    private List<UploadResult> _images = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _houseNo = Plant.Current?.HouseNo;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync() => _mine = await Api.Get<List<ShopApplication>>("api/shop-applications/mine") ?? [];
+
+    private void Edit(ShopApplication a)
+    {
+        _editing = a;
+        (_name, _category, _description, _houseNo, _phone) = (a.Name, a.Category, a.Description, a.HouseNo, a.Phone);
+        _images = a.SampleImageIds.Zip(a.SampleImageUrls, (id, url) => new UploadResult(id, "image/webp", null, null, url, url)).ToList();
+        _showForm = true;
+    }
+
+    private async Task SubmitAsync()
+    {
+        await _form!.ValidateAsync();
+        if (!_form.IsValid) return;
+        _busy = true;
+        var body = new { name = _name, category = _category, description = _description, houseNo = _houseNo, phone = _phone, sampleImageIds = _images.Select(i => i.Id).ToList() };
+        var ok = _editing is null ? await Api.Post("api/shop-applications", body) : await Api.Put($"api/shop-applications/{_editing.Id}", body);
+        _busy = false;
+        if (!ok) return;
+        Snackbar.Add(L["ส่งคำขอแล้ว รอผู้ดูแลตรวจสอบ", "Sent. Waiting for review."], Severity.Success);
+        _showForm = false;
+        await LoadAsync();
+    }
+
+    private async Task WithdrawAsync(ShopApplication a)
+    {
+        if (await Api.Post($"api/shop-applications/{a.Id}/withdraw")) await LoadAsync();
+    }
+
+    private string StatusText(string status) => status switch
+    {
+        "Submitted" => L["รอตรวจสอบ", "Under review"],
+        "ChangesRequested" => L["ขอข้อมูลเพิ่ม", "Changes requested"],
+        "Approved" => L["อนุมัติแล้ว", "Approved"],
+        "Rejected" => L["ไม่อนุมัติ", "Rejected"],
+        "Withdrawn" => L["ถอนแล้ว", "Withdrawn"],
+        _ => status,
+    };
+}

@@ -1,0 +1,243 @@
+@page "/merchant/{ShopId:guid}/menu/new"
+@page "/merchant/{ShopId:guid}/menu/{ItemId:guid}"
+@layout MerchantLayout
+@inject Api Api
+@inject NavigationManager Nav
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<div class="ss-page">
+    <MudText Typo="Typo.h5" Class="mb-3" Style="font-weight:700">@(ItemId is null ? L["เพิ่มสินค้า / บริการ", "New item"] : L["แก้ไขรายการ", "Edit item"])</MudText>
+
+    @if (!_loaded) { <Loading /> }
+    else
+    {
+        <MudForm @ref="_form">
+            <MudToggleGroup T="string" @bind-Value="_kind" Color="Color.Primary" Class="mb-3" FixedContent="true">
+                <MudToggleItem Value="@("Product")" Text="@L["🛍️ สินค้า", "🛍️ Product"]" />
+                <MudToggleItem Value="@("Service")" Text="@L["💆 บริการ", "💆 Service"]" />
+            </MudToggleGroup>
+
+            <MudTextField @bind-Value="_name" Label="@L["ชื่อ *", "Name *"]" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudTextField @bind-Value="_description" Label="@L["รายละเอียด", "Description"]" Lines="2" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <div class="ss-grid-2">
+                <MudNumericField T="decimal" @bind-Value="_price" Label="@L["ราคา (บาท) *", "Price (THB) *"]" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudSelect T="Guid?" @bind-Value="_categoryId" Label="@L["หมวดหมู่", "Category"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true"
+                           ToStringFunc="@(id => _categories.FirstOrDefault(c => c.Id == id)?.Name ?? "")">
+                    @foreach (var c in _categories) { <MudSelectItem T="Guid?" Value="c.Id">@c.Name</MudSelectItem> }
+                </MudSelect>
+            </div>
+            <MudCheckBox T="bool" @bind-Value="_recommended" Label="@L["⭐ เมนูแนะนำ", "⭐ Recommended"]" Dense="true" />
+
+            <MudText Typo="Typo.subtitle2" Class="mt-2">@L["รูป", "Pictures"]</MudText>
+            <div class="d-flex flex-wrap gap-2 my-2 align-center">
+                @foreach (var img in _images)
+                {
+                    <div style="position:relative">
+                        <img src="@img.Url" alt="" style="width:80px;height:80px;object-fit:cover;border-radius:8px" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Style="position:absolute;top:-8px;right:-8px;background:#fff" OnClick="@(() => _images.Remove(img))" />
+                    </div>
+                }
+                @if (_images.Count < 5) { <ImageUploader Purpose="ItemImage" Uploaded="@(f => { if (f is not null) _images.Add((f.Id, f.ThumbnailUrl)); })" /> }
+            </div>
+
+            <MudText Typo="Typo.subtitle1" Class="mt-3" Style="font-weight:600">📦 @L["สต็อก", "Stock"]</MudText>
+            <MudRadioGroup T="string" @bind-Value="_stockMode">
+                <MudRadio Value="@("Untracked")" Color="Color.Primary">@L["ไม่นับจำนวน (ทำตามสั่ง / กดหมดเอง)", "Don't count (made to order / mark sold out)"]</MudRadio>
+                <MudRadio Value="@("Tracked")" Color="Color.Primary">@L["นับจำนวนคงเหลือ", "Count remaining stock"]</MudRadio>
+                <MudRadio Value="@("Daily")" Color="Color.Primary">@L["จำนวนต่อวัน (รีเซ็ตทุกวัน)", "Daily quota (resets every day)"]</MudRadio>
+                @if (_kind == "Service") { <MudRadio Value="@("Slot")" Color="Color.Primary">@L["จองเป็นช่วงเวลา (คิว)", "Book by time slot"]</MudRadio> }
+            </MudRadioGroup>
+            @switch (_stockMode)
+            {
+                case "Tracked":
+                    @if (ItemId is null) { <MudNumericField T="int?" @bind-Value="_initialStock" Label="@L["จำนวนเริ่มต้น", "Initial stock"]" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /> }
+                    <MudNumericField T="int?" @bind-Value="_lowStock" Label="@L["แจ้งเตือนเมื่อเหลือน้อยกว่า", "Warn when below"]" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    break;
+                case "Daily":
+                    <div class="ss-grid-2">
+                        <MudNumericField T="int?" @bind-Value="_dailyQuota" Label="@L["จำนวนต่อวัน", "Per day"]" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                        <MudTimePicker @bind-Time="_resetTime" Label="@L["รีเซ็ตเวลา", "Reset at"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    </div>
+                    <MudNumericField T="int?" @bind-Value="_lowStock" Label="@L["แจ้งเตือนเมื่อเหลือน้อยกว่า", "Warn when below"]" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    break;
+                case "Slot":
+                    <div class="ss-grid-2">
+                        <MudNumericField T="int?" @bind-Value="_duration" Label="@L["ระยะเวลา (นาที)", "Duration (min)"]" Min="5" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                        <MudNumericField T="int?" @bind-Value="_capacity" Label="@L["รับได้กี่คิวต่อช่วง", "Capacity per slot"]" Min="1" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    </div>
+                    break;
+            }
+            @if (_kind == "Service" && _stockMode != "Slot")
+            {
+                <MudNumericField T="int?" @bind-Value="_duration" Label="@L["ระยะเวลา (นาที, ไม่บังคับ)", "Duration (min, optional)"]" Min="5" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            }
+            <MudNumericField T="int?" @bind-Value="_maxPerOrder" Label="@L["จำกัดต่อออเดอร์ (ไม่บังคับ)", "Max per order (optional)"]" Min="1" Variant="Variant.Outlined" Margin="Margin.Dense" />
+
+            <MudExpansionPanels Elevation="0" Class="mt-3" MultiExpansion="true">
+                <MudExpansionPanel Text="@L["⏰ ช่วงเวลาที่ขาย", "⏰ When it is sold"]">
+                    <MudText Typo="Typo.caption" Class="ss-muted">@L["ไม่ใส่ = ขายตลอดเวลาที่ร้านเปิด", "Empty = whenever the shop is open"]</MudText>
+                    @foreach (var w in _windows)
+                    {
+                        <div class="d-flex gap-2 align-center flex-wrap mb-2">
+                            <MudSelect T="string" MultiSelection="true" SelectedValues="w.Days" SelectedValuesChanged="@(v => w.Days = v.ToList())" Label="@L["วัน (ว่าง = ทุกวัน)", "Days (empty = all)"]"
+                                       Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:180px" ToStringFunc="@(d => OpeningHoursView.DayName(d, L))">
+                                @foreach (var d in AllDays) { <MudSelectItem Value="d">@OpeningHoursView.DayName(d, L)</MudSelectItem> }
+                            </MudSelect>
+                            <MudTimePicker @bind-Time="w.From" Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:110px" />
+                            <MudTimePicker @bind-Time="w.To" Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:110px" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" OnClick="@(() => _windows.Remove(w))" />
+                        </div>
+                    }
+                    <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => _windows.Add(new WindowForm()))">@L["เพิ่มช่วงเวลา", "Add window"]</MudButton>
+                    <div class="ss-grid-2 mt-2">
+                        <MudDatePicker @bind-Date="_saleFrom" Label="@L["เริ่มขายวันที่", "On sale from"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" />
+                        <MudDatePicker @bind-Date="_saleTo" Label="@L["ถึงวันที่", "until"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" />
+                    </div>
+                </MudExpansionPanel>
+                <MudExpansionPanel Text="@L["➕ ตัวเลือกเพิ่มเติม (ขนาด, ท็อปปิ้ง)", "➕ Options (size, add-ons)"]">
+                    @foreach (var g in _groups)
+                    {
+                        <MudPaper Outlined="true" Class="pa-2 mb-2">
+                            <div class="d-flex gap-2 align-center">
+                                <MudTextField @bind-Value="g.Name" Label="@L["ชื่อกลุ่ม เช่น ขนาด", "Group, e.g. Size"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                <MudNumericField T="int" @bind-Value="g.MinSelect" Label="@L["เลือกอย่างน้อย", "Min"]" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:90px" />
+                                <MudNumericField T="int" @bind-Value="g.MaxSelect" Label="@L["มากสุด", "Max"]" Min="1" Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:90px" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" OnClick="@(() => _groups.Remove(g))" />
+                            </div>
+                            @foreach (var o in g.Options)
+                            {
+                                <div class="d-flex gap-2 align-center ps-4">
+                                    <MudTextField @bind-Value="o.Name" Label="@L["ตัวเลือก", "Option"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                    <MudNumericField T="decimal" @bind-Value="o.PriceDelta" Label="+฿" Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:100px" />
+                                    <MudCheckBox T="bool" @bind-Value="o.IsAvailable" Dense="true" />
+                                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="@(() => g.Options.Remove(o))" />
+                                </div>
+                            }
+                            <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => g.Options.Add(new OptionForm()))">@L["เพิ่มตัวเลือก", "Add option"]</MudButton>
+                        </MudPaper>
+                    }
+                    <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => _groups.Add(new GroupForm()))">@L["เพิ่มกลุ่มตัวเลือก", "Add option group"]</MudButton>
+                </MudExpansionPanel>
+                <MudExpansionPanel Text="@L["🚚 วิธีรับ & รอบสั่งล่วงหน้า", "🚚 Fulfillment & pre-order"]">
+                    <MudCheckBox T="bool" @bind-Value="_pickupOnly" Label="@L["รับที่ร้านเท่านั้น (ไม่ส่ง)", "Pickup only (no delivery)"]" Dense="true" />
+                    <MudSelect T="Guid?" @bind-Value="_roundId" Label="@L["รอบสั่งล่วงหน้า", "Pre-order round"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true"
+                               ToStringFunc="@(id => _rounds.FirstOrDefault(r => r.Id == id)?.Title ?? "")">
+                        @foreach (var r in _rounds.Where(r => r.Status == "Open")) { <MudSelectItem T="Guid?" Value="r.Id">@r.Title</MudSelectItem> }
+                    </MudSelect>
+                </MudExpansionPanel>
+            </MudExpansionPanels>
+        </MudForm>
+
+        <div class="d-flex gap-2 mt-4">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true" Disabled="_busy" OnClick="SaveAsync">@L["บันทึก", "Save"]</MudButton>
+            @if (ItemId is not null) { <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="DeleteAsync">@L["ลบ", "Delete"]</MudButton> }
+        </div>
+        @if (ItemId is not null)
+        {
+            <MudButton Variant="Variant.Text" Size="Size.Small" Class="mt-2" OnClick="ShowMovementsAsync">📜 @L["ประวัติสต็อก", "Stock history"]</MudButton>
+            @foreach (var m in _movements)
+            {
+                <MudText Typo="Typo.caption" Class="d-block">@Fmt.DateTime(m.At) · @m.Type @(m.Quantity > 0 ? "+" : "")@m.Quantity → @m.OnHandAfter @m.Note</MudText>
+            }
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public Guid ShopId { get; set; }
+    [Parameter] public Guid? ItemId { get; set; }
+
+    private static readonly string[] AllDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+    private sealed class WindowForm { public List<string> Days { get; set; } = []; public TimeSpan? From { get; set; } = new(6, 0, 0); public TimeSpan? To { get; set; } = new(10, 0, 0); }
+    private sealed class OptionForm { public Guid Id { get; set; } public string Name { get; set; } = ""; public decimal PriceDelta { get; set; } public bool IsAvailable { get; set; } = true; }
+    private sealed class GroupForm { public Guid Id { get; set; } public string Name { get; set; } = ""; public int MinSelect { get; set; } public int MaxSelect { get; set; } = 1; public List<OptionForm> Options { get; set; } = [new()]; }
+
+    private MudForm? _form;
+    private bool _loaded, _busy;
+    private List<Category> _categories = [];
+    private List<Round> _rounds = [];
+    private List<Movement> _movements = [];
+    private string _kind = "Product", _stockMode = "Untracked";
+    private string? _name, _description;
+    private decimal _price;
+    private Guid? _categoryId, _roundId;
+    private bool _recommended, _pickupOnly;
+    private List<(Guid Id, string? Url)> _images = [];
+    private int? _initialStock, _lowStock, _dailyQuota, _duration, _capacity, _maxPerOrder;
+    private TimeSpan? _resetTime = new(5, 0, 0);
+    private DateTime? _saleFrom, _saleTo;
+    private List<WindowForm> _windows = [];
+    private List<GroupForm> _groups = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _categories = await Api.Get<List<Category>>($"api/merchant/shops/{ShopId}/catalog/categories") ?? [];
+        _rounds = await Api.Get<List<Round>>($"api/merchant/shops/{ShopId}/catalog/rounds", silent: true) ?? [];
+        if (ItemId is { } id)
+        {
+            var items = await Api.Get<List<MerchantItem>>($"api/merchant/shops/{ShopId}/catalog/items") ?? [];
+            var m = items.FirstOrDefault(x => x.Item.Id == id);
+            if (m is null) { Nav.NavigateTo($"/merchant/{ShopId}/menu"); return; }
+            var i = m.Item;
+            (_kind, _stockMode, _name, _description, _price, _categoryId, _recommended) = (i.Kind, i.StockMode, i.Name, i.Description, i.Price, i.CategoryId, i.IsRecommended);
+            _images = m.ImageIds.Zip(i.ImageUrls, (imgId, url) => (imgId, url)).ToList();
+            (_lowStock, _dailyQuota, _duration, _capacity, _maxPerOrder) = (m.LowStockThreshold, m.DailyQuota, i.DurationMinutes, m.SlotCapacity, i.MaxPerOrder);
+            _resetTime = m.DailyResetTime is { } r ? TimeSpan.Parse(r, System.Globalization.CultureInfo.InvariantCulture) : _resetTime;
+            _saleFrom = i.SaleFrom?.ToDateTime(TimeOnly.MinValue);
+            _saleTo = i.SaleTo?.ToDateTime(TimeOnly.MinValue);
+            _pickupOnly = i.AllowedFulfillment is ["Pickup"];
+            _roundId = i.Round?.Id;
+            _windows = i.Windows.Select(w => new WindowForm { Days = w.Days, From = TimeSpan.Parse(w.From, System.Globalization.CultureInfo.InvariantCulture), To = TimeSpan.Parse(w.To, System.Globalization.CultureInfo.InvariantCulture) }).ToList();
+            _groups = i.ModifierGroups.Select(g => new GroupForm
+            {
+                Id = g.Id, Name = g.Name, MinSelect = g.MinSelect, MaxSelect = g.MaxSelect,
+                Options = g.Options.Select(o => new OptionForm { Id = o.Id, Name = o.Name, PriceDelta = o.PriceDelta, IsAvailable = o.IsAvailable }).ToList(),
+            }).ToList();
+        }
+        _loaded = true;
+    }
+
+    private static string? Time(TimeSpan? t) => t?.ToString(@"hh\:mm");
+
+    private async Task SaveAsync()
+    {
+        await _form!.ValidateAsync();
+        if (!_form.IsValid) return;
+        _busy = true;
+        var body = new
+        {
+            kind = _kind, stockMode = _stockMode, name = _name, description = _description, price = _price, categoryId = _categoryId,
+            imageIds = _images.Select(i => i.Id).ToList(),
+            windows = _windows.Where(w => w.From is not null && w.To is not null).Select(w => new { days = w.Days, from = Time(w.From), to = Time(w.To) }).ToList(),
+            saleFrom = _saleFrom is { } sf ? DateOnly.FromDateTime(sf) : (DateOnly?)null,
+            saleTo = _saleTo is { } st ? DateOnly.FromDateTime(st) : (DateOnly?)null,
+            maxPerOrder = _maxPerOrder, durationMinutes = _duration, slotCapacity = _stockMode == "Slot" ? _capacity ?? 1 : (int?)null,
+            allowedFulfillment = _pickupOnly ? new[] { "Pickup" } : null,
+            modifierGroups = _groups.Select(g => new { id = g.Id, name = g.Name, minSelect = g.MinSelect, maxSelect = g.MaxSelect,
+                options = g.Options.Select(o => new { id = o.Id, name = o.Name, priceDelta = o.PriceDelta, isAvailable = o.IsAvailable }).ToList() }).ToList(),
+            preOrderRoundId = _roundId, isRecommended = _recommended,
+            initialStock = _initialStock, dailyQuota = _dailyQuota, dailyResetTime = Time(_resetTime), lowStockThreshold = _lowStock,
+        };
+        var ok = ItemId is null
+            ? await Api.Post<MerchantItem>($"api/merchant/shops/{ShopId}/catalog/items", body) is not null
+            : await Api.Put<MerchantItem>($"api/merchant/shops/{ShopId}/catalog/items/{ItemId}", body) is not null;
+        _busy = false;
+        if (ok)
+        {
+            Snackbar.Add(L["บันทึกแล้ว", "Saved"], Severity.Success);
+            Nav.NavigateTo($"/merchant/{ShopId}/menu");
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (await Dialogs.ShowMessageBoxAsync(L["ลบรายการนี้?", "Delete this item?"], _name, yesText: L["ลบ", "Delete"], cancelText: L["ยกเลิก", "Cancel"]) == true
+            && await Api.Delete($"api/merchant/shops/{ShopId}/catalog/items/{ItemId}"))
+            Nav.NavigateTo($"/merchant/{ShopId}/menu");
+    }
+
+    private async Task ShowMovementsAsync() =>
+        _movements = await Api.Get<List<Movement>>($"api/merchant/shops/{ShopId}/catalog/items/{ItemId}/movements") ?? [];
+}

@@ -1,0 +1,40 @@
+@* Can the shop actually be reached when a new order arrives? Shows each member's channels. *@
+@inject Api Api
+
+@if (_health is not null)
+{
+    <MudPaper Outlined="true" Class="pa-3 ss-card" Style="@(_health.AnyRecipientHasPush ? "" : "border-color:var(--mud-palette-warning)")">
+        <div class="d-flex align-center mb-1">
+            <MudText Typo="Typo.subtitle1" Style="font-weight:600">🔔 @L["การแจ้งเตือนออเดอร์ใหม่", "New-order alerts"]</MudText>
+            <MudSpacer />
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" OnClick="LoadAsync" />
+        </div>
+        @if (!_health.AnyRecipientHasPush)
+        {
+            <MudAlert Severity="@(_health.Requirement == "Block" ? Severity.Error : Severity.Warning)" Dense="true" Class="mb-2">
+                @(_health.Requirement == "Block"
+                    ? L["หมู่บ้านนี้ไม่ให้เปิดร้านจนกว่าจะมีสมาชิกร้านอย่างน้อย 1 คนรับแจ้งเตือนแบบ Push ได้", "This village requires at least one member with push notifications before opening"]
+                    : L["ยังไม่มีใครในร้านรับแจ้งเตือนแบบ Push ได้ อาจพลาดออเดอร์", "Nobody in the shop can receive push notifications; orders may be missed"])
+            </MudAlert>
+        }
+        @foreach (var m in _health.Members)
+        {
+            <div class="d-flex align-center gap-2 py-1">
+                <MudText Typo="Typo.body2" Style="flex:1">@m.DisplayName @(m.DisplayLabel is null ? "" : $"({m.DisplayLabel})")</MudText>
+                @if (!m.ReceiveOrderNotifications) { <MudChip T="string" Size="Size.Small">@L["ปิดรับ", "muted"]</MudChip> }
+                <MudChip T="string" Size="Size.Small" Color="@(m.LineFriend ? Color.Success : Color.Default)" Variant="Variant.Outlined">LINE @(m.LineFriend ? "✓" : "✗")</MudChip>
+                <MudChip T="string" Size="Size.Small" Color="@(m.WebPushDevices + m.MobileDevices > 0 ? Color.Success : Color.Default)" Variant="Variant.Outlined">Push @(m.WebPushDevices + m.MobileDevices)</MudChip>
+            </div>
+        }
+        <MudButton Href="/profile#notifications" Size="Size.Small" Variant="Variant.Text">@L["ตั้งค่าช่องทางแจ้งเตือนของฉัน", "Set up my notifications"]</MudButton>
+    </MudPaper>
+}
+
+@code {
+    [Parameter] public Guid ShopId { get; set; }
+    private NotificationHealth? _health;
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync() => _health = await Api.Get<NotificationHealth>($"api/merchant/shops/{ShopId}/notification-health", silent: true);
+}

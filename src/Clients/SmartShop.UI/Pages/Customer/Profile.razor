@@ -1,0 +1,244 @@
+@page "/profile"
+@inject Api Api
+@inject Session Session
+@inject PlantContext Plant
+@inject IPushRegistrar Push
+@inject AppConfig Config
+@inject Browser Browser
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<div class="ss-page">
+    @if (_me is null) { <Loading Rows="2" /> }
+    else
+    {
+        <div class="d-flex align-center gap-3 mb-4">
+            <MudAvatar Size="Size.Large">
+                @if (_me.PictureUrl is not null) { <MudImage Src="@_me.PictureUrl" /> } else { @_me.DisplayName[..1] }
+            </MudAvatar>
+            <div>
+                <MudText Typo="Typo.h6">@_me.DisplayName</MudText>
+                <MudText Typo="Typo.caption" Class="ss-muted">@Plant.Current?.PlantName · @L["บ้าน", "House"] @Plant.Current?.HouseNo</MudText>
+            </div>
+        </div>
+
+        @* ---- my shops ---- *@
+        <MudPaper Outlined="true" Class="pa-3 mb-3 ss-card">
+            <MudText Typo="Typo.subtitle1" Style="font-weight:600">🏪 @L["ร้านของฉัน", "My shops"]</MudText>
+            @foreach (var shop in Plant.MyShops)
+            {
+                <div class="d-flex align-center py-1">
+                    <MudText>@shop.Name <span class="ss-muted">(@shop.Role)</span></MudText>
+                    <MudSpacer />
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Href="@($"/merchant/{shop.Id}")">@L["จัดการร้าน", "Manage"]</MudButton>
+                </div>
+            }
+            <MudButton Href="/shop-applications" StartIcon="@Icons.Material.Filled.AddBusiness" Variant="Variant.Text" Size="Size.Small">@L["ขอเปิดร้านใหม่", "Open a new shop"]</MudButton>
+        </MudPaper>
+
+        @* ---- notification channels ---- *@
+        <MudPaper Outlined="true" Class="pa-3 mb-3 ss-card" id="notifications">
+            <MudText Typo="Typo.subtitle1" Style="font-weight:600">🔔 @L["ช่องทางรับแจ้งเตือน", "How you get notified"]</MudText>
+            @if (_channels is not null)
+            {
+                @if (!_channels.HasPush)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="my-2">@L["ยังไม่มีช่องทางแจ้งเตือนแบบ Push อาจพลาดออเดอร์หรือข่าวสาร", "No push channel yet: you may miss orders and updates"]</MudAlert>
+                }
+                <div class="d-flex align-center py-1">
+                    <MudText>LINE Official Account</MudText>
+                    <MudSpacer />
+                    @if (!_channels.LineConfigured) { <MudText Typo="Typo.caption" Class="ss-muted">@L["ยังไม่ได้ตั้งค่าบนเซิร์ฟเวอร์", "not configured"]</MudText> }
+                    else if (_channels.LineFriend) { <MudChip T="string" Color="Color.Success" Size="Size.Small">✓ @L["เป็นเพื่อนแล้ว", "Friend"]</MudChip> }
+                    else
+                    {
+                        @if ((_channels.LineAddFriendUrl ?? Config.LineAddFriendUrl) is { } url)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Filled" Href="@url" Target="_blank" Style="background:#06C755;color:#fff">@L["เพิ่มเพื่อน", "Add friend"]</MudButton>
+                        }
+                        <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" OnClick="RefreshLineAsync" title="@L["ตรวจสอบอีกครั้ง", "Check again"]" />
+                    }
+                </div>
+                <div class="d-flex align-center py-1">
+                    <MudText>@L["แจ้งเตือนบนอุปกรณ์นี้ (Web Push)", "Push on this device"]</MudText>
+                    <MudSpacer />
+                    @if (!_channels.WebPushConfigured && Push.Kind == "WebPush") { <MudText Typo="Typo.caption" Class="ss-muted">@L["ยังไม่ได้ตั้งค่าบนเซิร์ฟเวอร์", "not configured"]</MudText> }
+                    else if (!_pushSupported) { <MudText Typo="Typo.caption" Class="ss-muted">@(PushHint)</MudText> }
+                    else { <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" OnClick="EnablePushAsync">@L["เปิด", "Enable"]</MudButton> }
+                </div>
+                @foreach (var d in _channels.Devices)
+                {
+                    <div class="d-flex align-center ps-4">
+                        <MudText Typo="Typo.caption">📱 @(d.Label ?? d.Kind) · @Fmt.Ago(d.LastSeenAt, L)</MudText>
+                        <MudSpacer />
+                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="@(() => RemoveDeviceAsync(d))" />
+                    </div>
+                }
+                <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.NotificationsActive" OnClick="TestAsync">@L["ทดสอบแจ้งเตือน", "Send a test"]</MudButton>
+            }
+            @if (_settings is not null)
+            {
+                <MudDivider Class="my-2" />
+                <MudSwitch T="bool" Value="@(_settings.PushMode == "OnlyWhenLineFails")" ValueChanged="SetPushModeAsync" Color="Color.Primary"
+                           Label="@L["ส่ง Push เฉพาะเมื่อ LINE ส่งไม่ได้", "Push only when LINE fails"]" />
+                <div class="d-flex gap-2 align-center">
+                    <MudText Typo="Typo.body2">🌙 @L["ห้ามรบกวน", "Quiet hours"]</MudText>
+                    <MudTimePicker Time="_quietFrom" TimeChanged="@(t => { _quietFrom = t; })" Label="@L["ตั้งแต่", "From"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" />
+                    <MudTimePicker Time="_quietTo" TimeChanged="@(t => { _quietTo = t; })" Label="@L["ถึง", "To"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Save" OnClick="SaveQuietAsync" />
+                </div>
+                <MudText Typo="Typo.caption" Class="ss-muted">@L["ออเดอร์ใหม่ของร้านคุณจะยังแจ้งเตือนเสมอ", "New orders for your shop always notify"]</MudText>
+            }
+        </MudPaper>
+
+        @* ---- profile & address ---- *@
+        <MudPaper Outlined="true" Class="pa-3 mb-3 ss-card">
+            <MudText Typo="Typo.subtitle1" Style="font-weight:600">👤 @L["ข้อมูลของฉัน", "My details"]</MudText>
+            <MudTextField @bind-Value="_name" Label="@L["ชื่อที่แสดง", "Display name"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+            <MudTextField @bind-Value="_phone" Label="@L["เบอร์โทร (ร้านที่คุณสั่งจะเห็น)", "Phone (shown to shops you order from)"]" Variant="Variant.Outlined" Margin="Margin.Dense" InputType="InputType.Telephone" />
+            <div class="ss-grid-2">
+                <MudTextField @bind-Value="_houseNo" Label="@L["บ้านเลขที่", "House no."]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudTextField @bind-Value="_soi" Label="@L["ซอย", "Soi"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </div>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Class="mt-2" OnClick="SaveProfileAsync">@L["บันทึก", "Save"]</MudButton>
+        </MudPaper>
+
+        <MudPaper Outlined="true" Class="pa-3 mb-3 ss-card">
+            <div class="d-flex align-center">
+                <MudText>🌐 @L["ภาษา", "Language"]</MudText>
+                <MudSpacer />
+                <MudToggleGroup T="string" Value="L.Language" ValueChanged="@(v => L.SetAsync(v))" Size="Size.Small" Color="Color.Primary">
+                    <MudToggleItem Value="@("th")" Text="ไทย" />
+                    <MudToggleItem Value="@("en")" Text="EN" />
+                </MudToggleGroup>
+            </div>
+            <MudButton Href="/villages" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.HolidayVillage">@L["หมู่บ้านของฉัน", "My villages"]</MudButton>
+            @if (Session.User?.IsSystemAdmin == true) { <MudButton Href="/system" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Dns">@L["ผู้ดูแลระบบ", "System admin"]</MudButton> }
+        </MudPaper>
+
+        @* ---- PDPA ---- *@
+        <MudPaper Outlined="true" Class="pa-3 mb-3 ss-card">
+            <MudText Typo="Typo.subtitle1" Style="font-weight:600">🔒 @L["ความเป็นส่วนตัว (PDPA)", "Privacy (PDPA)"]</MudText>
+            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportAsync">@L["ดาวน์โหลดข้อมูลของฉัน", "Download my data"]</MudButton>
+            <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.DeleteForever" OnClick="DeleteAsync">@L["ลบบัญชี", "Delete account"]</MudButton>
+        </MudPaper>
+
+        <MudButton FullWidth="true" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Logout" OnClick="SignOutAsync">@L["ออกจากระบบ", "Log out"]</MudButton>
+        <MudText Typo="Typo.caption" Align="Align.Center" Class="ss-muted d-block mt-4">SmartShop · Open source (MIT)</MudText>
+    }
+</div>
+
+@code {
+    private Me? _me;
+    private Channels? _channels;
+    private NotificationSettings? _settings;
+    private string? _name, _phone, _houseNo, _soi;
+    private TimeSpan? _quietFrom, _quietTo;
+    private bool _pushSupported;
+
+    private string PushHint => Push.Kind == "WebPush"
+        ? L["อุปกรณ์นี้ไม่รองรับ (iOS: เพิ่มไปที่หน้าจอโฮมก่อน / ในแอป LINE ไม่รองรับ)", "Not supported here (iOS: add to Home Screen first; not inside LINE)"]
+        : L["ไม่รองรับ", "Not supported"];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _me = await Api.Get<Me>("api/me");
+        _name = _me?.DisplayName;
+        _phone = _me?.Phone;
+        _houseNo = Plant.Current?.HouseNo;
+        _soi = Plant.Current?.Soi;
+        _pushSupported = await Push.IsSupportedAsync();
+        await LoadChannelsAsync();
+    }
+
+    private async Task LoadChannelsAsync()
+    {
+        _channels = await Api.Get<Channels>("api/notifications/channels", silent: true);
+        _settings = await Api.Get<NotificationSettings>("api/notifications/settings", silent: true);
+        _quietFrom = _settings?.QuietFrom is { } f ? TimeSpan.Parse(f, System.Globalization.CultureInfo.InvariantCulture) : null;
+        _quietTo = _settings?.QuietTo is { } t ? TimeSpan.Parse(t, System.Globalization.CultureInfo.InvariantCulture) : null;
+    }
+
+    private async Task RefreshLineAsync()
+    {
+        _channels = await Api.Post<Channels>("api/notifications/channels/line/refresh") ?? _channels;
+        if (_channels?.LineFriend == true) Snackbar.Add(L["เชื่อมต่อ LINE OA แล้ว", "LINE OA connected"], Severity.Success);
+    }
+
+    private async Task EnablePushAsync()
+    {
+        var sub = await Push.SubscribeAsync(_channels?.VapidPublicKey);
+        if (sub is null)
+        {
+            Snackbar.Add(L["ไม่ได้รับอนุญาตให้แจ้งเตือน", "Notification permission was not granted"], Severity.Warning);
+            return;
+        }
+        if (await Api.Post("api/notifications/devices", new { kind = Push.Kind, endpoint = sub.Endpoint, p256dh = sub.P256dh, auth = sub.Auth, label = sub.Label }))
+        {
+            Snackbar.Add(L["เปิดแจ้งเตือนบนอุปกรณ์นี้แล้ว", "Push enabled on this device"], Severity.Success);
+            await LoadChannelsAsync();
+        }
+    }
+
+    private async Task RemoveDeviceAsync(Device d)
+    {
+        if (await Api.Delete($"api/notifications/devices/{d.Id}")) await LoadChannelsAsync();
+    }
+
+    private async Task TestAsync()
+    {
+        if (await Api.Post("api/notifications/test")) Snackbar.Add(L["ส่งแจ้งเตือนทดสอบแล้ว", "Test sent"], Severity.Info);
+    }
+
+    private async Task SetPushModeAsync(bool onlyWhenLineFails)
+    {
+        if (_settings is null) return;
+        _settings = _settings with { PushMode = onlyWhenLineFails ? "OnlyWhenLineFails" : "Always" };
+        await Api.Put("api/notifications/settings", _settings);
+    }
+
+    private async Task SaveQuietAsync()
+    {
+        if (_settings is null) return;
+        _settings = _settings with { QuietFrom = _quietFrom?.ToString(@"hh\:mm"), QuietTo = _quietTo?.ToString(@"hh\:mm") };
+        if (await Api.Put("api/notifications/settings", _settings)) Snackbar.Add(L["บันทึกแล้ว", "Saved"], Severity.Success);
+    }
+
+    private async Task SaveProfileAsync()
+    {
+        var me = await Api.Put<Me>("api/me", new { displayName = _name, phone = _phone, locale = L.Language });
+        var addressOk = string.IsNullOrWhiteSpace(_houseNo) || await Api.Put("api/plant/me/address", new { houseNo = _houseNo, soi = _soi, nickname = Plant.Current?.Nickname });
+        if (me is not null && addressOk)
+        {
+            _me = me;
+            await Session.UpdateUserAsync(u => u with { DisplayName = me.DisplayName });
+            await Plant.LoadAsync(force: true);
+            Snackbar.Add(L["บันทึกแล้ว", "Saved"], Severity.Success);
+        }
+    }
+
+    private async Task ExportAsync()
+    {
+        var bytes = await Api.DownloadAsync("api/me/export");
+        if (bytes is not null) await Browser.DownloadAsync("smartshop-my-data.json", bytes, "application/json");
+    }
+
+    private async Task DeleteAsync()
+    {
+        var ok = await Dialogs.ShowMessageBoxAsync(L["ลบบัญชี?", "Delete account?"],
+            L["ข้อมูลส่วนตัวจะถูกลบ/ทำให้ไม่ระบุตัวตน และออกจากทุกหมู่บ้าน ย้อนกลับไม่ได้", "Your personal data will be erased and you will leave every village. This cannot be undone."],
+            yesText: L["ลบบัญชี", "Delete"], cancelText: L["ยกเลิก", "Cancel"]);
+        if (ok == true && await Api.Delete("api/me"))
+        {
+            await Session.SignOutAsync();
+            Nav.NavigateTo("/login");
+        }
+    }
+
+    private async Task SignOutAsync()
+    {
+        await Session.SignOutAsync();
+        Nav.NavigateTo("/login");
+    }
+}

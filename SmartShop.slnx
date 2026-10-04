@@ -9,6 +9,11 @@
     <Project Path="src/BuildingBlocks/SmartShop.Infrastructure/SmartShop.Infrastructure.csproj" />
     <Project Path="src/BuildingBlocks/SmartShop.SharedKernel/SmartShop.SharedKernel.csproj" />
   </Folder>
+  <Folder Name="/src/Clients/">
+    <Project Path="src/Clients/SmartShop.UI/SmartShop.UI.csproj" />
+    <Project Path="src/Clients/SmartShop.Web.Client/SmartShop.Web.Client.csproj" />
+    <Project Path="src/Clients/SmartShop.Web/SmartShop.Web.csproj" />
+  </Folder>
   <Folder Name="/src/Hosts/">
     <Project Path="src/Hosts/SmartShop.Api/SmartShop.Api.csproj" />
     <Project Path="src/Hosts/SmartShop.Bootstrap/SmartShop.Bootstrap.csproj" />

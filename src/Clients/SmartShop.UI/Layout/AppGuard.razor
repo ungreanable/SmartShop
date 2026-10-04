@@ -1,0 +1,58 @@
+@* Redirects to login / consent / village selection before rendering protected content. *@
+@inject Session Session
+@inject PlantContext Plant
+@inject NavigationManager Nav
+
+@if (_allowed)
+{
+    @ChildContent
+}
+else
+{
+    <div class="ss-center"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+}
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public bool RequirePlant { get; set; } = true;
+    [Parameter] public bool RequirePlantAdmin { get; set; }
+    [Parameter] public bool RequireSystemAdmin { get; set; }
+
+    private bool _allowed;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _allowed = false;
+        var here = Nav.ToBaseRelativePath(Nav.Uri);
+        if (!Session.IsAuthenticated)
+        {
+            Nav.NavigateTo("/login?returnUrl=" + Uri.EscapeDataString("/" + here), replace: true);
+            return;
+        }
+        if (Session.User?.HasConsent == false && !here.StartsWith("consent", StringComparison.Ordinal))
+        {
+            Nav.NavigateTo("/consent?returnUrl=" + Uri.EscapeDataString("/" + here), replace: true);
+            return;
+        }
+        if (RequireSystemAdmin && Session.User?.IsSystemAdmin != true)
+        {
+            Nav.NavigateTo("/", replace: true);
+            return;
+        }
+        if (RequirePlant || RequirePlantAdmin)
+        {
+            await Plant.LoadAsync();
+            if (Plant.Current is null)
+            {
+                Nav.NavigateTo("/villages", replace: true);
+                return;
+            }
+            if (RequirePlantAdmin && !Plant.IsAdmin)
+            {
+                Nav.NavigateTo("/", replace: true);
+                return;
+            }
+        }
+        _allowed = true;
+    }
+}

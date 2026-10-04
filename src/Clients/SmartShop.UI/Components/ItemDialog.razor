@@ -1,0 +1,142 @@
+@* Item bottom sheet: options, quantity, note and (for services) time slot, like delivery apps. *@
+@inject Api Api
+@inject IDialogService Dialogs
+
+<MudDialog>
+    <DialogContent>
+        @if (Item.ImageUrls.FirstOrDefault() is { } img)
+        {
+            <img src="@img" alt="" style="width:100%; max-height:260px; object-fit:cover; border-radius:12px" />
+        }
+        @if (Item.Description is not null) { <MudText Typo="Typo.body2" Class="mt-2">@Item.Description</MudText> }
+        <MudText Typo="Typo.h6" Class="mt-1">@Fmt.Baht(Item.Price)</MudText>
+
+        @foreach (var group in Item.ModifierGroups)
+        {
+            <div class="mt-3">
+                <MudText Typo="Typo.subtitle2">
+                    @group.Name
+                    <span class="ss-muted" style="font-weight:400">
+                        @(group.MinSelect > 0 ? L[$"(เลือก {group.MinSelect}{(group.MaxSelect > group.MinSelect ? $"–{group.MaxSelect}" : "")})", $"(choose {group.MinSelect}{(group.MaxSelect > group.MinSelect ? $"–{group.MaxSelect}" : "")})"]
+                                             : L[$"(ไม่บังคับ สูงสุด {group.MaxSelect})", $"(optional, up to {group.MaxSelect})"])
+                    </span>
+                </MudText>
+                @foreach (var option in group.Options)
+                {
+                    <div class="d-flex align-center">
+                        <MudCheckBox T="bool" Value="_selected.Contains(option.Id)" ValueChanged="@(v => Toggle(group, option, v))" Disabled="!option.IsAvailable"
+                                     Label="@option.Name" Dense="true" Color="Color.Primary" />
+                        <MudSpacer />
+                        @if (option.PriceDelta != 0) { <MudText Typo="Typo.body2">+@Fmt.Baht(option.PriceDelta)</MudText> }
+                    </div>
+                }
+            </div>
+        }
+
+        @if (Item.StockMode == "Slot")
+        {
+            <MudText Typo="Typo.subtitle2" Class="mt-3">@L["เลือกเวลา", "Choose a time"]</MudText>
+            <MudDatePicker Date="_date" DateChanged="DateChangedAsync" MinDate="DateTime.Today" MaxDate="DateTime.Today.AddDays(14)" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            @if (_slots is null) { <MudProgressLinear Indeterminate="true" Class="my-2" /> }
+            else if (_slots.Count == 0) { <MudText Typo="Typo.caption" Class="ss-muted">@L["ไม่มีเวลาว่างในวันนี้", "No free slots on this day"]</MudText> }
+            else
+            {
+                <div class="d-flex flex-wrap gap-2 mt-2">
+                    @foreach (var slot in _slots)
+                    {
+                        <MudChip T="string" Disabled="slot.Remaining == 0" Color="@(_slot == slot.Start ? Color.Primary : Color.Default)"
+                                 Variant="@(_slot == slot.Start ? Variant.Filled : Variant.Outlined)" OnClick="@(() => _slot = slot.Start)">
+                            @Fmt.Time(slot.Start) @(slot.Remaining == 0 ? L["เต็ม", "full"] : "")
+                        </MudChip>
+                    }
+                </div>
+            }
+        }
+
+        <MudTextField @bind-Value="_note" Label="@L["หมายเหตุถึงร้าน", "Note for the shop"]" Placeholder="@L["เช่น ไม่ใส่ผัก", "e.g. no vegetables"]"
+                      Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" MaxLength="200" />
+
+        <div class="d-flex align-center justify-center gap-4 mt-4">
+            <MudIconButton Icon="@Icons.Material.Filled.Remove" Variant="Variant.Outlined" Disabled="@(_qty <= 1)" OnClick="@(() => _qty--)" />
+            <MudText Typo="Typo.h5">@_qty</MudText>
+            <MudIconButton Icon="@Icons.Material.Filled.Add" Variant="Variant.Outlined" Disabled="@(_qty >= Max)" OnClick="@(() => _qty++)" />
+        </div>
+        @if (Item.Remaining is { } remaining && remaining <= 10)
+        {
+            <MudText Typo="Typo.caption" Align="Align.Center" Class="ss-muted d-block">@L[$"เหลือ {remaining}", $"{remaining} left"]</MudText>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large" Disabled="@(!CanAdd || _busy)" OnClick="AddAsync" Class="ma-2">
+            @L["เพิ่มลงตะกร้า", "Add to cart"] · @Fmt.Baht(Total)
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public MenuItem Item { get; set; } = default!;
+    [Parameter] public Guid ShopId { get; set; }
+
+    private readonly HashSet<Guid> _selected = [];
+    private int _qty = 1;
+    private string? _note;
+    private bool _busy;
+    private DateTime? _date = DateTime.Today;
+    private List<Slot>? _slots;
+    private DateTimeOffset? _slot;
+
+    private int Max => Math.Min(Item.MaxPerOrder ?? 99, Item.Remaining ?? 99);
+    private decimal Total => (Item.Price + Item.ModifierGroups.SelectMany(g => g.Options).Where(o => _selected.Contains(o.Id)).Sum(o => o.PriceDelta)) * _qty;
+    private bool CanAdd => Item.ModifierGroups.All(g => g.Options.Count(o => _selected.Contains(o.Id)) >= g.MinSelect)
+                           && (Item.StockMode != "Slot" || _slot is not null);
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Pre-select the only option of mandatory single-choice groups.
+        foreach (var g in Item.ModifierGroups.Where(g => g.MinSelect == 1 && g.MaxSelect == 1))
+            if (g.Options.FirstOrDefault(o => o.IsAvailable) is { } first) _selected.Add(first.Id);
+        if (Item.StockMode == "Slot") await LoadSlotsAsync();
+    }
+
+    private void Toggle(ModifierGroup group, ModifierOption option, bool on)
+    {
+        if (!on) { _selected.Remove(option.Id); return; }
+        if (group.MaxSelect == 1) foreach (var o in group.Options) _selected.Remove(o.Id);
+        else if (group.Options.Count(o => _selected.Contains(o.Id)) >= group.MaxSelect) return;
+        _selected.Add(option.Id);
+    }
+
+    private async Task DateChangedAsync(DateTime? date)
+    {
+        _date = date;
+        _slot = null;
+        await LoadSlotsAsync();
+    }
+
+    private async Task LoadSlotsAsync()
+    {
+        _slots = null;
+        _slots = await Api.Get<List<Slot>>($"api/items/{Item.Id}/slots?date={_date:yyyy-MM-dd}") ?? [];
+    }
+
+    private async Task AddAsync()
+    {
+        _busy = true;
+        var body = new { shopId = ShopId, itemId = Item.Id, quantity = _qty, optionIds = _selected.ToList(), note = _note, slotStart = _slot, replaceCart = false };
+        var cart = await Api.Post<Cart>("api/cart/items", body, silent: true);
+        if (cart is null && Api.LastProblem?.Code == "cart_other_shop")
+        {
+            var replace = await Dialogs.ShowMessageBoxAsync(L["เริ่มตะกร้าใหม่?", "Start a new cart?"],
+                L["ตะกร้ามีสินค้าจากร้านอื่นอยู่ จะล้างตะกร้าเดิมแล้วเพิ่มรายการนี้ไหม", "Your cart has items from another shop. Clear it and add this item?"],
+                yesText: L["เริ่มใหม่", "Start new"], cancelText: L["ยกเลิก", "Cancel"]);
+            if (replace == true) cart = await Api.Post<Cart>("api/cart/items", body with { replaceCart = true });
+        }
+        else if (cart is null && Api.LastProblem is { } problem)
+        {
+            await Dialogs.ShowMessageBoxAsync(L["เพิ่มไม่ได้", "Cannot add"], problem.Message, yesText: "OK");
+        }
+        _busy = false;
+        if (cart is not null) Dialog.Close(DialogResult.Ok(cart));
+    }
+}

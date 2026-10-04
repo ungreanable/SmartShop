@@ -1,0 +1,60 @@
+@* Pre-order rounds ("order by Fri 20:00, pick up Sat 08-10") and group buys (minimum total quantity). *@
+@inject Api Api
+
+@foreach (var r in _rounds)
+{
+    <MudPaper Outlined="true" Class="pa-2 mb-2">
+        <div class="d-flex align-center">
+            <MudText Typo="Typo.subtitle2">@r.Title</MudText>
+            <MudSpacer />
+            <MudChip T="string" Size="Size.Small" Color="@(r.Status == "Open" ? Color.Success : r.Status == "Confirmed" ? Color.Info : Color.Default)">@r.Status</MudChip>
+        </div>
+        <MudText Typo="Typo.caption">@L["สั่งถึง", "Order by"] @Fmt.DateTime(r.OrderCutoff) · @L["รับ", "pick up"] @Fmt.Window(r.FulfillFrom, r.FulfillTo)</MudText><br />
+        <MudText Typo="Typo.caption">@L["สั่งแล้ว", "Ordered"] @r.OrderedQuantity @(r.MinTotalQuantity is { } min ? L[$"/ ขั้นต่ำ {min}", $"/ minimum {min}"] : "")</MudText>
+    </MudPaper>
+}
+
+<MudText Typo="Typo.subtitle2" Class="mt-2">@L["สร้างรอบใหม่", "New round"]</MudText>
+<MudTextField @bind-Value="_title" Immediate="true" Label="@L["ชื่อรอบ เช่น ขนมจีบรอบเสาร์", "Title, e.g. Saturday dumplings"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+<div class="ss-grid-2">
+    <MudDatePicker @bind-Date="_cutoffDate" Label="@L["ปิดรับวันที่", "Order by (date)"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+    <MudTimePicker @bind-Time="_cutoffTime" Label="@L["เวลา", "time"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+    <MudDatePicker @bind-Date="_pickupDate" Label="@L["วันรับ", "Pick-up date"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+    <div class="d-flex gap-1">
+        <MudTimePicker @bind-Time="_fromTime" Label="@L["ตั้งแต่", "from"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+        <MudTimePicker @bind-Time="_toTime" Label="@L["ถึง", "to"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+    </div>
+</div>
+<MudNumericField T="int?" @bind-Value="_min" Label="@L["ยอดขั้นต่ำรวม (ซื้อกลุ่ม, ไม่บังคับ)", "Minimum total (group buy, optional)"]" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" />
+<MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" Class="mt-2" OnClick="CreateAsync"
+           Disabled="@(string.IsNullOrWhiteSpace(_title) || _cutoffDate is null || _pickupDate is null)">@L["สร้างรอบ", "Create round"]</MudButton>
+<MudText Typo="Typo.caption" Class="ss-muted d-block mt-1">@L["จากนั้นแก้ไขสินค้าแล้วเลือกรอบนี้", "Then edit an item and choose this round"]</MudText>
+
+@code {
+    [Parameter] public Guid ShopId { get; set; }
+
+    private List<Round> _rounds = [];
+    private string? _title;
+    private DateTime? _cutoffDate = DateTime.Today.AddDays(1), _pickupDate = DateTime.Today.AddDays(2);
+    private TimeSpan? _cutoffTime = new(20, 0, 0), _fromTime = new(8, 0, 0), _toTime = new(10, 0, 0);
+    private int? _min;
+
+    protected override async Task OnParametersSetAsync() =>
+        _rounds = await Api.Get<List<Round>>($"api/merchant/shops/{ShopId}/catalog/rounds", silent: true) ?? [];
+
+    private static DateTimeOffset At(DateTime date, TimeSpan? time) => new DateTimeOffset(date.Date + (time ?? TimeSpan.Zero), DateTimeOffset.Now.Offset);
+
+    private async Task CreateAsync()
+    {
+        var body = new
+        {
+            title = _title, orderCutoff = At(_cutoffDate!.Value, _cutoffTime),
+            fulfillFrom = At(_pickupDate!.Value, _fromTime), fulfillTo = At(_pickupDate!.Value, _toTime), minTotalQuantity = _min,
+        };
+        if (await Api.Post<Round>($"api/merchant/shops/{ShopId}/catalog/rounds", body) is not null)
+        {
+            _title = null;
+            await OnParametersSetAsync();
+        }
+    }
+}

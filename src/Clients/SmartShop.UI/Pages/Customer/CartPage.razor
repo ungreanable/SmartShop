@@ -1,0 +1,213 @@
+@page "/cart"
+@inject Api Api
+@inject PlantContext Plant
+@inject NavigationManager Nav
+@inject IDialogService Dialogs
+
+<div class="ss-page">
+    <MudText Typo="Typo.h5" Class="mb-3" Style="font-weight:700">@L["ตะกร้า & ชำระเงิน", "Cart & checkout"]</MudText>
+
+    @if (_cart is null) { <Loading /> }
+    else if (_cart.Lines.Count == 0)
+    {
+        <EmptyState Icon="@Icons.Material.Outlined.ShoppingCart" Title="@L["ตะกร้าว่าง", "Your cart is empty"]">
+            <MudButton Href="/" Variant="Variant.Filled" Color="Color.Primary">@L["เลือกร้าน", "Browse shops"]</MudButton>
+        </EmptyState>
+    }
+    else if (_shop is not null)
+    {
+        <MudPaper Outlined="true" Class="pa-3 mb-3 ss-card">
+            <div class="d-flex align-center mb-2">
+                <MudLink Href="@($"/shops/{_shop.Id}")" Typo="Typo.subtitle1" Style="font-weight:600">@_shop.Name</MudLink>
+                <MudSpacer />
+                <StatusBadge Status="_shop.Status" AcceptsPreorders="_shop.Status.AcceptsPreorders" />
+            </div>
+            @foreach (var line in _cart.Lines)
+            {
+                <div class="d-flex gap-2 py-2 align-center" style="border-top:1px solid var(--mud-palette-lines-default)">
+                    <div style="flex:1; min-width:0">
+                        <MudText Typo="Typo.body1">@line.Name</MudText>
+                        @if (line.Options.Count > 0) { <MudText Typo="Typo.caption" Class="ss-muted">@string.Join(", ", line.Options.Select(o => o.Name))</MudText> }
+                        @if (line.SlotStart is { } s) { <MudText Typo="Typo.caption" Color="Color.Info">⏰ @Fmt.Day(s) @Fmt.Time(s)</MudText> }
+                        @if (line.Note is not null) { <MudText Typo="Typo.caption" Class="ss-muted">📝 @line.Note</MudText> }
+                        @if (!line.IsOrderable) { <MudText Typo="Typo.caption" Color="Color.Error">⚠️ @Problem(line.Problem)</MudText> }
+                    </div>
+                    <MudIconButton Size="Size.Small" Icon="@(line.Quantity == 1 ? Icons.Material.Filled.DeleteOutline : Icons.Material.Filled.Remove)" OnClick="@(() => ChangeAsync(line, -1))" />
+                    <MudText>@line.Quantity</MudText>
+                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Add" OnClick="@(() => ChangeAsync(line, 1))" />
+                    <MudText Style="min-width:64px; text-align:right">@Fmt.Baht(line.LineTotal)</MudText>
+                </div>
+            }
+            <MudButton Href="@($"/shops/{_shop.Id}")" StartIcon="@Icons.Material.Filled.Add" Size="Size.Small" Variant="Variant.Text">@L["เพิ่มรายการ", "Add more"]</MudButton>
+        </MudPaper>
+
+        <MudText Typo="Typo.subtitle1" Class="mb-1" Style="font-weight:600">@L["รับสินค้าอย่างไร", "How to receive"]</MudText>
+        <MudToggleGroup T="string" @bind-Value="_fulfillment" Color="Color.Primary" Class="mb-2" FixedContent="true">
+            @if (_shop.PickupEnabled) { <MudToggleItem Value="@("Pickup")" Text="@L["🏠 รับเองที่ร้าน", "🏠 Pick up"]" /> }
+            @if (_shop.DeliveryEnabled) { <MudToggleItem Value="@("Delivery")" Text="@L["🛵 ให้ร้านไปส่ง", "🛵 Shop delivers"]" /> }
+        </MudToggleGroup>
+        @if (_fulfillment == "Pickup" && _shop.PickupInstruction is not null) { <MudText Typo="Typo.caption" Class="ss-muted d-block mb-2">ℹ️ @_shop.PickupInstruction</MudText> }
+        @if (_fulfillment == "Delivery")
+        {
+            <MudText Typo="Typo.caption" Class="ss-muted d-block mb-1">@L["ส่งในหมู่บ้าน ไม่มีค่าส่ง", "Delivery inside the village is free"] @(_shop.DeliveryZoneNote is null ? "" : $"· {_shop.DeliveryZoneNote}")</MudText>
+            <div class="ss-grid-2">
+                <MudTextField @bind-Value="_houseNo" Label="@L["บ้านเลขที่", "House no."]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudTextField @bind-Value="_soi" Label="@L["ซอย", "Soi"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </div>
+            <MudTextField @bind-Value="_addressNote" Label="@L["จุดสังเกต / วางไว้ที่", "Landmark / leave at"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2" />
+        }
+
+        <MudText Typo="Typo.subtitle1" Class="mt-3 mb-1" Style="font-weight:600">@L["เวลา", "When"]</MudText>
+        @if (_round is not null)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true">📅 @L["สั่งล่วงหน้า รับ", "Pre-order, pick up"] @Fmt.Window(_round.FulfillFrom, _round.FulfillTo)</MudAlert>
+        }
+        else
+        {
+            <MudRadioGroup T="bool" @bind-Value="_scheduled">
+                <MudRadio Value="false" Color="Color.Primary" Disabled="!_shop.Status.AcceptingOrders">
+                    ⚡ @L["เร็วที่สุด / รับได้ตลอด", "As soon as possible"] @(_shop.PrepTimeMinutes > 0 ? L[$"(~{_shop.PrepTimeMinutes} นาที)", $"(~{_shop.PrepTimeMinutes} min)"] : "")
+                </MudRadio>
+                <MudRadio Value="true" Color="Color.Primary">🕐 @L["เลือกเวลา", "Choose a time"]</MudRadio>
+            </MudRadioGroup>
+            @if (_scheduled)
+            {
+                @if (_windows.Count == 0) { <MudText Typo="Typo.caption" Color="Color.Warning">@L["ไม่มีช่วงเวลาที่เลือกได้", "No available time windows"]</MudText> }
+                else
+                {
+                    <MudSelect T="TimeWindow" @bind-Value="_window" Label="@L["ช่วงเวลา", "Time window"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                               ToStringFunc="@(w => w is null ? "" : Fmt.Window(w.Start, w.End))">
+                        @foreach (var w in _windows) { <MudSelectItem Value="w" /> }
+                    </MudSelect>
+                }
+            }
+        }
+
+        <MudText Typo="Typo.subtitle1" Class="mt-4 mb-1" Style="font-weight:600">@L["ชำระเงิน", "Payment"]</MudText>
+        <MudRadioGroup T="Guid" @bind-Value="_paymentMethodId">
+            @foreach (var p in _shop.PaymentMethods)
+            {
+                <MudRadio Value="p.Id" Color="Color.Primary">@PaymentIcon(p.Type) @p.DisplayName</MudRadio><br />
+            }
+        </MudRadioGroup>
+
+        <MudTextField @bind-Value="_coupon" Label="@L["โค้ดส่วนลด (ถ้ามี)", "Coupon code (optional)"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3"
+                      Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.LocalOffer" OnBlur="PreviewDiscountAsync" />
+        <MudTextField @bind-Value="_note" Label="@L["หมายเหตุถึงร้าน", "Note for the shop"]" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" Class="mt-2" />
+
+        <MudPaper Outlined="true" Class="pa-3 mt-4 ss-card">
+            <div class="d-flex"><MudText>@L["ค่าสินค้า", "Subtotal"]</MudText><MudSpacer /><MudText>@Fmt.Baht(_cart.Subtotal)</MudText></div>
+            @if (_discount is not null)
+            {
+                <div class="d-flex"><MudText Color="Color.Success">@L["ส่วนลด", "Discount"] (@_discount.Description)</MudText><MudSpacer /><MudText Color="Color.Success">-@Fmt.Baht(_discount.Discount)</MudText></div>
+            }
+            <div class="d-flex"><MudText>@L["ค่าส่ง", "Delivery"]</MudText><MudSpacer /><MudText>@L["ฟรี", "Free"]</MudText></div>
+            <MudDivider Class="my-2" />
+            <div class="d-flex"><MudText Typo="Typo.h6">@L["รวม", "Total"]</MudText><MudSpacer /><MudText Typo="Typo.h6">@Fmt.Baht(Math.Max(0, _cart.Subtotal - (_discount?.Discount ?? 0)))</MudText></div>
+        </MudPaper>
+
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true" Class="mt-4" Disabled="@(!CanOrder || _busy)" OnClick="PlaceAsync">
+            @(_busy ? L["กำลังสั่ง...", "Placing order..."] : L["สั่งเลย", "Place order"])
+        </MudButton>
+    }
+</div>
+
+@code {
+    private Cart? _cart;
+    private ShopDetails? _shop;
+    private Menu? _menu;
+    private Round? _round;
+    private List<TimeWindow> _windows = [];
+    private string _fulfillment = "Pickup";
+    private bool _scheduled;
+    private TimeWindow? _window;
+    private Guid _paymentMethodId;
+    private string? _houseNo, _soi, _addressNote, _note, _coupon;
+    private DiscountPreview? _discount;
+    private bool _busy;
+    private readonly string _idempotencyKey = Guid.NewGuid().ToString("N");
+
+    private bool CanOrder => _cart is { CanCheckout: true } && _paymentMethodId != Guid.Empty
+        && (_round is not null || !_scheduled || _window is not null)
+        && (_scheduled || _round is not null || _shop?.Status.AcceptingOrders == true)
+        && (_fulfillment != "Delivery" || !string.IsNullOrWhiteSpace(_houseNo));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _cart = await Api.Get<Cart>("api/cart");
+        if (_cart?.ShopId is not { } shopId || _cart.Lines.Count == 0) return;
+        var shop = Api.Get<ShopDetails>($"api/shops/{shopId}");
+        var windows = Api.Get<List<TimeWindow>>($"api/shops/{shopId}/windows?days=3", silent: true);
+        var menu = Api.Get<Menu>($"api/shops/{shopId}/menu", silent: true);
+        _shop = await shop;
+        _windows = await windows ?? [];
+        _menu = await menu;
+        if (_shop is null) return;
+
+        _fulfillment = _shop.PickupEnabled ? "Pickup" : "Delivery";
+        _paymentMethodId = _shop.PaymentMethods.FirstOrDefault()?.Id ?? Guid.Empty;
+        _scheduled = !_shop.Status.AcceptingOrders;
+        _houseNo = Plant.Current?.HouseNo;
+        _soi = Plant.Current?.Soi;
+        var itemIds = _cart.Lines.Select(l => l.ItemId).ToHashSet();
+        _round = _menu?.Categories.SelectMany(c => c.Items).FirstOrDefault(i => itemIds.Contains(i.Id) && i.Round is not null)?.Round;
+    }
+
+    private async Task ChangeAsync(CartLine line, int delta)
+    {
+        var quantity = line.Quantity + delta;
+        _cart = quantity <= 0
+            ? await Api.Send<Cart>(HttpMethod.Delete, $"api/cart/items/{line.Id}", null)
+            : await Api.Put<Cart>($"api/cart/items/{line.Id}", new { quantity, optionIds = line.OptionIds, note = line.Note });
+        _discount = null;
+    }
+
+    private async Task PreviewDiscountAsync()
+    {
+        _discount = null;
+        if (string.IsNullOrWhiteSpace(_coupon) || _cart?.ShopId is not { } shopId) return;
+        _discount = await Api.Post<DiscountPreview>($"api/shops/{shopId}/promotions/preview", new { code = _coupon.Trim(), subtotal = _cart.Subtotal });
+    }
+
+    private async Task PlaceAsync()
+    {
+        _busy = true;
+        var body = new
+        {
+            fulfillmentType = _fulfillment,
+            scheduledFrom = _round is null && _scheduled ? _window?.Start : null,
+            scheduledTo = _round is null && _scheduled ? _window?.End : null,
+            deliveryAddress = _fulfillment == "Delivery" ? new { houseNo = _houseNo, soi = _soi, note = _addressNote } : null,
+            paymentMethodId = _paymentMethodId,
+            note = _note,
+            couponCode = string.IsNullOrWhiteSpace(_coupon) ? null : _coupon.Trim(),
+        };
+        var order = await Api.Post<Order>("api/orders", body, silent: true, idempotencyKey: _idempotencyKey);
+        _busy = false;
+        if (order is not null)
+        {
+            Nav.NavigateTo($"/orders/{order.Id}", replace: true);
+            return;
+        }
+        if (Api.LastProblem is { } p)
+            await Dialogs.ShowMessageBoxAsync(L["สั่งไม่สำเร็จ", "Could not place order"], p.Message, yesText: "OK");
+        _cart = await Api.Get<Cart>("api/cart");
+    }
+
+    private string Problem(string? code) => code switch
+    {
+        "sold_out" => L["สินค้าหมด", "Sold out"],
+        "not_enough_stock" => L["สินค้าเหลือไม่พอ", "Not enough stock"],
+        "outside_hours" => L["ไม่ใช่เวลาขาย", "Not sold at this time"],
+        "item_removed" => L["ร้านเอาออกแล้ว", "Removed by the shop"],
+        _ => L["กรุณาตรวจสอบรายการ", "Please check this item"],
+    };
+
+    public static string PaymentIcon(string type) => type switch
+    {
+        "Cash" => "💵",
+        "PromptPayQr" => "📱",
+        "BankTransfer" => "🏦",
+        _ => "💳",
+    };
+}

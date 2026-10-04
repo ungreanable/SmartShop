@@ -1,0 +1,23 @@
+@inject PlantContext Plant
+
+<MudDialog>
+    <DialogContent>
+        <MudList T="Guid" SelectedValue="@(Plant.PlantId ?? Guid.Empty)" SelectedValueChanged="Choose">
+            @foreach (var m in Plant.Memberships.Where(m => m.IsActive))
+            {
+                <MudListItem Value="m.PlantId" Icon="@Icons.Material.Filled.HolidayVillage" Text="@m.PlantName"
+                             SecondaryText="@(m.IsAdmin ? L["ผู้ดูแล", "Admin"] : null)" />
+            }
+        </MudList>
+        <MudDivider Class="my-2" />
+        <MudButton Href="/villages" StartIcon="@Icons.Material.Filled.Add" FullWidth="true" Variant="Variant.Text">
+            @L["ขอเข้าหมู่บ้านอื่น", "Join another village"]
+        </MudButton>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    private void Choose(Guid plantId) => Dialog.Close(DialogResult.Ok(plantId));
+}

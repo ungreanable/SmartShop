@@ -30,7 +30,8 @@ var api = builder.AddProject<Projects.SmartShop_Api>("api")
     .WithEnvironment("Storage__Provider", "S3")
     .WithEnvironment("Storage__ServiceUrl", s3)
     .WithEnvironment("Storage__AccessKey", "smartshop")
-    .WithEnvironment("Storage__SecretKey", "smartshop");
+    .WithEnvironment("Storage__SecretKey", "smartshop")
+    .WithEnvironment("App__PublicUrl", "http://localhost:5100");
 
 builder.AddProject<Projects.SmartShop_Worker>("worker")
     .WithReference(database).WaitFor(database)
@@ -41,5 +42,9 @@ builder.AddProject<Projects.SmartShop_Worker>("worker")
     .WithEnvironment("Storage__ServiceUrl", s3)
     .WithEnvironment("Storage__AccessKey", "smartshop")
     .WithEnvironment("Storage__SecretKey", "smartshop");
+
+builder.AddProject<Projects.SmartShop_Web>("web")
+    .WithReference(api).WaitFor(api)
+    .WithExternalHttpEndpoints();
 
 builder.Build().Run();

@@ -1,0 +1,22 @@
+@* Totals across open orders: "chicken rice x12" - handy for pre-order rounds. *@
+<MudDialog>
+    <DialogContent>
+        @if (Items.Count == 0) { <MudText Class="ss-muted">@L["ไม่มีของที่ต้องทำ", "Nothing to prepare"]</MudText> }
+        <MudSimpleTable Dense="true" Elevation="0">
+            <tbody>
+                @foreach (var i in Items)
+                {
+                    <tr>
+                        <td><b>@i.Quantity×</b></td>
+                        <td>@i.Name @if (!string.IsNullOrEmpty(i.Options)) { <span class="ss-muted"> (@i.Options)</span> }</td>
+                        <td class="ss-muted">@i.Orders @L["ออเดอร์", "orders"]</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [Parameter] public List<PrepItem> Items { get; set; } = [];
+}

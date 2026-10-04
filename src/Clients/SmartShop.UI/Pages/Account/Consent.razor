@@ -1,0 +1,48 @@
+@page "/consent"
+@layout BareLayout
+@inject Api Api
+@inject Session Session
+@inject NavigationManager Nav
+
+<AppGuard RequirePlant="false">
+    <MudText Typo="Typo.h5" Class="mb-2" Style="font-weight:700">@L["ข้อตกลงและความเป็นส่วนตัว", "Terms & privacy"]</MudText>
+    <MudPaper Outlined="true" Class="pa-4 mb-4">
+        <MudText Typo="Typo.body2">
+            @L["SmartShop เก็บข้อมูลเท่าที่จำเป็นเพื่อให้บริการซื้อขายในหมู่บ้าน ตาม พ.ร.บ.คุ้มครองข้อมูลส่วนบุคคล (PDPA):",
+               "SmartShop keeps only what is needed to run village shopping, following Thailand's PDPA:"]
+        </MudText>
+        <ul style="margin:8px 0 0 18px">
+            <li>@L["ชื่อและรูปโปรไฟล์จาก LINE", "Name and picture from LINE"]</li>
+            <li>@L["บ้านเลขที่ ใช้ยืนยันว่าเป็นคนในหมู่บ้าน และสำหรับการส่งของ", "House number to verify residency and for delivery"]</li>
+            <li>@L["ประวัติออเดอร์และสลิปการโอน เห็นเฉพาะคุณ ร้านค้านั้น และผู้ดูแลหมู่บ้าน", "Orders and payment slips, visible only to you, that shop and village admins"]</li>
+            <li>@L["เบอร์โทร (ถ้ากรอก) แสดงให้ร้านที่คุณสั่งเท่านั้น", "Phone (optional), shown only to shops you order from"]</li>
+        </ul>
+        <MudText Typo="Typo.body2" Class="mt-2">
+            @L["คุณขอดาวน์โหลดหรือลบข้อมูลของตัวเองได้ทุกเมื่อที่หน้า \"ฉัน\"", "You can download or delete your data any time on the \"Me\" page."]
+        </MudText>
+    </MudPaper>
+    <MudCheckBox T="bool" @bind-Value="_agree" Label="@L["ฉันยอมรับ", "I agree"]" Color="Color.Primary" />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large" Disabled="@(!_agree || _busy)" OnClick="AcceptAsync">
+        @L["ยืนยัน", "Continue"]
+    </MudButton>
+</AppGuard>
+
+@code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+
+    private bool _agree;
+    private bool _busy;
+
+    private async Task AcceptAsync()
+    {
+        _busy = true;
+        var current = await Api.Get<Dictionary<string, string>>("api/me/consent");
+        var version = current?.GetValueOrDefault("version") ?? "2026-10";
+        if (await Api.Post("api/me/consent", new { version }))
+        {
+            await Session.UpdateUserAsync(u => u with { HasConsent = true });
+            Nav.NavigateTo(Login.Safe(ReturnUrl), replace: true);
+        }
+        _busy = false;
+    }
+}

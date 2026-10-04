@@ -1,0 +1,85 @@
+@page "/notifications"
+@inject Api Api
+@inject AppState State
+@inject PlantContext Plant
+@inject NavigationManager Nav
+
+<div class="ss-page">
+    <div class="d-flex align-center mb-2">
+        <MudText Typo="Typo.h5" Style="font-weight:700">@L["แจ้งเตือน", "Notifications"]</MudText>
+        <MudSpacer />
+        <MudButton Size="Size.Small" OnClick="ReadAllAsync">@L["อ่านทั้งหมด", "Mark all read"]</MudButton>
+        <MudIconButton Icon="@Icons.Material.Filled.Settings" Href="/profile#notifications" />
+    </div>
+
+    @if (_items is null) { <Loading /> }
+    else if (_items.Count == 0) { <EmptyState Icon="@Icons.Material.Outlined.NotificationsNone" Title="@L["ยังไม่มีแจ้งเตือน", "No notifications yet"]" /> }
+    else
+    {
+        <MudList T="NotificationItem" Dense="false" Class="pa-0">
+            @foreach (var n in _items)
+            {
+                <MudListItem T="NotificationItem" OnClick="@(() => OpenAsync(n))" Style="@(n.Read ? "" : "background:rgba(0,168,81,.06)")">
+                    <div class="d-flex gap-3 align-start">
+                        <MudIcon Icon="@Icon(n.Type)" Color="@(n.Priority == "High" ? Color.Secondary : Color.Primary)" />
+                        <div style="flex:1; min-width:0">
+                            <MudText Typo="Typo.subtitle2" Style="@(n.Read ? "" : "font-weight:700")">@n.Title</MudText>
+                            <MudText Typo="Typo.body2" Class="ss-muted ss-clamp-2">@n.Body</MudText>
+                            <MudText Typo="Typo.caption" Class="ss-muted">@Fmt.Ago(n.CreatedAt, L)</MudText>
+                        </div>
+                    </div>
+                </MudListItem>
+                <MudDivider />
+            }
+        </MudList>
+        @if (_total > _items.Count) { <MudButton FullWidth="true" OnClick="MoreAsync">@L["ดูเพิ่ม", "Load more"]</MudButton> }
+    }
+</div>
+
+@code {
+    private List<NotificationItem>? _items;
+    private int _page = 1, _total;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var page = await Api.Get<PagedResult<NotificationItem>>("api/notifications");
+        _items = page?.Items ?? [];
+        _total = page?.Total ?? 0;
+    }
+
+    private async Task MoreAsync()
+    {
+        var page = await Api.Get<PagedResult<NotificationItem>>($"api/notifications?page={++_page}");
+        _items!.AddRange(page?.Items ?? []);
+    }
+
+    private async Task ReadAllAsync()
+    {
+        await Api.Post("api/notifications/read-all");
+        _items = _items?.Select(n => n with { Read = true }).ToList();
+        State.MarkAllRead();
+    }
+
+    private async Task OpenAsync(NotificationItem n)
+    {
+        if (!n.Read)
+        {
+            await Api.Post($"api/notifications/{n.Id}/read", silent: true);
+            await State.RefreshUnreadAsync();
+        }
+        if (n.PlantId is { } plantId && plantId != Plant.PlantId) await Plant.SelectAsync(plantId);
+        if (n.Link is not null) Nav.NavigateTo(n.Link);
+    }
+
+    private static string Icon(string type) => type switch
+    {
+        _ when type.StartsWith("order.new", StringComparison.Ordinal) => Icons.Material.Filled.NotificationsActive,
+        _ when type.StartsWith("order", StringComparison.Ordinal) => Icons.Material.Filled.ReceiptLong,
+        _ when type.StartsWith("payment", StringComparison.Ordinal) => Icons.Material.Filled.Payments,
+        _ when type.StartsWith("admin", StringComparison.Ordinal) => Icons.Material.Filled.AdminPanelSettings,
+        "shop.opened" => Icons.Material.Filled.Storefront,
+        "stock.low" => Icons.Material.Filled.Inventory2,
+        "plant.announcement" => Icons.Material.Filled.Campaign,
+        _ => Icons.Material.Filled.Notifications,
+    };
+}

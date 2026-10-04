@@ -1,0 +1,135 @@
+@page "/"
+@implements IDisposable
+@inject Api Api
+@inject PlantContext Plant
+@inject Realtime Realtime
+@inject NavigationManager Nav
+
+<div class="ss-page @(_cart?.ItemCount > 0 ? "ss-has-cart" : "")">
+    <MudTextField T="string" @bind-Value="_q" Placeholder="@L["ค้นหาร้าน หรือเมนู...", "Search shops or dishes..."]" Variant="Variant.Outlined"
+                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Margin="Margin.Dense" Class="mb-3"
+                  OnKeyUp="@(e => { if (e.Key == "Enter") Search(); })" OnAdornmentClick="Search" />
+
+    @foreach (var a in _announcements)
+    {
+        <MudAlert Severity="Severity.Info" Icon="@Icons.Material.Filled.Campaign" Class="mb-2" Dense="true">
+            <b>@a.Title</b>@if (!string.IsNullOrEmpty(a.Body)) { <span> · @a.Body</span> }
+        </MudAlert>
+    }
+
+    @if (_home is null)
+    {
+        <Loading />
+    }
+    else if (_home.Shops.Count == 0 && _category is null)
+    {
+        <EmptyState Icon="@Icons.Material.Outlined.Storefront" Title="@L["ยังไม่มีร้านในหมู่บ้านนี้", "No shops in this village yet"]"
+                    Text="@L["อยากเปิดร้านเองไหม? ส่งคำขอให้ผู้ดูแลหมู่บ้านได้เลย", "Want to open one? Send a request to the village admin."]">
+            <MudButton Href="/shop-applications" Variant="Variant.Filled" Color="Color.Primary">@L["ขอเปิดร้าน", "Open a shop"]</MudButton>
+        </EmptyState>
+    }
+    else
+    {
+        @if (_home.Categories.Count > 0)
+        {
+            <div class="ss-hscroll mb-2">
+                <MudChip T="string" Color="@(_category is null ? Color.Primary : Color.Default)" Variant="@(_category is null ? Variant.Filled : Variant.Outlined)"
+                         OnClick="@(() => FilterAsync(null))">@L["ทั้งหมด", "All"]</MudChip>
+                @foreach (var c in _home.Categories)
+                {
+                    <MudChip T="string" Color="@(_category == c ? Color.Primary : Color.Default)" Variant="@(_category == c ? Variant.Filled : Variant.Outlined)"
+                             OnClick="@(() => FilterAsync(c))">@c</MudChip>
+                }
+            </div>
+        }
+
+        @if (_home.OpenNow.Count > 0 && _category is null)
+        {
+            <MudText Typo="Typo.h6" Class="mb-2" Style="font-weight:700">🟢 @L["เปิดอยู่ตอนนี้", "Open now"]</MudText>
+            <div class="ss-hscroll mb-4">
+                @foreach (var s in _home.OpenNow)
+                {
+                    <div class="ss-mini-card" style="cursor:pointer" @onclick="@(() => Nav.NavigateTo($"/shops/{s.Id}"))">
+                        @if ((s.CoverUrl ?? s.LogoUrl) is { } img) { <img src="@img" alt="" loading="lazy" /> }
+                        else { <div style="width:160px;height:100px;border-radius:12px;background:#DFF5E8" class="d-flex align-center justify-center"><MudIcon Icon="@Icons.Material.Filled.Storefront" Color="Color.Primary" /></div> }
+                        <MudText Typo="Typo.subtitle2" Class="mt-1" Style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">@s.Name</MudText>
+                        <MudText Typo="Typo.caption" Class="ss-muted">@(s.Category ?? "") @(s.Status.Until is { } u ? L[$"· ถึง {Fmt.Time(u)}", $"· until {Fmt.Time(u)}"] : "")</MudText>
+                    </div>
+                }
+            </div>
+        }
+
+        <MudText Typo="Typo.h6" Class="mb-2" Style="font-weight:700">@L["ร้านทั้งหมด", "All shops"]</MudText>
+        @foreach (var s in _home.Shops)
+        {
+            <ShopCardView Shop="s" />
+        }
+    }
+</div>
+
+@if (_cart?.ItemCount > 0)
+{
+    <div class="ss-cart-bar">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Href="/cart" Style="border-radius:28px; justify-content:space-between; text-transform:none">
+            <span>🛒 @_cart.ItemCount @L["รายการ", "items"] · @_cart.ShopName</span>
+            <span>@Fmt.Baht(_cart.Subtotal)</span>
+        </MudButton>
+    </div>
+}
+
+@code {
+    private HomeFeed? _home;
+    private Cart? _cart;
+    private List<Announcement> _announcements = [];
+    private string? _category;
+    private string? _q;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Realtime.ShopStatusChanged += OnShopChanged;
+        Plant.Changed += OnPlantChanged;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var home = Api.Get<HomeFeed>($"api/home{(_category is null ? "" : "?category=" + Uri.EscapeDataString(_category))}");
+        var cart = Api.Get<Cart>("api/cart", silent: true);
+        var news = Api.Get<List<Announcement>>("api/plant/announcements", silent: true);
+        _home = await home;
+        _cart = await cart;
+        _announcements = await news ?? [];
+    }
+
+    private async Task FilterAsync(string? category)
+    {
+        _category = category;
+        _home = null;
+        await LoadAsync();
+    }
+
+    private void Search()
+    {
+        if (!string.IsNullOrWhiteSpace(_q)) Nav.NavigateTo($"/search?q={Uri.EscapeDataString(_q)}");
+    }
+
+    private async void OnShopChanged(JsonElement _)
+    {
+        await LoadAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async void OnPlantChanged()
+    {
+        _home = null;
+        _category = null;
+        await LoadAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        Realtime.ShopStatusChanged -= OnShopChanged;
+        Plant.Changed -= OnPlantChanged;
+    }
+}

@@ -1,0 +1,39 @@
+@page "/shops/{ShopId:guid}/reviews"
+@inject Api Api
+
+<div class="ss-page">
+    <MudText Typo="Typo.h5" Class="mb-2" Style="font-weight:700">@L["รีวิวร้าน", "Shop reviews"]</MudText>
+    @if (_summary is null) { <Loading /> }
+    else
+    {
+        <div class="d-flex align-center gap-4 mb-3">
+            <MudText Typo="Typo.h3">@_summary.Average.ToString("0.0")</MudText>
+            <div>
+                <MudRating SelectedValue="@((int)Math.Round(_summary.Average))" ReadOnly="true" />
+                <MudText Typo="Typo.caption" Class="ss-muted">@_summary.Count @L["รีวิว", "reviews"]</MudText>
+            </div>
+        </div>
+        @foreach (var r in _summary.Reviews)
+        {
+            <MudPaper Outlined="true" Class="pa-3 mb-2 ss-card">
+                <div class="d-flex align-center gap-2">
+                    <MudAvatar Size="Size.Small">@if (r.CustomerPictureUrl is not null) { <MudImage Src="@r.CustomerPictureUrl" /> } else { @r.CustomerName[..1] }</MudAvatar>
+                    <MudText Typo="Typo.subtitle2">@r.CustomerName</MudText>
+                    <MudSpacer />
+                    <MudRating SelectedValue="r.Rating" ReadOnly="true" Size="Size.Small" />
+                </div>
+                @if (r.Comment is not null) { <MudText Typo="Typo.body2" Class="mt-1">@r.Comment</MudText> }
+                @if (r.Reply is not null) { <MudAlert Severity="Severity.Normal" Dense="true" Class="mt-2">🏪 @r.Reply</MudAlert> }
+                <MudText Typo="Typo.caption" Class="ss-muted">@Fmt.DateTime(r.CreatedAt)</MudText>
+            </MudPaper>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public Guid ShopId { get; set; }
+    private ReviewSummary? _summary;
+
+    protected override async Task OnParametersSetAsync() =>
+        _summary = await Api.Get<ReviewSummary>($"api/shops/{ShopId}/reviews") ?? new ReviewSummary(0, 0, [], []);
+}

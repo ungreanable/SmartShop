@@ -1,0 +1,38 @@
+@* Cash / PromptPay (ID → QR with amount, or own QR image) / bank account / custom (e.g. เป๋าตัง). *@
+@inject Api Api
+@inject IDialogService Dialogs
+
+@foreach (var m in Methods.OrderBy(m => m.SortOrder))
+{
+    <div class="d-flex align-center py-1">
+        <MudText>@CartPage.PaymentIcon(m.Type) @m.DisplayName @(m.Enabled ? "" : L["(ปิด)", "(off)"])</MudText>
+        <MudSpacer />
+        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => EditAsync(m))" />
+        @if (m.Type != "Cash") { <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="@(() => DeleteAsync(m))" /> }
+    </div>
+}
+<MudMenu Label="@L["เพิ่มวิธีชำระเงิน", "Add payment method"]" StartIcon="@Icons.Material.Filled.Add" Variant="Variant.Outlined" Size="Size.Small" Class="mt-2">
+    <MudMenuItem OnClick="@(() => EditAsync(null, "PromptPayQr"))">📱 PromptPay / QR</MudMenuItem>
+    <MudMenuItem OnClick="@(() => EditAsync(null, "BankTransfer"))">🏦 @L["โอนเข้าบัญชี", "Bank transfer"]</MudMenuItem>
+    <MudMenuItem OnClick="@(() => EditAsync(null, "Custom"))">💳 @L["อื่นๆ (เช่น เป๋าตัง)", "Other (e.g. Paotang)"]</MudMenuItem>
+    @if (!Methods.Any(m => m.Type == "Cash")) { <MudMenuItem OnClick="@(() => EditAsync(null, "Cash"))">💵 @L["เงินสด", "Cash"]</MudMenuItem> }
+</MudMenu>
+
+@code {
+    [Parameter] public Guid ShopId { get; set; }
+    [Parameter] public List<PaymentMethod> Methods { get; set; } = [];
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private async Task EditAsync(PaymentMethod? method, string? type = null)
+    {
+        var parameters = new DialogParameters<PaymentMethodDialog> { { x => x.ShopId, ShopId }, { x => x.Method, method }, { x => x.Type, method?.Type ?? type! } };
+        var result = await (await Dialogs.ShowAsync<PaymentMethodDialog>(method?.DisplayName ?? L["วิธีชำระเงิน", "Payment method"], parameters)).Result;
+        if (result is { Canceled: false }) await Changed.InvokeAsync();
+    }
+
+    private async Task DeleteAsync(PaymentMethod m)
+    {
+        if (await Dialogs.ShowMessageBoxAsync(L["ลบวิธีชำระเงิน?", "Delete payment method?"], m.DisplayName, yesText: L["ลบ", "Delete"], cancelText: L["ยกเลิก", "Cancel"]) == true
+            && await Api.Delete($"api/merchant/shops/{ShopId}/payment-methods/{m.Id}")) await Changed.InvokeAsync();
+    }
+}

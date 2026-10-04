@@ -1,0 +1,74 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject PlantContext Plant
+@inject Realtime Realtime
+@inject OrderAlarm Alarm
+@inject NavigationManager Nav
+
+<MudLayout>
+    <MudAppBar Elevation="0" Dense="true" Fixed="true" Class="border-b">
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="/" title="@L["กลับโหมดลูกค้า", "Back to customer mode"]" />
+        <MudMenu AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft">
+            <ActivatorContent>
+                <MudButton Variant="Variant.Text" Color="Color.Inherit" EndIcon="@Icons.Material.Filled.ExpandMore" Style="text-transform:none">
+                    <MudText Typo="Typo.subtitle1">@(Shop?.Name ?? L["ร้านของฉัน", "My shop"])</MudText>
+                </MudButton>
+            </ActivatorContent>
+            <ChildContent>
+                @foreach (var shop in Plant.MyShops)
+                {
+                    <MudMenuItem Href="@($"/merchant/{shop.Id}")">@shop.Name</MudMenuItem>
+                }
+            </ChildContent>
+        </MudMenu>
+        <MudSpacer />
+        @if (Alarm.Ringing)
+        {
+            <MudButton Color="Color.Secondary" Variant="Variant.Filled" Size="Size.Small" StartIcon="@Icons.Material.Filled.NotificationsOff"
+                       OnClick="Alarm.SilenceAsync">@L["ปิดเสียง", "Silence"]</MudButton>
+        }
+    </MudAppBar>
+    <MudMainContent Style="padding-top:48px">
+        <AppGuard>
+            <CascadingValue Value="ShopId" Name="ShopId">
+                @Body
+            </CascadingValue>
+        </AppGuard>
+    </MudMainContent>
+</MudLayout>
+
+<nav class="ss-bottom-nav">
+    <div class="ss-nav-inner">
+        <NavLink href="@($"/merchant/{ShopId}")" Match="NavLinkMatch.All"><MudIcon Icon="@Icons.Material.Filled.ReceiptLong" />@L["ออเดอร์", "Orders"]</NavLink>
+        <NavLink href="@($"/merchant/{ShopId}/menu")"><MudIcon Icon="@Icons.Material.Filled.RestaurantMenu" />@L["เมนู & สต็อก", "Menu"]</NavLink>
+        <NavLink href="@($"/merchant/{ShopId}/sales")"><MudIcon Icon="@Icons.Material.Filled.BarChart" />@L["ยอดขาย", "Sales"]</NavLink>
+        <NavLink href="@($"/merchant/{ShopId}/settings")"><MudIcon Icon="@Icons.Material.Filled.Settings" />@L["ร้าน", "Shop"]</NavLink>
+    </div>
+</nav>
+
+@code {
+    private Guid ShopId => Guid.TryParse(Nav.ToBaseRelativePath(Nav.Uri).Split('/', '?').ElementAtOrDefault(1), out var id) ? id : Guid.Empty;
+    private MyShop? Shop => Plant.MyShops.FirstOrDefault(s => s.Id == ShopId);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (ShopId != Guid.Empty) await Realtime.JoinShopAsync(ShopId);
+    }
+
+    protected override void OnInitialized()
+    {
+        Alarm.Changed += Refresh;
+        Plant.Changed += Refresh;
+        Nav.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) => Refresh();
+    private void Refresh() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Alarm.Changed -= Refresh;
+        Plant.Changed -= Refresh;
+        Nav.LocationChanged -= OnLocationChanged;
+    }
+}

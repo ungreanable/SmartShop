@@ -1,0 +1,17 @@
+@* "Close until ..." choices like merchant apps. Returns null for "until I open again". *@
+<MudDialog>
+    <DialogContent>
+        <MudList T="string">
+            <MudListItem T="string" OnClick="@(() => Close(DateTimeOffset.Now.AddMinutes(30)))" Text="@L["30 นาที", "30 minutes"]" />
+            <MudListItem T="string" OnClick="@(() => Close(DateTimeOffset.Now.AddHours(1)))" Text="@L["1 ชั่วโมง", "1 hour"]" />
+            <MudListItem T="string" OnClick="@(() => Close(DateTimeOffset.Now.AddHours(3)))" Text="@L["3 ชั่วโมง", "3 hours"]" />
+            <MudListItem T="string" OnClick="@(() => Close(DateTimeOffset.Now.Date.AddDays(1).AddHours(5)))" Text="@L["ถึงพรุ่งนี้เช้า", "Until tomorrow morning"]" />
+            <MudListItem T="string" OnClick="@(() => Dialog.Close(DialogResult.Ok<DateTimeOffset?>(null)))" Text="@L["จนกว่าจะเปิดเอง", "Until I open again"]" />
+        </MudList>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    private void Close(DateTimeOffset until) => Dialog.Close(DialogResult.Ok<DateTimeOffset?>(until));
+}

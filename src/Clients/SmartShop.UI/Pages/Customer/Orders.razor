@@ -1,0 +1,65 @@
+@page "/orders"
+@implements IDisposable
+@inject Api Api
+@inject Realtime Realtime
+@inject NavigationManager Nav
+
+<div class="ss-page">
+    <MudText Typo="Typo.h5" Class="mb-2" Style="font-weight:700">@L["ออเดอร์ของฉัน", "My orders"]</MudText>
+    <MudTabs @bind-ActivePanelIndex="_tab" Elevation="0" ApplyEffectsToContainer="true" Color="Color.Transparent" SliderColor="Color.Primary">
+        <MudTabPanel Text="@L["กำลังดำเนินการ", "Active"]" OnClick="@(() => LoadAsync(0))" />
+        <MudTabPanel Text="@L["ประวัติ", "History"]" OnClick="@(() => LoadAsync(1))" />
+    </MudTabs>
+
+    @if (_orders is null) { <Loading /> }
+    else if (_orders.Count == 0)
+    {
+        <EmptyState Icon="@Icons.Material.Outlined.ReceiptLong" Title="@L["ยังไม่มีออเดอร์", "No orders yet"]" />
+    }
+    else
+    {
+        @foreach (var o in _orders)
+        {
+            <MudPaper Outlined="true" Class="pa-3 mb-2 ss-card" Style="cursor:pointer" @onclick="@(() => Nav.NavigateTo($"/orders/{o.Id}"))">
+                <div class="d-flex align-center">
+                    <MudText Typo="Typo.subtitle1" Style="font-weight:600">@o.ShopName</MudText>
+                    <MudSpacer />
+                    <OrderStatusChip Status="@o.Status" />
+                </div>
+                <MudText Typo="Typo.body2" Class="ss-clamp-2">@o.ItemsPreview</MudText>
+                <div class="d-flex mt-1">
+                    <MudText Typo="Typo.caption" Class="ss-muted">#@o.OrderNo · @Fmt.DateTime(o.PlacedAt)</MudText>
+                    <MudSpacer />
+                    <MudText Typo="Typo.body2" Style="font-weight:600">@Fmt.Baht(o.Total)</MudText>
+                </div>
+            </MudPaper>
+        }
+    }
+</div>
+
+@code {
+    private int _tab;
+    private List<OrderSummary>? _orders;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Realtime.OrderUpdated += OnUpdated;
+        await LoadAsync(0);
+    }
+
+    private async Task LoadAsync(int tab)
+    {
+        _tab = tab;
+        _orders = null;
+        var page = await Api.Get<PagedResult<OrderSummary>>($"api/orders?scope={(tab == 0 ? "active" : "history")}");
+        _orders = page?.Items ?? [];
+    }
+
+    private async void OnUpdated(JsonElement _)
+    {
+        await LoadAsync(_tab);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => Realtime.OrderUpdated -= OnUpdated;
+}

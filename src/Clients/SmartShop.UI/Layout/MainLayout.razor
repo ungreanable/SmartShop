@@ -1,0 +1,76 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject PlantContext Plant
+@inject AppState State
+@inject Realtime Realtime
+@inject IDialogService Dialogs
+@inject NavigationManager Nav
+
+<MudLayout>
+    <MudAppBar Elevation="0" Dense="true" Fixed="true" Class="border-b">
+        <MudButton Variant="Variant.Text" Color="Color.Inherit" EndIcon="@Icons.Material.Filled.ExpandMore"
+                   StartIcon="@Icons.Material.Filled.LocationOn" OnClick="SwitchPlantAsync" Style="text-transform:none; max-width:70%">
+            <MudText Typo="Typo.subtitle1" Style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@(Plant.Current?.PlantName ?? "SmartShop")</MudText>
+        </MudButton>
+        <MudSpacer />
+        @if (Plant.MyShops.Count > 0)
+        {
+            <MudTooltip Text="@L["โหมดร้านค้า", "Merchant mode"]">
+                <MudIconButton Icon="@Icons.Material.Filled.Storefront" Href="@($"/merchant/{Plant.MyShops[0].Id}")" />
+            </MudTooltip>
+        }
+        @if (Plant.IsAdmin)
+        {
+            <MudTooltip Text="@L["ผู้ดูแลหมู่บ้าน", "Village admin"]">
+                <MudIconButton Icon="@Icons.Material.Filled.AdminPanelSettings" Href="/admin" />
+            </MudTooltip>
+        }
+    </MudAppBar>
+    <MudMainContent Style="padding-top:48px">
+        <AppGuard>
+            @Body
+        </AppGuard>
+    </MudMainContent>
+</MudLayout>
+
+<nav class="ss-bottom-nav">
+    <div class="ss-nav-inner">
+        <NavLink href="/" Match="NavLinkMatch.All"><MudIcon Icon="@Icons.Material.Filled.Home" />@L["หน้าแรก", "Home"]</NavLink>
+        <NavLink href="/orders"><MudIcon Icon="@Icons.Material.Filled.ReceiptLong" />@L["ออเดอร์", "Orders"]</NavLink>
+        <NavLink href="/notifications">
+            <MudBadge Content="@State.UnreadNotifications" Visible="@(State.UnreadNotifications > 0)" Color="Color.Error" Overlap="true" Max="99">
+                <MudIcon Icon="@Icons.Material.Filled.Notifications" />
+            </MudBadge>
+            @L["แจ้งเตือน", "Alerts"]
+        </NavLink>
+        <NavLink href="/profile"><MudIcon Icon="@Icons.Material.Filled.Person" />@L["ฉัน", "Me"]</NavLink>
+    </div>
+</nav>
+
+@code {
+    protected override void OnInitialized()
+    {
+        State.Changed += Refresh;
+        Plant.Changed += Refresh;
+    }
+
+    private async Task SwitchPlantAsync()
+    {
+        var dialog = await Dialogs.ShowAsync<PlantSwitcherDialog>(L["เลือกหมู่บ้าน", "Choose village"]);
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: Guid plantId })
+        {
+            await Plant.SelectAsync(plantId);
+            await Realtime.JoinPlantAsync(plantId);
+            Nav.NavigateTo("/");
+        }
+    }
+
+    private void Refresh() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        State.Changed -= Refresh;
+        Plant.Changed -= Refresh;
+    }
+}

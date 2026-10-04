@@ -1,0 +1,32 @@
+<MudSimpleTable Dense="true" Elevation="0" Class="mb-2">
+    <tbody>
+        @foreach (var day in Days)
+        {
+            var slots = Hours.Where(h => h.Day == day).ToList();
+            <tr style="@(day == DateTime.Now.DayOfWeek.ToString() ? "font-weight:700" : "")">
+                <td style="width:40%">@DayName(day)</td>
+                <td>@(slots.Count == 0 ? L["ปิด", "Closed"] : string.Join(", ", slots.Select(s => $"{s.OpenAt[..5]}–{s.CloseAt[..5]}")))</td>
+            </tr>
+        }
+    </tbody>
+</MudSimpleTable>
+
+@code {
+    [Parameter, EditorRequired] public List<OpeningHour> Hours { get; set; } = [];
+
+    private static readonly string[] Days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+    public static string DayName(string day, Loc l) => day switch
+    {
+        "Monday" => l["จันทร์", "Mon"],
+        "Tuesday" => l["อังคาร", "Tue"],
+        "Wednesday" => l["พุธ", "Wed"],
+        "Thursday" => l["พฤหัสบดี", "Thu"],
+        "Friday" => l["ศุกร์", "Fri"],
+        "Saturday" => l["เสาร์", "Sat"],
+        "Sunday" => l["อาทิตย์", "Sun"],
+        _ => day,
+    };
+
+    private string DayName(string day) => DayName(day, L);
+}

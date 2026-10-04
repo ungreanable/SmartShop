@@ -1,0 +1,38 @@
+@* Shop open/closed status in the words customers use: "เปิดอยู่ · ปิด 13:00", "ปิด · เปิด 16:00". *@
+<MudChip T="string" Size="Size.Small" Color="@Color" Variant="Variant.Filled" Icon="@Icon" Class="ma-0" Style="align-self:flex-start">@Text</MudChip>
+
+@code {
+    [Parameter, EditorRequired] public ShopStatus Status { get; set; } = default!;
+    [Parameter] public bool AcceptsPreorders { get; set; }
+
+    private Color Color => Status.State switch
+    {
+        "Open" => Color.Success,
+        "Busy" => Color.Warning,
+        _ when AcceptsPreorders => Color.Info,
+        _ => Color.Default,
+    };
+
+    private string Icon => Status.State switch
+    {
+        "Open" => Icons.Material.Filled.Circle,
+        "Busy" => Icons.Material.Filled.HourglassTop,
+        _ => Icons.Material.Outlined.Circle,
+    };
+
+    private string Text => Status.State switch
+    {
+        "Open" when Status.Until is { } u && u - DateTimeOffset.UtcNow < TimeSpan.FromMinutes(45)
+            => L[$"กำลังจะปิด {Fmt.Time(u)}", $"Closing {Fmt.Time(u)}"],
+        "Open" => Status.Until is { } until ? L[$"เปิดอยู่ · ปิด {Fmt.Time(until)}", $"Open · until {Fmt.Time(until)}"] : L["เปิดอยู่", "Open"],
+        "Busy" => L["ยุ่งอยู่ ไม่รับออเดอร์ชั่วคราว", "Busy, not taking orders"],
+        _ => Status.Reason switch
+        {
+            "Vacation" => Status.Until is { } v ? L[$"ปิดถึง {Fmt.Day(v)}", $"Closed until {Fmt.Day(v)}"] : L["ปิดชั่วคราว", "Temporarily closed"],
+            "TemporaryClosed" => Status.Until is { } t ? L[$"ปิดชั่วคราวถึง {Fmt.Day(t)}", $"Closed until {Fmt.Day(t)}"] : L["ปิดชั่วคราว", "Temporarily closed"],
+            "Suspended" => L["ถูกระงับ", "Suspended"],
+            _ when AcceptsPreorders => L["ปิด · สั่งล่วงหน้าได้", "Closed · pre-order"],
+            _ => Status.NextOpenAt is { } n ? L[$"ปิด · เปิด {Fmt.Day(n)} {Fmt.Time(n)}", $"Closed · opens {Fmt.Day(n)} {Fmt.Time(n)}"] : L["ปิด", "Closed"],
+        },
+    };
+}

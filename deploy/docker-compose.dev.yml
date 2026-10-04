@@ -1,0 +1,35 @@
+# Local infrastructure for development without Aspire:
+#   docker compose -f deploy/docker-compose.dev.yml up -d
+# then run the services (see docs/development.md). Ports are fixed and match appsettings.Development.json.
+name: smartshop-dev
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: smartshop
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports: ["5432:5432"]
+    volumes: [dev-postgres:/var/lib/postgresql/data]
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    ports: ["6379:6379"]
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports: ["5672:5672", "15672:15672"]
+
+  seaweedfs:
+    image: chrislusf/seaweedfs:3.97
+    command: ["server", "-s3", "-dir=/data", "-master.volumeSizeLimitMB=256"]
+    ports: ["8333:8333"]
+    volumes: [dev-seaweedfs:/data]
+
+volumes:
+  dev-postgres:
+  dev-seaweedfs:

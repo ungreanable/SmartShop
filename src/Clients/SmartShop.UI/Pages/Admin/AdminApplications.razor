@@ -1,0 +1,83 @@
+@page "/admin/applications"
+@layout AdminLayout
+@inject Api Api
+@inject PlantContext Plant
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<div class="ss-page">
+    <MudText Typo="Typo.h5" Class="mb-2" Style="font-weight:700">@L["คำขอเปิดร้าน", "Shop requests"]</MudText>
+    <MudChipSet T="string" SelectedValue="_status" SelectedValueChanged="FilterAsync" SelectionMode="SelectionMode.SingleSelection" CheckMark="false" SelectedColor="Color.Primary" Variant="Variant.Outlined">
+        <MudChip T="string" Value="@("Submitted")" Text="@L["รอตรวจ", "To review"]" />
+        <MudChip T="string" Value="@("ChangesRequested")" Text="@L["รอแก้ไข", "Waiting changes"]" />
+        <MudChip T="string" Value="@("Approved")" Text="@L["อนุมัติแล้ว", "Approved"]" />
+        <MudChip T="string" Value="@("Rejected")" Text="@L["ไม่อนุมัติ", "Rejected"]" />
+    </MudChipSet>
+
+    @if (_apps is null) { <Loading /> }
+    else if (_apps.Count == 0) { <EmptyState Title="@L["ไม่มีคำขอ", "No requests"]" Icon="@Icons.Material.Outlined.AddBusiness" /> }
+    else
+    {
+        @foreach (var a in _apps)
+        {
+            <MudPaper Outlined="true" Class="pa-3 mb-2 ss-card">
+                <div class="d-flex align-center gap-2">
+                    <MudAvatar Size="Size.Small">@if (a.ApplicantPictureUrl is not null) { <MudImage Src="@a.ApplicantPictureUrl" /> }</MudAvatar>
+                    <div style="flex:1">
+                        <MudText Typo="Typo.subtitle1" Style="font-weight:600">@a.Name <span class="ss-muted">@a.Category</span></MudText>
+                        <MudText Typo="Typo.caption" Class="ss-muted">@a.ApplicantName · @L["บ้าน", "house"] @a.HouseNo · @a.Phone · @Fmt.DateTime(a.SubmittedAt)</MudText>
+                    </div>
+                </div>
+                @if (a.Description is not null) { <MudText Typo="Typo.body2" Class="mt-1">@a.Description</MudText> }
+                <div class="d-flex flex-wrap gap-2 mt-2">
+                    @foreach (var url in a.SampleImageUrls.Where(u => u is not null)) { <img src="@url" alt="" style="width:80px;height:80px;object-fit:cover;border-radius:8px" /> }
+                </div>
+                @if (a.ReviewNote is not null) { <MudText Typo="Typo.caption">💬 @a.ReviewNote</MudText> }
+                @if (a.Status == "Submitted")
+                {
+                    <div class="d-flex gap-2 mt-2 justify-end">
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => ReviewAsync(a, "reject"))">@L["ไม่อนุมัติ", "Reject"]</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => ReviewAsync(a, "request-changes"))">@L["ขอข้อมูลเพิ่ม", "Request changes"]</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => ApproveAsync(a))">@L["อนุมัติ", "Approve"]</MudButton>
+                    </div>
+                }
+            </MudPaper>
+        }
+    }
+</div>
+
+@code {
+    private string _status = "Submitted";
+    private List<ShopApplication>? _apps;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task FilterAsync(string status)
+    {
+        _status = status ?? "Submitted";
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _apps = null;
+        _apps = await Api.Get<List<ShopApplication>>($"api/plant/admin/shop-applications?status={_status}") ?? [];
+    }
+
+    private async Task ApproveAsync(ShopApplication a)
+    {
+        if (await Api.Post("api/plant/admin/shop-applications/" + a.Id + "/approve", new { note = (string?)null }))
+        {
+            Snackbar.Add(L[$"เปิดร้าน {a.Name} แล้ว", $"{a.Name} is now open"], Severity.Success);
+            await LoadAsync();
+        }
+    }
+
+    private async Task ReviewAsync(ShopApplication a, string action)
+    {
+        var parameters = new DialogParameters<TextPromptDialog> { { x => x.Label, action == "reject" ? L["เหตุผลที่ไม่อนุมัติ", "Reason"] : L["ต้องการข้อมูลอะไรเพิ่ม", "What is missing?"] } };
+        var result = await (await Dialogs.ShowAsync<TextPromptDialog>(a.Name, parameters)).Result;
+        if (result is { Canceled: false, Data: string note } && await Api.Post($"api/plant/admin/shop-applications/{a.Id}/{action}", new { note }))
+            await LoadAsync();
+    }
+}

@@ -1,0 +1,118 @@
+@implements IDisposable
+@inject Session Session
+@inject PlantContext Plant
+@inject Realtime Realtime
+@inject AppState State
+@inject OrderAlarm Alarm
+@inject ILoginLauncher Login
+@inject Browser Browser
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<MudThemeProvider Theme="UiSetup.Theme" @bind-IsDarkMode="_dark" ObserveSystemDarkModeChange="true" />
+<MudPopoverProvider />
+<MudDialogProvider FullWidth="true" MaxWidth="MaxWidth.Small" CloseButton="true" />
+<MudSnackbarProvider />
+
+@if (!_ready)
+{
+    <div class="ss-center">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        <MudText Typo="Typo.body2" Class="ss-muted">SmartShop</MudText>
+    </div>
+}
+else
+{
+    <Router AppAssembly="typeof(SmartShopApp).Assembly" AdditionalAssemblies="AdditionalAssemblies">
+        <Found Context="routeData">
+            <RouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)" />
+            <FocusOnNavigate RouteData="routeData" Selector="h1" />
+        </Found>
+        <NotFound>
+            <LayoutView Layout="typeof(BareLayout)">
+                <div class="ss-center">
+                    <MudIcon Icon="@Icons.Material.Outlined.Explore" Size="Size.Large" />
+                    <MudText Typo="Typo.h6">@L["ไม่พบหน้านี้", "Page not found"]</MudText>
+                    <MudButton Href="/" Variant="Variant.Filled" Color="Color.Primary">@L["กลับหน้าแรก", "Back home"]</MudButton>
+                </div>
+            </LayoutView>
+        </NotFound>
+    </Router>
+}
+
+@code {
+    [Parameter] public IEnumerable<System.Reflection.Assembly> AdditionalAssemblies { get; set; } = [];
+
+    private bool _ready;
+    private bool _dark;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await L.InitializeAsync();
+        await Session.InitializeAsync();
+        L.Changed += Refresh;
+        Session.Changed += OnSessionChanged;
+        Realtime.Notification += OnNotification;
+
+        // Inside the LINE app (LIFF) sign in silently.
+        if (!Session.IsAuthenticated)
+        {
+            try
+            {
+                var auto = await Login.TryAutoLoginAsync();
+                if (auto is not null) await Session.SignInAsync(auto, await Browser.UserAgentLabelAsync());
+            }
+            catch (JSException) { }
+        }
+
+        if (Session.IsAuthenticated) await StartAsync();
+        _ready = true;
+    }
+
+    private async Task StartAsync()
+    {
+        await Plant.LoadAsync(force: true);
+        State.Attach();
+        Alarm.Attach();
+        await Realtime.StartAsync();
+        if (Plant.PlantId is { } plantId) await Realtime.JoinPlantAsync(plantId);
+        // Join every shop I work for, so new-order alarms ring anywhere in the app.
+        foreach (var shop in Plant.MyShops) await Realtime.JoinShopAsync(shop.Id);
+        await State.RefreshUnreadAsync();
+    }
+
+    private async void OnSessionChanged()
+    {
+        if (Session.IsAuthenticated) await StartAsync();
+        else
+        {
+            Plant.Reset();
+            await Realtime.StopAsync();
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void OnNotification(RealtimeNotification n)
+    {
+        if (n.Type is "order.new" or "order.reminder") return; // handled by the order alarm
+        _ = InvokeAsync(() => Snackbar.Add($"{n.Title} · {n.Body}", n.Urgent ? Severity.Warning : Severity.Info, o =>
+        {
+            if (n.Link is null) return;
+            o.Action = L["ดู", "View"];
+            o.OnClick = _ =>
+            {
+                Nav.NavigateTo(n.Link);
+                return Task.CompletedTask;
+            };
+        }));
+    }
+
+    private void Refresh() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        L.Changed -= Refresh;
+        Session.Changed -= OnSessionChanged;
+        Realtime.Notification -= OnNotification;
+    }
+}

@@ -1,0 +1,87 @@
+@page "/admin"
+@layout AdminLayout
+@inject Api Api
+@inject Browser Browser
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<div class="ss-page">
+    <MudText Typo="Typo.h5" Class="mb-3" Style="font-weight:700">@L["ภาพรวมหมู่บ้าน", "Village overview"]</MudText>
+    @if (_counts is not null)
+    {
+        <div class="ss-grid-2 mb-3">
+            <MudPaper Outlined="true" Class="pa-3 ss-card" Style="cursor:pointer" @onclick="@(() => {})">
+                <MudText Typo="Typo.caption" Class="ss-muted">@L["สมาชิก", "Members"]</MudText><MudText Typo="Typo.h5">@_counts.Active</MudText>
+            </MudPaper>
+            <MudPaper Outlined="true" Class="pa-3 ss-card" Style="@(_counts.Pending > 0 ? "border-color:var(--mud-palette-warning)" : "")">
+                <MudLink Href="/admin/members" Underline="Underline.None">
+                    <MudText Typo="Typo.caption" Class="ss-muted">@L["รออนุมัติ", "Pending"]</MudText><MudText Typo="Typo.h5" Color="@(_counts.Pending > 0 ? Color.Warning : Color.Default)">@_counts.Pending</MudText>
+                </MudLink>
+            </MudPaper>
+            <MudPaper Outlined="true" Class="pa-3 ss-card">
+                <MudLink Href="/admin/applications" Underline="Underline.None">
+                    <MudText Typo="Typo.caption" Class="ss-muted">@L["คำขอเปิดร้าน", "Shop requests"]</MudText><MudText Typo="Typo.h5">@_applications</MudText>
+                </MudLink>
+            </MudPaper>
+            <MudPaper Outlined="true" Class="pa-3 ss-card">
+                <MudLink Href="/admin/shops" Underline="Underline.None">
+                    <MudText Typo="Typo.caption" Class="ss-muted">@L["ร้านค้า", "Shops"]</MudText><MudText Typo="Typo.h5">@_shops</MudText>
+                </MudLink>
+            </MudPaper>
+        </div>
+    }
+
+    <MudPaper Outlined="true" Class="pa-3 ss-card">
+        <MudText Typo="Typo.subtitle1" Style="font-weight:600">🔗 @L["ลิงก์ขอเข้าหมู่บ้าน", "Join link"]</MudText>
+        <MudText Typo="Typo.caption" Class="ss-muted d-block">@L["ปักหมุดใน OpenChat ของหมู่บ้าน ทุกคนที่เข้ามาต้องรอคุณอนุมัติก่อนเสมอ", "Pin it in the village OpenChat. Everyone still needs your approval."]</MudText>
+        @if (_link is not null)
+        {
+            <div class="d-flex flex-column align-center mt-2">
+                @if (_qr is not null) { <img class="ss-qr" src="@_qr" alt="QR" style="width:200px;height:200px" /> }
+                <MudText Typo="Typo.h6" Class="mt-1">@_link.JoinCode</MudText>
+                <MudText Typo="Typo.caption" Style="word-break:break-all">@_link.Url</MudText>
+                <div class="d-flex gap-2 mt-1">
+                    <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="CopyAsync">@L["คัดลอก", "Copy"]</MudButton>
+                    <MudButton Size="Size.Small" Color="Color.Error" StartIcon="@Icons.Material.Filled.Autorenew" OnClick="ResetAsync">@L["รีเซ็ตลิงก์", "Reset link"]</MudButton>
+                </div>
+            </div>
+        }
+    </MudPaper>
+</div>
+
+@code {
+    private PlantCounts? _counts;
+    private int _applications, _shops;
+    private JoinLink? _link;
+    private string? _qr;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var counts = Api.Get<PlantCounts>("api/plant/admin/counts");
+        var apps = Api.Get<List<ShopApplication>>("api/plant/admin/shop-applications?status=Submitted");
+        var shops = Api.Get<List<AdminShopRow>>("api/plant/admin/shops");
+        var link = Api.Get<JoinLink>("api/plant/admin/join-link");
+        _counts = await counts;
+        _applications = (await apps)?.Count ?? 0;
+        _shops = (await shops)?.Count ?? 0;
+        await SetLinkAsync(await link);
+    }
+
+    private async Task SetLinkAsync(JoinLink? link)
+    {
+        _link = link;
+        if (link is not null) _qr = (await Api.Post<Dictionary<string, string>>("api/media/qr", new { text = link.Url }, silent: true))?.GetValueOrDefault("dataUrl");
+    }
+
+    private async Task CopyAsync()
+    {
+        if (_link is not null && await Browser.CopyAsync(_link.Url)) Snackbar.Add(L["คัดลอกแล้ว", "Copied"], Severity.Success);
+    }
+
+    private async Task ResetAsync()
+    {
+        if (await Dialogs.ShowMessageBoxAsync(L["รีเซ็ตลิงก์?", "Reset link?"], L["ลิงก์และ QR เดิมจะใช้ไม่ได้อีก (ใช้เมื่อลิงก์หลุดออกนอกกลุ่ม)", "The old link and QR stop working (use when the link leaked)"],
+                yesText: L["รีเซ็ต", "Reset"], cancelText: L["ยกเลิก", "Cancel"]) == true)
+            await SetLinkAsync(await Api.Post<JoinLink>("api/plant/admin/join-link/reset"));
+    }
+}

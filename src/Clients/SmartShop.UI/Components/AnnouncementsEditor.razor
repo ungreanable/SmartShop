@@ -1,0 +1,50 @@
+@* Village notices shown on the home page ("water outage tomorrow", "market on Saturday"). *@
+@inject Api Api
+
+@foreach (var a in _items)
+{
+    <div class="d-flex align-center py-1">
+        <div style="flex:1">
+            <MudText Typo="Typo.body2">@(a.IsPinned ? "📌 " : "")<b>@a.Title</b></MudText>
+            <MudText Typo="Typo.caption" Class="ss-muted">@Fmt.DateTime(a.StartsAt) @(a.EndsAt is { } e ? $"– {Fmt.DateTime(e)}" : "")</MudText>
+        </div>
+        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="@(() => DeleteAsync(a))" />
+    </div>
+}
+<MudTextField @bind-Value="_title" Immediate="true" Label="@L["หัวข้อ", "Title"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+<MudTextField @bind-Value="_body" Label="@L["รายละเอียด", "Details"]" Lines="2" Variant="Variant.Outlined" Margin="Margin.Dense" />
+<MudDatePicker @bind-Date="_until" Label="@L["แสดงถึงวันที่ (ไม่บังคับ)", "Show until (optional)"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" />
+<MudCheckBox T="bool" @bind-Value="_pinned" Label="@L["ปักหมุด", "Pin"]" Dense="true" />
+<MudCheckBox T="bool" @bind-Value="_notify" Label="@L["แจ้งเตือนสมาชิกทุกคน", "Notify every member"]" Dense="true" />
+<MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" Disabled="@string.IsNullOrWhiteSpace(_title)" OnClick="CreateAsync">@L["ประกาศ", "Publish"]</MudButton>
+
+@code {
+    private List<Announcement> _items = [];
+    private string? _title, _body;
+    private DateTime? _until;
+    private bool _pinned, _notify;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync() => _items = await Api.Get<List<Announcement>>("api/plant/admin/announcements", silent: true) ?? [];
+
+    private async Task CreateAsync()
+    {
+        var body = new
+        {
+            title = _title, body = _body, startsAt = DateTimeOffset.Now,
+            endsAt = _until is { } u ? new DateTimeOffset(u.Date.AddDays(1), DateTimeOffset.Now.Offset) : (DateTimeOffset?)null,
+            isPinned = _pinned, notify = _notify, imageId = (Guid?)null,
+        };
+        if (await Api.Post("api/plant/admin/announcements", body))
+        {
+            (_title, _body, _until, _pinned, _notify) = (null, null, null, false, false);
+            await LoadAsync();
+        }
+    }
+
+    private async Task DeleteAsync(Announcement a)
+    {
+        if (await Api.Delete($"api/plant/admin/announcements/{a.Id}")) await LoadAsync();
+    }
+}

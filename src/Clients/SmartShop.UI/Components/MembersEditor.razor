@@ -1,0 +1,117 @@
+@* Shop team: several people (or a second phone) can receive orders and run the shop. *@
+@inject Api Api
+@inject Session Session
+@inject Browser Browser
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+@foreach (var m in _members)
+{
+    <div class="d-flex align-center gap-2 py-1">
+        <MudAvatar Size="Size.Small">@if (m.PictureUrl is not null) { <MudImage Src="@m.PictureUrl" /> } else { @m.DisplayName[..1] }</MudAvatar>
+        <div style="flex:1; min-width:0">
+            <MudText Typo="Typo.body2">@m.DisplayName @(m.DisplayLabel is null ? "" : $"({m.DisplayLabel})") @(m.UserId == Session.User?.Id ? L["(คุณ)", "(you)"] : "")</MudText>
+            <MudText Typo="Typo.caption" Class="ss-muted">@RoleText(m.Role)</MudText>
+        </div>
+        <MudTooltip Text="@L["รับแจ้งเตือนออเดอร์ใหม่", "Receives new-order alerts"]">
+            <MudSwitch T="bool" Value="m.ReceiveOrderNotifications" ValueChanged="@(v => NotifyAsync(m, v))" Color="Color.Primary" Size="Size.Small"
+                       Disabled="@(m.UserId != Session.User?.Id && !CanManage)" ThumbIcon="@Icons.Material.Filled.Notifications" />
+        </MudTooltip>
+        <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true">
+            <MudMenuItem OnClick="@(() => LabelAsync(m))">@L["ตั้งชื่อเรียก เช่น เครื่อง 2", "Set label (e.g. phone 2)"]</MudMenuItem>
+            @if (CanManage && m.Role != "Owner" && m.UserId != Session.User?.Id)
+            {
+                <MudMenuItem OnClick="@(() => RoleAsync(m, m.Role == "Manager" ? "Staff" : "Manager"))">@(m.Role == "Manager" ? L["เปลี่ยนเป็นพนักงาน", "Make staff"] : L["เปลี่ยนเป็นผู้จัดการ", "Make manager"])</MudMenuItem>
+                <MudMenuItem OnClick="@(() => RemoveAsync(m))"><span style="color:var(--mud-palette-error)">@L["นำออกจากร้าน", "Remove"]</span></MudMenuItem>
+            }
+            @if (MyRole == "Owner" && m.Role == "Manager") { <MudMenuItem OnClick="@(() => TransferAsync(m))">@L["โอนความเป็นเจ้าของ", "Transfer ownership"]</MudMenuItem> }
+            @if (m.UserId == Session.User?.Id && m.Role != "Owner") { <MudMenuItem OnClick="@(() => RemoveAsync(m))">@L["ออกจากร้าน", "Leave shop"]</MudMenuItem> }
+        </MudMenu>
+    </div>
+}
+
+@if (CanManage)
+{
+    <MudDivider Class="my-2" />
+    <MudText Typo="Typo.subtitle2">@L["เชิญสมาชิก", "Invite someone"]</MudText>
+    <MudText Typo="Typo.caption" Class="ss-muted d-block mb-1">@L["เช่น โทรศัพท์เครื่องที่ 2 (LINE อีกบัญชี) หรือคนในครอบครัว ต้องเป็นสมาชิกหมู่บ้านนี้", "e.g. your second phone (another LINE account) or family; must be a member of this village"]</MudText>
+    <div class="d-flex gap-2">
+        <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => InviteAsync("Manager"))">@L["ผู้จัดการ", "Manager"]</MudButton>
+        <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => InviteAsync("Staff"))">@L["พนักงาน", "Staff"]</MudButton>
+    </div>
+    @if (_invite is not null)
+    {
+        <MudPaper Outlined="true" Class="pa-3 mt-2 d-flex flex-column align-center">
+            @if (_qr is not null) { <img class="ss-qr" src="@_qr" alt="QR" style="width:180px;height:180px" /> }
+            <MudText Typo="Typo.caption" Style="word-break:break-all">@_invite.Url</MudText>
+            <MudText Typo="Typo.caption" Class="ss-muted">@L["ใช้ได้ครั้งเดียว หมดอายุ", "Single use, expires"] @Fmt.DateTime(_invite.ExpiresAt)</MudText>
+            <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Share" OnClick="ShareInviteAsync">@L["ส่งลิงก์", "Share link"]</MudButton>
+        </MudPaper>
+    }
+}
+
+@code {
+    [Parameter] public Guid ShopId { get; set; }
+    [Parameter] public string MyRole { get; set; } = "Staff";
+
+    private List<ShopMember> _members = [];
+    private Invite? _invite;
+    private string? _qr;
+    private bool CanManage => MyRole is "Owner" or "Manager";
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync() => _members = await Api.Get<List<ShopMember>>($"api/merchant/shops/{ShopId}/members") ?? [];
+
+    private string Base(Guid userId) => $"api/merchant/shops/{ShopId}/members/{userId}";
+
+    private async Task NotifyAsync(ShopMember m, bool enabled)
+    {
+        if (await Api.Put($"{Base(m.UserId)}/notifications", new { enabled })) await LoadAsync();
+    }
+
+    private async Task RoleAsync(ShopMember m, string role)
+    {
+        if (await Api.Put($"{Base(m.UserId)}/role", new { role })) await LoadAsync();
+    }
+
+    private async Task LabelAsync(ShopMember m)
+    {
+        var parameters = new DialogParameters<TextPromptDialog> { { x => x.Label, L["ชื่อเรียก", "Label"] }, { x => x.Initial, m.DisplayLabel }, { x => x.Required, false } };
+        var result = await (await Dialogs.ShowAsync<TextPromptDialog>(m.DisplayName, parameters)).Result;
+        if (result is { Canceled: false, Data: string label } && await Api.Put($"{Base(m.UserId)}/label", new { label })) await LoadAsync();
+    }
+
+    private async Task RemoveAsync(ShopMember m)
+    {
+        if (await Dialogs.ShowMessageBoxAsync(L["ยืนยัน?", "Are you sure?"], m.DisplayName, yesText: L["ยืนยัน", "Confirm"], cancelText: L["ยกเลิก", "Cancel"]) == true
+            && await Api.Delete(Base(m.UserId))) await LoadAsync();
+    }
+
+    private async Task TransferAsync(ShopMember m)
+    {
+        if (await Dialogs.ShowMessageBoxAsync(L["โอนความเป็นเจ้าของร้าน?", "Transfer ownership?"], L[$"{m.DisplayName} จะเป็นเจ้าของ และคุณจะเป็นผู้จัดการ", $"{m.DisplayName} becomes owner and you become manager"],
+                yesText: L["โอน", "Transfer"], cancelText: L["ยกเลิก", "Cancel"]) == true
+            && await Api.Post($"api/merchant/shops/{ShopId}/transfer-ownership", new { userId = m.UserId })) await LoadAsync();
+    }
+
+    private async Task InviteAsync(string role)
+    {
+        _invite = await Api.Post<Invite>($"api/merchant/shops/{ShopId}/invites", new { role });
+        if (_invite is not null)
+            _qr = (await Api.Post<Dictionary<string, string>>("api/media/qr", new { text = _invite.Url }, silent: true))?.GetValueOrDefault("dataUrl");
+    }
+
+    private async Task ShareInviteAsync()
+    {
+        if (_invite is not null && await Browser.ShareAsync("SmartShop", L["คำเชิญเข้าร่วมดูแลร้าน", "Shop team invitation"], _invite.Url))
+            Snackbar.Add(L["คัดลอกลิงก์แล้ว", "Link copied"], Severity.Success);
+    }
+
+    private string RoleText(string role) => role switch
+    {
+        "Owner" => L["เจ้าของร้าน", "Owner"],
+        "Manager" => L["ผู้จัดการ", "Manager"],
+        _ => L["พนักงาน", "Staff"],
+    };
+}

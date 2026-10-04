@@ -1,0 +1,181 @@
+@page "/merchant/{ShopId:guid}"
+@layout MerchantLayout
+@implements IDisposable
+@inject Api Api
+@inject Realtime Realtime
+@inject OrderAlarm Alarm
+@inject IDialogService Dialogs
+@inject NavigationManager Nav
+
+<div class="ss-page">
+    @if (_settings is not null)
+    {
+        <MudPaper Class="pa-3 mb-3 ss-card" Outlined="true">
+            <div class="d-flex align-center">
+                <div>
+                    <StatusBadge Status="_settings.Shop.Status" AcceptsPreorders="_settings.Shop.Status.AcceptsPreorders" />
+                    <MudText Typo="Typo.caption" Class="ss-muted d-block mt-1">
+                        @(_settings.OverrideMode switch { "ForceOpen" => L["เปิดเอง (ไม่ตามตารางเวลา)", "Manually open"], "ForceClosed" => L["ปิดเอง", "Manually closed"], _ => L["ตามตารางเวลา", "Following schedule"] })
+                        @if (_settings.OverrideUntil is { } u) { <span> · @L["ถึง", "until"] @Fmt.DateTime(u)</span> }
+                    </MudText>
+                </div>
+                <MudSpacer />
+                <MudSwitch T="bool" Value="@_settings.Shop.Status.IsOpen()" ValueChanged="ToggleAsync" Color="Color.Success" Class="ss-big-switch"
+                           Label="@(_settings.Shop.Status.IsOpen() ? L["เปิดรับออเดอร์", "Open"] : L["ปิดร้าน", "Closed"])" />
+            </div>
+            <div class="d-flex gap-2 mt-2 flex-wrap">
+                @if (_settings.Shop.Status.State == "Busy")
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" OnClick="@(() => BusyAsync(0))">@L["เลิกยุ่ง รับออเดอร์ต่อ", "Resume orders"]</MudButton>
+                }
+                else if (_settings.Shop.Status.State == "Open")
+                {
+                    <MudMenu Label="@L["ยุ่ง หยุดรับชั่วคราว", "Busy, pause orders"]" Variant="Variant.Outlined" Size="Size.Small" Color="Color.Warning" StartIcon="@Icons.Material.Filled.HourglassTop">
+                        @foreach (var m in new[] { 15, 30, 60 }) { <MudMenuItem OnClick="@(() => BusyAsync(m))">@m @L["นาที", "min"]</MudMenuItem> }
+                    </MudMenu>
+                }
+                @if (_settings.OverrideMode != "None")
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => StatusAsync("auto", null))">@L["กลับไปใช้ตารางเวลา", "Back to schedule"]</MudButton>
+                }
+                <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Checklist" OnClick="PrepSummaryAsync">@L["สรุปของที่ต้องทำ", "To prepare"]</MudButton>
+            </div>
+        </MudPaper>
+    }
+
+    <MudTabs @bind-ActivePanelIndex="_tab" Elevation="0" Color="Color.Transparent" SliderColor="Color.Primary" ApplyEffectsToContainer="true">
+        <MudTabPanel Text="@L["ใหม่", "New"]" BadgeData="@Badge(_counts?.New)" BadgeColor="Color.Error" OnClick="@(() => LoadAsync(0))" />
+        <MudTabPanel Text="@L["กำลังทำ", "Active"]" BadgeData="@Badge(_counts?.Active)" OnClick="@(() => LoadAsync(1))" />
+        <MudTabPanel Text="@L["พร้อมส่ง", "Ready"]" BadgeData="@Badge(_counts?.Ready)" OnClick="@(() => LoadAsync(2))" />
+        <MudTabPanel Text="@L["เสร็จแล้ว", "Done"]" OnClick="@(() => LoadAsync(3))" />
+    </MudTabs>
+
+    @if (_orders is null) { <Loading /> }
+    else if (_orders.Count == 0)
+    {
+        <EmptyState Icon="@Icons.Material.Outlined.Inbox" Title="@(_tab == 0 ? L["ยังไม่มีออเดอร์ใหม่", "No new orders"] : L["ไม่มีรายการ", "Nothing here"])" />
+    }
+    else
+    {
+        @foreach (var o in _orders)
+        {
+            <MudPaper Outlined="true" Class="@($"pa-3 mb-2 ss-card {(o.Status == "PendingAcceptance" ? "ss-new-order" : "")}")">
+                <div class="d-flex align-center" style="cursor:pointer" @onclick="@(() => Nav.NavigateTo($"/merchant/{ShopId}/orders/{o.Id}"))">
+                    <MudText Typo="Typo.h6" Style="font-weight:700">#@o.OrderNo</MudText>
+                    <MudText Typo="Typo.caption" Class="ss-muted ms-2">@Fmt.Ago(o.PlacedAt, L)</MudText>
+                    <MudSpacer />
+                    <MudText Typo="Typo.subtitle1" Style="font-weight:700">@Fmt.Baht(o.Total)</MudText>
+                </div>
+                <MudText Typo="Typo.body2">👤 @o.CustomerName @(o.CustomerHouseNo is null ? "" : $"· {L["บ้าน", "house"]} {o.CustomerHouseNo}")</MudText>
+                <MudText Typo="Typo.body2">@(o.FulfillmentType == "Delivery" ? "🛵" : "🏠") @(o.ScheduledFrom is { } f && o.ScheduledTo is { } t ? Fmt.Window(f, t) : L["เร็วที่สุด", "ASAP"])</MudText>
+                <MudText Typo="Typo.body2" Class="ss-clamp-2">🧾 @o.ItemsPreview</MudText>
+                <div class="d-flex align-center gap-2 mt-1">
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@CartPage.PaymentIcon(o.PaymentMethodType) @OrderStatusChip.PaymentText(o.PaymentStatus, L)</MudChip>
+                    @if (o.CancelRequested) { <MudChip T="string" Size="Size.Small" Color="Color.Error">@L["ขอยกเลิก", "Cancel requested"]</MudChip> }
+                    <MudSpacer />
+                    @switch (o.Status)
+                    {
+                        case "PendingAcceptance":
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" Href="@($"/merchant/{ShopId}/orders/{o.Id}")">@L["ปฏิเสธ", "Reject"]</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => ActAsync(o, "accept"))">@L["รับออเดอร์", "Accept"]</MudButton>
+                            break;
+                        case "Accepted":
+                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => ActAsync(o, "start"))">@L["เริ่มทำ", "Start"]</MudButton>
+                            break;
+                        case "Preparing":
+                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => ActAsync(o, "ready"))">@L["พร้อมแล้ว", "Ready"]</MudButton>
+                            break;
+                        case "Ready" or "OutForDelivery":
+                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Href="@($"/merchant/{ShopId}/orders/{o.Id}")">@L["ส่งมอบ", "Hand over"]</MudButton>
+                            break;
+                        default:
+                            <OrderStatusChip Status="@o.Status" />
+                            break;
+                    }
+                </div>
+            </MudPaper>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public Guid ShopId { get; set; }
+
+    private int _tab;
+    private List<OrderSummary>? _orders;
+    private OrderCounts? _counts;
+    private ShopSettings? _settings;
+    private static readonly string[] Tabs = ["new", "active", "ready", "done"];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Realtime.NewOrder -= OnChanged;
+        Realtime.OrderUpdated -= OnChanged;
+        Realtime.NewOrder += OnChanged;
+        Realtime.OrderUpdated += OnChanged;
+        _settings = await Api.Get<ShopSettings>($"api/merchant/shops/{ShopId}");
+        await LoadAsync(_tab);
+    }
+
+    private static object? Badge(int? count) => count is > 0 ? count : null;
+
+    private async Task LoadAsync(int tab)
+    {
+        _tab = tab;
+        var orders = Api.Get<List<OrderSummary>>($"api/merchant/shops/{ShopId}/orders?tab={Tabs[tab]}");
+        var counts = Api.Get<OrderCounts>($"api/merchant/shops/{ShopId}/orders/counts", silent: true);
+        _orders = await orders ?? [];
+        _counts = await counts;
+    }
+
+    private async Task ActAsync(OrderSummary o, string action)
+    {
+        if (await Api.Post<Order>($"api/merchant/orders/{o.Id}/{action}") is not null)
+        {
+            if (action == "accept" && Alarm.PendingOrderIds.Count <= 1) await Alarm.SilenceAsync();
+            await LoadAsync(_tab);
+        }
+    }
+
+    private async Task ToggleAsync(bool open)
+    {
+        if (open) await StatusAsync("open", null);
+        else
+        {
+            var parameters = new DialogParameters<CloseShopDialog>();
+            var result = await (await Dialogs.ShowAsync<CloseShopDialog>(L["ปิดร้าน", "Close the shop"], parameters)).Result;
+            if (result is { Canceled: false }) await StatusAsync("close", result.Data as DateTimeOffset?);
+        }
+    }
+
+    private async Task StatusAsync(string action, DateTimeOffset? until)
+    {
+        if (await Api.Post<ShopStatus>($"api/merchant/shops/{ShopId}/status", new { action, until }) is not null)
+            _settings = await Api.Get<ShopSettings>($"api/merchant/shops/{ShopId}");
+    }
+
+    private async Task BusyAsync(int minutes)
+    {
+        if (await Api.Post<ShopStatus>($"api/merchant/shops/{ShopId}/busy", new { minutes }) is not null)
+            _settings = await Api.Get<ShopSettings>($"api/merchant/shops/{ShopId}");
+    }
+
+    private async Task PrepSummaryAsync()
+    {
+        var items = await Api.Get<List<PrepItem>>($"api/merchant/shops/{ShopId}/orders/prep-summary") ?? [];
+        var parameters = new DialogParameters<PrepSummaryDialog> { { x => x.Items, items } };
+        await Dialogs.ShowAsync<PrepSummaryDialog>(L["สรุปของที่ต้องทำ", "To prepare"], parameters);
+    }
+
+    private async void OnChanged(JsonElement _)
+    {
+        await LoadAsync(_tab);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        Realtime.NewOrder -= OnChanged;
+        Realtime.OrderUpdated -= OnChanged;
+    }
+}

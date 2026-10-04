@@ -1,0 +1,85 @@
+@page "/login"
+@layout BareLayout
+@inject Session Session
+@inject ILoginLauncher Launcher
+@inject AppConfig Config
+@inject Browser Browser
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<div class="ss-center" style="min-height:85vh">
+    <MudAvatar Size="Size.Large" Color="Color.Primary" Style="width:84px;height:84px">
+        <MudIcon Icon="@Icons.Material.Filled.Storefront" Style="font-size:48px" />
+    </MudAvatar>
+    <MudText Typo="Typo.h4" Style="font-weight:700">SmartShop</MudText>
+    <MudText Typo="Typo.body1" Class="ss-muted">@L["ร้านค้าในหมู่บ้าน สั่งง่าย รู้สถานะทุกออเดอร์", "Village shops: easy ordering, every order tracked"]</MudText>
+
+    <MudButton Variant="Variant.Filled" Size="Size.Large" FullWidth="true" Disabled="_busy" OnClick="LineAsync"
+               Style="background:#06C755; color:#fff; max-width:360px; margin-top:24px; text-transform:none; font-weight:600">
+        @(_busy ? L["กำลังเข้าสู่ระบบ...", "Signing in..."] : L["เข้าสู่ระบบด้วย LINE", "Log in with LINE"])
+    </MudButton>
+    <MudText Typo="Typo.caption" Class="ss-muted" Style="max-width:360px">
+        @L["ใช้บัญชี LINE เดียวกับที่คุยใน OpenChat ของหมู่บ้าน ระบบจะชวนเพิ่มเพื่อน LINE OA เพื่อรับแจ้งเตือนออเดอร์", "Use the LINE account you use in the village OpenChat. You will be asked to add our LINE Official Account to receive order alerts."]
+    </MudText>
+
+    @if (Config.DevLoginEnabled)
+    {
+        <MudPaper Outlined="true" Class="pa-4 mt-6" Style="max-width:360px; width:100%">
+            <MudText Typo="Typo.subtitle2" Class="mb-2">🧪 Dev login (development only)</MudText>
+            <MudTextField @bind-Value="_devName" Immediate="true" Label="@L["ชื่อ", "Name"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudCheckBox T="bool" @bind-Value="_devAdmin" Label="System admin" Dense="true" />
+            <MudButton Variant="Variant.Outlined" FullWidth="true" Disabled="@(_busy || string.IsNullOrWhiteSpace(_devName))" OnClick="DevAsync">Dev login</MudButton>
+        </MudPaper>
+    }
+
+    <div class="mt-4">
+        <MudButton Size="Size.Small" OnClick="@(() => L.SetAsync(L.IsThai ? "en" : "th"))">@L["English", "ภาษาไทย"]</MudButton>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+
+    private bool _busy;
+    private string _devName = "";
+    private bool _devAdmin;
+
+    protected override void OnInitialized()
+    {
+        if (Session.IsAuthenticated) Nav.NavigateTo(Safe(ReturnUrl), replace: true);
+    }
+
+    private async Task LineAsync()
+    {
+        _busy = true;
+        try
+        {
+            var result = await Launcher.LoginAsync(Safe(ReturnUrl));
+            if (result is null) return; // web: browser navigates to LINE
+            await CompleteAsync(await Session.SignInAsync(result, await Browser.UserAgentLabelAsync()));
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DevAsync()
+    {
+        _busy = true;
+        var key = new string(_devName.Trim().ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
+        await CompleteAsync(await Session.DevSignInAsync(string.IsNullOrEmpty(key) ? _devName.Trim() : key, _devName.Trim(), _devAdmin));
+        _busy = false;
+    }
+
+    private Task CompleteAsync(bool ok)
+    {
+        if (ok) Nav.NavigateTo(Safe(ReturnUrl), forceLoad: false, replace: true);
+        else Snackbar.Add(Session.LastError?.Message ?? L["เข้าสู่ระบบไม่สำเร็จ", "Login failed"], Severity.Error);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Only allow local return URLs (no open redirect).</summary>
+    public static string Safe(string? url) =>
+        string.IsNullOrEmpty(url) || !url.StartsWith('/') || url.StartsWith("//", StringComparison.Ordinal) ? "/" : url;
+}

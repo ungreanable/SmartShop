@@ -1,0 +1,71 @@
+@page "/admin/more"
+@layout AdminLayout
+@inject Api Api
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<div class="ss-page">
+    <MudExpansionPanels Elevation="0" Outlined="true" MultiExpansion="true">
+        <MudExpansionPanel Text="@L["🚩 รายงานปัญหา", "🚩 Reports"]" Expanded="true">
+            @if (_reports.Count == 0) { <MudText Typo="Typo.body2" Class="ss-muted">@L["ไม่มีรายงาน", "No reports"]</MudText> }
+            @foreach (var r in _reports)
+            {
+                <MudPaper Outlined="true" Class="pa-2 mb-2">
+                    <div class="d-flex align-center">
+                        <MudLink Href="@($"/orders/{r.OrderId}")">#@r.OrderNo · @r.ShopName</MudLink>
+                        <MudSpacer />
+                        <MudChip T="string" Size="Size.Small" Color="@(r.Status == "Open" ? Color.Warning : Color.Success)">@r.Status</MudChip>
+                    </div>
+                    <MudText Typo="Typo.body2">@r.ReporterName: @r.Reason</MudText>
+                    @if (r.Resolution is not null) { <MudText Typo="Typo.caption">✅ @r.Resolution</MudText> }
+                    @if (r.Status == "Open") { <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => ResolveAsync(r))">@L["ตอบกลับ / ปิดเรื่อง", "Resolve"]</MudButton> }
+                </MudPaper>
+            }
+        </MudExpansionPanel>
+
+        <MudExpansionPanel Text="@L["📢 ประกาศของหมู่บ้าน", "📢 Announcements"]">
+            <AnnouncementsEditor />
+        </MudExpansionPanel>
+
+        <MudExpansionPanel Text="@L["⚙️ ตั้งค่าหมู่บ้าน", "⚙️ Village settings"]">
+            @if (_plant is not null)
+            {
+                <MudTextField @bind-Value="_name" Label="@L["ชื่อหมู่บ้าน", "Name"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudTextField @bind-Value="_description" Label="@L["คำอธิบาย", "Description"]" Lines="2" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudSelect T="string" @bind-Value="_push" Label="@L["ร้านที่ไม่มีใครรับแจ้งเตือน Push ได้", "Shops with no push-capable member"]" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    <MudSelectItem Value="@("Warn")">@L["แค่เตือน", "Warn only"]</MudSelectItem>
+                    <MudSelectItem Value="@("Block")">@L["ไม่ให้เปิดร้าน", "Block opening"]</MudSelectItem>
+                </MudSelect>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Class="mt-2" OnClick="SaveAsync">@L["บันทึก", "Save"]</MudButton>
+            }
+        </MudExpansionPanel>
+    </MudExpansionPanels>
+</div>
+
+@code {
+    private List<OrderReport> _reports = [];
+    private PlantDetails? _plant;
+    private string? _name, _description;
+    private string _push = "Warn";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _reports = await Api.Get<List<OrderReport>>("api/plant/admin/reports", silent: true) ?? [];
+        _plant = await Api.Get<PlantDetails>("api/plant");
+        (_name, _description, _push) = (_plant?.Name, _plant?.Description, _plant?.PushRequirement ?? "Warn");
+    }
+
+    private async Task ResolveAsync(OrderReport r)
+    {
+        var parameters = new DialogParameters<TextPromptDialog> { { x => x.Label, L["ผลการดำเนินการ (ผู้แจ้งจะเห็น)", "Resolution (shown to reporter)"] } };
+        var result = await (await Dialogs.ShowAsync<TextPromptDialog>("#" + r.OrderNo, parameters)).Result;
+        if (result is { Canceled: false, Data: string resolution } && await Api.Post($"api/plant/admin/reports/{r.Id}/resolve", new { resolution }))
+            _reports = await Api.Get<List<OrderReport>>("api/plant/admin/reports") ?? [];
+    }
+
+    private async Task SaveAsync()
+    {
+        if (await Api.Put("api/plant/admin/settings", new { name = _name, description = _description, pictureId = _plant?.PictureId, pushRequirement = _push }))
+            Snackbar.Add(L["บันทึกแล้ว", "Saved"], Severity.Success);
+    }
+}

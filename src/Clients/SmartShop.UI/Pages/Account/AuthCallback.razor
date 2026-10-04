@@ -1,0 +1,47 @@
+@page "/auth/callback"
+@layout BareLayout
+@inject Session Session
+@inject ILoginLauncher Launcher
+@inject Browser Browser
+@inject NavigationManager Nav
+
+<div class="ss-center">
+    @if (_error is null)
+    {
+        <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        <MudText>@L["กำลังเข้าสู่ระบบด้วย LINE...", "Signing in with LINE..."]</MudText>
+    }
+    else
+    {
+        <MudIcon Icon="@Icons.Material.Filled.ErrorOutline" Color="Color.Error" Size="Size.Large" />
+        <MudText>@_error</MudText>
+        <MudButton Href="/login" Variant="Variant.Filled" Color="Color.Primary">@L["ลองอีกครั้ง", "Try again"]</MudButton>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? Code { get; set; }
+    [SupplyParameterFromQuery] public string? State { get; set; }
+    [SupplyParameterFromQuery] public string? Error { get; set; }
+
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!string.IsNullOrEmpty(Error) || string.IsNullOrEmpty(Code) || string.IsNullOrEmpty(State))
+        {
+            _error = L["ยกเลิกการเข้าสู่ระบบ", "Login was cancelled"];
+            return;
+        }
+        var (result, returnUrl) = await Launcher.CompleteRedirectAsync(Code, State);
+        if (result is null)
+        {
+            _error = L["ลิงก์เข้าสู่ระบบหมดอายุ กรุณาลองใหม่", "The login link expired, please try again"];
+            return;
+        }
+        if (await Session.SignInAsync(result, await Browser.UserAgentLabelAsync()))
+            Nav.NavigateTo(Login.Safe(returnUrl), replace: true);
+        else
+            _error = Session.LastError?.Message ?? L["เข้าสู่ระบบไม่สำเร็จ", "Login failed"];
+    }
+}

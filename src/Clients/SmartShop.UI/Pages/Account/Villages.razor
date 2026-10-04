@@ -1,0 +1,86 @@
+@page "/villages"
+@layout BareLayout
+@inject PlantContext Plant
+@inject Session Session
+@inject Realtime Realtime
+@inject NavigationManager Nav
+
+<AppGuard RequirePlant="false">
+    <div class="d-flex align-center mb-3">
+        <MudText Typo="Typo.h5" Style="font-weight:700">@L["หมู่บ้านของฉัน", "My villages"]</MudText>
+        <MudSpacer />
+        <MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="RefreshAsync" />
+    </div>
+
+    @if (Plant.Memberships.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-4">
+            @L["ขอลิงก์หรือ QR \"ขอเข้าหมู่บ้าน\" จากผู้ดูแลหมู่บ้าน (มักปักหมุดไว้ใน OpenChat) แล้วกดลิงก์นั้น หรือกรอกโค้ดด้านล่าง",
+               "Ask your village admin for the \"join village\" link or QR (usually pinned in the OpenChat), open it, or enter the code below."]
+        </MudAlert>
+    }
+
+    @foreach (var m in Plant.Memberships)
+    {
+        <MudPaper Outlined="true" Class="pa-3 mb-2 ss-card">
+            <div class="d-flex align-center gap-3">
+                <MudAvatar Color="Color.Primary" Variant="Variant.Outlined"><MudIcon Icon="@Icons.Material.Filled.HolidayVillage" /></MudAvatar>
+                <div style="flex:1">
+                    <MudText Typo="Typo.subtitle1">@m.PlantName</MudText>
+                    <MudText Typo="Typo.caption" Class="ss-muted">@StatusText(m)</MudText>
+                    @if (m.Status == "Rejected" && m.DecisionReason is not null)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Error">@L["เหตุผล", "Reason"]: @m.DecisionReason</MudText>
+                    }
+                </div>
+                @if (m.IsActive)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="@(() => OpenAsync(m.PlantId))">@L["เข้า", "Open"]</MudButton>
+                }
+            </div>
+        </MudPaper>
+    }
+
+    <MudText Typo="Typo.subtitle1" Class="mt-6 mb-2">@L["มีโค้ดเชิญ?", "Have a code?"]</MudText>
+    <div class="d-flex gap-2">
+        <MudTextField @bind-Value="_code" Immediate="true" Placeholder="ABCD2345" Variant="Variant.Outlined" Margin="Margin.Dense" Style="text-transform:uppercase" />
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="@(string.IsNullOrWhiteSpace(_code))" Href="@($"/join/{_code?.Trim()}")">@L["ถัดไป", "Next"]</MudButton>
+    </div>
+
+    @if (Session.User?.IsSystemAdmin == true)
+    {
+        <MudButton Href="/system" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" Class="mt-6">@L["สร้างหมู่บ้าน (ผู้ดูแลระบบ)", "Create a village (system admin)"]</MudButton>
+    }
+
+    <MudButton Variant="Variant.Text" Class="mt-2" OnClick="SignOutAsync" StartIcon="@Icons.Material.Filled.Logout">@L["ออกจากระบบ", "Log out"]</MudButton>
+</AppGuard>
+
+@code {
+    private string? _code;
+
+    protected override async Task OnInitializedAsync() => await Plant.LoadAsync(force: true);
+
+    private async Task RefreshAsync() => await Plant.LoadAsync(force: true);
+
+    private async Task OpenAsync(Guid plantId)
+    {
+        await Plant.SelectAsync(plantId);
+        await Realtime.JoinPlantAsync(plantId);
+        Nav.NavigateTo("/");
+    }
+
+    private async Task SignOutAsync()
+    {
+        await Session.SignOutAsync();
+        Nav.NavigateTo("/login");
+    }
+
+    private string StatusText(MyMembership m) => m.Status switch
+    {
+        "Active" => m.IsAdmin ? L["ผู้ดูแลหมู่บ้าน", "Village admin"] : L["สมาชิก", "Member"],
+        "Pending" => L["⏳ รอผู้ดูแลอนุมัติ", "⏳ Waiting for admin approval"],
+        "Rejected" => L["ไม่ได้รับอนุมัติ (ขอใหม่ได้)", "Not approved (you may ask again)"],
+        "Suspended" => L["ถูกระงับ", "Suspended"],
+        _ => m.Status,
+    };
+}

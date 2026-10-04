@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <RootNamespace>SmartShop.Web</RootNamespace>
+    <ContainerRepository>smartshop-web</ContainerRepository>
+    <ContainerFamily>noble-chiseled-extra</ContainerFamily>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" />
+    <PackageReference Include="Yarp.ReverseProxy" />
+    <PackageReference Include="Microsoft.Extensions.ServiceDiscovery.Yarp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\SmartShop.Web.Client\SmartShop.Web.Client.csproj" />
+    <ProjectReference Include="..\..\Aspire\SmartShop.ServiceDefaults\SmartShop.ServiceDefaults.csproj" />
+  </ItemGroup>
+</Project>

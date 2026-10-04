@@ -1,0 +1,73 @@
+@* Chat attached to an order: no more messages lost in the group chat. *@
+@implements IDisposable
+@inject Api Api
+@inject Session Session
+@inject Realtime Realtime
+
+<MudPaper Outlined="true" Class="pa-3 mt-3 ss-card">
+    <MudText Typo="Typo.subtitle1" Class="mb-2" Style="font-weight:600">💬 @(IsShop ? L["คุยกับลูกค้า", "Chat with customer"] : L["คุยกับร้าน", "Chat with the shop"])</MudText>
+    <div class="ss-chat">
+        @foreach (var m in _messages)
+        {
+            <div class="ss-bubble @(m.SenderId == Session.User?.Id ? "mine" : "")">
+                @if (m.SenderId != Session.User?.Id) { <div style="font-size:.7rem; opacity:.7">@m.SenderName</div> }
+                @if (m.Body is not null) { @m.Body }
+                @if (m.ImageUrl is not null) { <img src="@m.ImageUrl" alt="" style="max-width:200px; border-radius:8px; display:block" /> }
+                <div style="font-size:.65rem; opacity:.6; text-align:right">@Fmt.Time(m.SentAt)</div>
+            </div>
+        }
+        @if (_messages.Count == 0) { <MudText Typo="Typo.caption" Class="ss-muted">@L["ยังไม่มีข้อความ", "No messages yet"]</MudText> }
+    </div>
+    <div class="d-flex gap-1 align-center mt-2">
+        <ImageUploader Purpose="ChatImage" Uploaded="SendImageAsync">
+            <MudIconButton Icon="@Icons.Material.Filled.Image" Size="Size.Small" />
+        </ImageUploader>
+        <MudTextField @bind-Value="_text" Placeholder="@L["พิมพ์ข้อความ...", "Type a message..."]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                      OnKeyUp="@(async e => { if (e.Key == "Enter") await SendAsync(); })" Immediate="true" />
+        <MudIconButton Icon="@Icons.Material.Filled.Send" Color="Color.Primary" Disabled="@string.IsNullOrWhiteSpace(_text)" OnClick="SendAsync" />
+    </div>
+</MudPaper>
+
+@code {
+    [Parameter] public Guid OrderId { get; set; }
+    [Parameter] public bool IsShop { get; set; }
+
+    private List<ChatMessage> _messages = [];
+    private string? _text;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Realtime.OrderMessage -= OnMessage;
+        Realtime.OrderMessage += OnMessage;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync() => _messages = await Api.Get<List<ChatMessage>>($"api/orders/{OrderId}/messages", silent: true) ?? [];
+
+    private async Task SendAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_text)) return;
+        var sent = await Api.Post<ChatMessage>($"api/orders/{OrderId}/messages", new { body = _text.Trim() });
+        if (sent is not null)
+        {
+            _messages.Add(sent);
+            _text = null;
+        }
+    }
+
+    private async Task SendImageAsync(UploadResult? file)
+    {
+        if (file is null) return;
+        var sent = await Api.Post<ChatMessage>($"api/orders/{OrderId}/messages", new { imageId = file.Id });
+        if (sent is not null) _messages.Add(sent);
+    }
+
+    private async void OnMessage(JsonElement e)
+    {
+        if (e.TryGetProperty("orderId", out var id) && id.GetGuid() != OrderId) return;
+        await LoadAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => Realtime.OrderMessage -= OnMessage;
+}

@@ -1,0 +1,21 @@
+<MudDialog>
+    <DialogContent>
+        <MudTextField @bind-Value="_text" Label="@Label" Variant="Variant.Outlined" Lines="3" AutoFocus="true" Immediate="true" MaxLength="300" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["ยกเลิก", "Cancel"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(Required && string.IsNullOrWhiteSpace(_text))"
+                   OnClick="@(() => Dialog.Close(DialogResult.Ok(_text?.Trim() ?? "")))">@L["ยืนยัน", "Confirm"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public bool Required { get; set; } = true;
+    [Parameter] public string? Initial { get; set; }
+
+    private string? _text;
+
+    protected override void OnInitialized() => _text = Initial;
+}

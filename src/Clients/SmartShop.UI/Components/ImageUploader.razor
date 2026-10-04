@@ -1,0 +1,52 @@
+@* Uploads one image (or PDF for slips) to /api/media and returns the media id. *@
+@inject Api Api
+
+<MudFileUpload T="IBrowserFile" FilesChanged="UploadAsync" Accept="@Accept" Disabled="_busy">
+    <CustomContent Context="upload">
+        @if (ChildContent is not null)
+        {
+            <span style="display:inline-block; cursor:pointer" @onclick="upload.OpenFilePickerAsync">@ChildContent</span>
+        }
+        else
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.AddAPhoto" Disabled="_busy"
+                       OnClick="upload.OpenFilePickerAsync">
+                @(_busy ? L["กำลังอัปโหลด...", "Uploading..."] : (Label ?? L["เลือกรูป", "Choose picture"]))
+            </MudButton>
+        }
+    </CustomContent>
+</MudFileUpload>
+
+@code {
+    [Parameter, EditorRequired] public string Purpose { get; set; } = "";
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public bool AllowPdf { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public EventCallback<UploadResult> Uploaded { get; set; }
+
+    private bool _busy;
+    private string Accept => AllowPdf ? "image/*,application/pdf" : "image/*";
+
+    private async Task UploadAsync(IBrowserFile? file)
+    {
+        if (file is null) return;
+        _busy = true;
+        try
+        {
+            await using var stream = file.OpenReadStream(15 * 1024 * 1024);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
+            buffer.Position = 0;
+            var result = await Api.UploadAsync(buffer, file.Name, file.ContentType, Purpose);
+            if (result is not null) await Uploaded.InvokeAsync(result);
+        }
+        catch (IOException)
+        {
+            await Uploaded.InvokeAsync(null!);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

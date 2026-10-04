@@ -1,0 +1,153 @@
+@* Payment of an order: PromptPay QR with amount, bank account to copy, slip upload, shop verification. *@
+@inject Api Api
+@inject Browser Browser
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<MudPaper Outlined="true" Class="pa-3 mb-3 ss-card">
+    @if (_payment is null)
+    {
+        <MudText Typo="Typo.body2" Class="ss-muted">@L["กำลังเตรียมข้อมูลการชำระเงิน...", "Preparing payment..."]</MudText>
+    }
+    else
+    {
+        <div class="d-flex align-center">
+            <MudText Typo="Typo.subtitle1" Style="font-weight:600">@CartPage.PaymentIcon(_payment.MethodType) @_payment.DisplayName</MudText>
+            <MudSpacer />
+            <MudChip T="string" Size="Size.Small" Color="@StatusColor" Variant="Variant.Filled">@OrderStatusChip.PaymentText(_payment.Status, L)</MudChip>
+        </div>
+        @if (_payment.RejectReason is not null && _payment.Status == "Rejected") { <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@_payment.RejectReason</MudAlert> }
+        @if (_payment.RefundRequired) { <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@L["ออเดอร์ถูกยกเลิกหลังชำระเงิน ร้านต้องคืนเงินให้ลูกค้า", "Order cancelled after payment: the shop must refund"]</MudAlert> }
+
+        @if (_payment.Status is "Unpaid" or "Rejected" or "PendingVerification")
+        {
+            @if (_payment.PromptPayQrDataUrl is not null)
+            {
+                <div class="d-flex flex-column align-center mt-2">
+                    <img class="ss-qr" src="@_payment.PromptPayQrDataUrl" alt="PromptPay QR" />
+                    <MudText Typo="Typo.caption" Class="ss-muted">@L["สแกนด้วยแอปธนาคาร ยอดเงินกรอกให้แล้ว", "Scan with your banking app, amount is pre-filled"] · @Fmt.Baht(_payment.Amount)</MudText>
+                </div>
+            }
+            else if (_payment.QrImageUrl is not null)
+            {
+                <div class="d-flex flex-column align-center mt-2">
+                    <img class="ss-qr" src="@_payment.QrImageUrl" alt="QR" style="object-fit:contain" />
+                    <MudText Typo="Typo.body2" Style="font-weight:600">@L["ยอดที่ต้องโอน", "Amount"] @Fmt.Baht(_payment.Amount)</MudText>
+                </div>
+            }
+            @if (_payment.AccountNumber is not null)
+            {
+                <MudPaper Elevation="0" Class="pa-2 mt-2" Style="background:var(--mud-palette-background)">
+                    <MudText Typo="Typo.body2">@_payment.BankName · @_payment.AccountName</MudText>
+                    <div class="d-flex align-center">
+                        <MudText Typo="Typo.h6">@_payment.AccountNumber</MudText>
+                        <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" OnClick="CopyAsync" />
+                    </div>
+                    <MudText Typo="Typo.body2" Style="font-weight:600">@L["ยอดที่ต้องโอน", "Amount"] @Fmt.Baht(_payment.Amount)</MudText>
+                </MudPaper>
+            }
+            @if (_payment.ImageUrl is not null) { <img src="@_payment.ImageUrl" alt="" style="max-width:100%; border-radius:8px" class="mt-2" /> }
+            @if (_payment.Instructions is not null) { <MudText Typo="Typo.body2" Class="mt-2">ℹ️ @_payment.Instructions</MudText> }
+            @if (_payment.MethodType == "Cash") { <MudText Typo="Typo.body2" Class="mt-2">💵 @L["ชำระเงินสดตอนรับสินค้า", "Pay cash on receipt"] · @Fmt.Baht(_payment.Amount)</MudText> }
+        }
+
+        @if (_payment.Proofs.Count > 0)
+        {
+            <MudText Typo="Typo.subtitle2" Class="mt-3">@L["หลักฐานการโอน", "Payment proofs"]</MudText>
+            <div class="d-flex flex-wrap gap-2 mt-1">
+                @foreach (var proof in _payment.Proofs)
+                {
+                    <a href="@proof.Url" target="_blank" rel="noopener">
+                        @if (proof.ThumbnailUrl is not null) { <img src="@proof.ThumbnailUrl" alt="" style="width:88px;height:88px;object-fit:cover;border-radius:8px" /> }
+                        else { <MudChip T="string" Icon="@Icons.Material.Filled.PictureAsPdf">PDF</MudChip> }
+                    </a>
+                    @if (proof.DuplicateOfOrderNo is not null)
+                    {
+                        <MudAlert Severity="Severity.Error" Dense="true">⚠️ @L[$"สลิปนี้เคยใช้กับออเดอร์ #{proof.DuplicateOfOrderNo}", $"This slip was already used for order #{proof.DuplicateOfOrderNo}"]</MudAlert>
+                    }
+                }
+            </div>
+        }
+
+        @if (_payment.CanUploadProof)
+        {
+            <div class="mt-3">
+                <ImageUploader Purpose="PaymentSlip" AllowPdf="true" Uploaded="AttachAsync" Label="@L["แนบสลิป / หลักฐานการโอน", "Attach slip / proof"]" />
+            </div>
+        }
+
+        @if (_payment.CanVerify)
+        {
+            <div class="d-flex gap-2 mt-3">
+                @if (_payment.MethodType == "Cash" || _payment.Proofs.Count == 0)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => ActAsync("received", null))">@L["ได้รับเงินแล้ว", "Payment received"]</MudButton>
+                }
+                @if (_payment.Status == "PendingVerification")
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => ActAsync("verify", null))">✅ @L["ยืนยันยอดเงิน", "Confirm payment"]</MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="RejectAsync">@L["สลิปไม่ถูกต้อง", "Reject slip"]</MudButton>
+                }
+            </div>
+        }
+    }
+</MudPaper>
+
+@code {
+    [Parameter] public Guid OrderId { get; set; }
+
+    private Payment? _payment;
+    private int _attempts;
+
+    private Color StatusColor => _payment?.Status switch
+    {
+        "Paid" => Color.Success,
+        "PendingVerification" => Color.Warning,
+        "Rejected" => Color.Error,
+        _ => Color.Default,
+    };
+
+    protected override async Task OnParametersSetAsync() => await ReloadAsync();
+
+    public async Task ReloadAsync()
+    {
+        _payment = await Api.Get<Payment>($"api/orders/{OrderId}/payment", silent: true);
+        // The payment is created asynchronously right after the order (event-driven); retry briefly.
+        while (_payment is null && _attempts++ < 5)
+        {
+            await Task.Delay(800);
+            _payment = await Api.Get<Payment>($"api/orders/{OrderId}/payment", silent: true);
+        }
+        StateHasChanged();
+    }
+
+    private async Task AttachAsync(UploadResult? file)
+    {
+        if (file is null) return;
+        var updated = await Api.Post<Payment>($"api/orders/{OrderId}/payment/proofs", new { mediaId = file.Id });
+        if (updated is not null)
+        {
+            _payment = updated;
+            Snackbar.Add(L["แนบสลิปแล้ว รอร้านตรวจสอบ", "Slip attached, waiting for the shop"], Severity.Success);
+        }
+    }
+
+    private async Task ActAsync(string action, object? body)
+    {
+        var updated = await Api.Post<Payment>($"api/merchant/orders/{OrderId}/payment/{action}", body ?? new { });
+        if (updated is not null) _payment = updated;
+    }
+
+    private async Task RejectAsync()
+    {
+        var parameters = new DialogParameters<TextPromptDialog> { { x => x.Label, L["เหตุผล (ลูกค้าจะเห็น)", "Reason (shown to customer)"] } };
+        var result = await (await Dialogs.ShowAsync<TextPromptDialog>(L["สลิปไม่ถูกต้อง", "Reject slip"], parameters)).Result;
+        if (result is { Canceled: false, Data: string reason }) await ActAsync("reject", new { reason });
+    }
+
+    private async Task CopyAsync()
+    {
+        if (_payment?.AccountNumber is { } account && await Browser.CopyAsync(account.Replace("-", "")))
+            Snackbar.Add(L["คัดลอกเลขบัญชีแล้ว", "Account number copied"], Severity.Success);
+    }
+}

@@ -1,0 +1,33 @@
+@inject Api Api
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <div class="d-flex justify-center"><MudRating @bind-SelectedValue="_rating" Size="Size.Large" /></div>
+        <MudTextField @bind-Value="_comment" Label="@L["ความคิดเห็น (ไม่บังคับ)", "Comment (optional)"]" Variant="Variant.Outlined" Lines="3" MaxLength="1000" Class="mt-2" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["ไว้ทีหลัง", "Later"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_rating == 0 || _busy)" OnClick="SubmitAsync">@L["ส่งรีวิว", "Submit"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public Guid OrderId { get; set; }
+
+    private int _rating;
+    private string? _comment;
+    private bool _busy;
+
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        if (await Api.Post($"api/orders/{OrderId}/review", new { rating = _rating, comment = _comment }))
+        {
+            Snackbar.Add(L["ขอบคุณสำหรับรีวิว", "Thanks for your review"], Severity.Success);
+            Dialog.Close();
+        }
+        _busy = false;
+    }
+}

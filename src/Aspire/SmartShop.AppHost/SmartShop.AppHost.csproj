@@ -12,5 +12,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Hosts\SmartShop.Api\SmartShop.Api.csproj" />
     <ProjectReference Include="..\..\Hosts\SmartShop.Worker\SmartShop.Worker.csproj" />
+    <ProjectReference Include="..\..\Clients\SmartShop.Web\SmartShop.Web.csproj" />
   </ItemGroup>
 </Project>

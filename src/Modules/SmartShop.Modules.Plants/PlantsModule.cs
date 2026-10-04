@@ -31,5 +31,6 @@ public sealed class PlantsModule : IModule
     {
         PlantEndpoints.Map(app);
         PlantAdminEndpoints.Map(app);
+        AnnouncementEndpoints.Map(app);
     }
 }

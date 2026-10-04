@@ -1,0 +1,202 @@
+@page "/shops/{ShopId:guid}"
+@implements IDisposable
+@inject Api Api
+@inject Realtime Realtime
+@inject Browser Browser
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<div class="ss-page @(CartHere ? "ss-has-cart" : "")">
+    @if (_shop is null)
+    {
+        <Loading Rows="4" />
+    }
+    else
+    {
+        <div class="ss-cover-wrap">
+            @if (_shop.CoverUrl is not null) { <img class="ss-cover" src="@_shop.CoverUrl" alt="" /> } else { <div class="ss-cover"></div> }
+        </div>
+        <MudPaper Class="pa-4 ss-shop-head ss-card" Elevation="1">
+            <div class="d-flex gap-3 align-start">
+                @if (_shop.LogoUrl is not null) { <MudAvatar Size="Size.Large" Style="width:64px;height:64px"><MudImage Src="@_shop.LogoUrl" /></MudAvatar> }
+                <div style="flex:1; min-width:0">
+                    <MudText Typo="Typo.h6" Style="font-weight:700">@_shop.Name</MudText>
+                    <MudText Typo="Typo.caption" Class="ss-muted">
+                        @if (_shop.RatingCount > 0) { <a href="@($"/shops/{ShopId}/reviews")">⭐ @_shop.RatingAverage.ToString("0.0") (@_shop.RatingCount)</a><span> · </span> }
+                        @_shop.Category @if (_shop.HouseNo is not null) { <span>· @L["บ้าน", "House"] @_shop.HouseNo</span> }
+                    </MudText>
+                </div>
+                <MudIconButton Icon="@(_shop.IsFavorite ? Icons.Material.Filled.Favorite : Icons.Material.Outlined.FavoriteBorder)" Color="Color.Error" OnClick="ToggleFavoriteAsync" />
+                <MudIconButton Icon="@Icons.Material.Filled.Share" OnClick="ShareAsync" />
+            </div>
+            <div class="d-flex flex-wrap gap-2 mt-2 align-center">
+                <StatusBadge Status="_shop.Status" AcceptsPreorders="_shop.Status.AcceptsPreorders" />
+                @if (_shop.DeliveryEnabled) { <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">🛵 @L["ร้านไปส่ง (ไม่มีค่าส่ง)", "Shop delivers (free)"]</MudChip> }
+                @if (_shop.PickupEnabled) { <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">🏠 @L["รับที่ร้าน", "Pickup"]</MudChip> }
+            </div>
+            @if (_shop.VacationMessage is not null) { <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@_shop.VacationMessage</MudAlert> }
+            @if (_shop.Description is not null) { <MudText Typo="Typo.body2" Class="mt-2">@_shop.Description</MudText> }
+            <MudExpansionPanels Elevation="0" Class="mt-1">
+                <MudExpansionPanel Text="@L["เวลาเปิด-ปิด & ข้อมูลร้าน", "Hours & info"]" Dense="true">
+                    <OpeningHoursView Hours="_shop.Hours" />
+                    @foreach (var c in _shop.UpcomingClosures)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Warning">⛔ @L["ปิด", "Closed"] @Fmt.DateTime(c.Start) – @Fmt.DateTime(c.End) @c.Reason</MudText><br />
+                    }
+                    @if (_shop.PickupInstruction is not null) { <MudText Typo="Typo.caption">🏠 @_shop.PickupInstruction</MudText><br /> }
+                    @if (_shop.DeliveryZoneNote is not null) { <MudText Typo="Typo.caption">🛵 @_shop.DeliveryZoneNote</MudText><br /> }
+                    @if (_shop.DeliveryMinOrder is { } min) { <MudText Typo="Typo.caption">@L["ส่งเมื่อสั่งขั้นต่ำ", "Delivery minimum"] @Fmt.Baht(min)</MudText><br /> }
+                    @if (_shop.Phone is not null) { <MudLink Href="@($"tel:{_shop.Phone}")" Typo="Typo.caption">📞 @_shop.Phone</MudLink> }
+                </MudExpansionPanel>
+            </MudExpansionPanels>
+        </MudPaper>
+
+        @if (_menu is null)
+        {
+            <Loading Rows="3" />
+        }
+        else if (_menu.Categories.Count == 0)
+        {
+            <EmptyState Title="@L["ร้านยังไม่มีเมนู", "No menu yet"]" Icon="@Icons.Material.Outlined.RestaurantMenu" />
+        }
+        else
+        {
+            <div class="ss-sticky-tabs ss-hscroll mt-2">
+                @foreach (var (c, i) in _menu.Categories.Select((c, i) => (c, i)))
+                {
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => Browser.ScrollToAsync($"cat-{i}"))">@Title(c)</MudChip>
+                }
+            </div>
+            @foreach (var (c, i) in _menu.Categories.Select((c, i) => (c, i)))
+            {
+                <MudText id="@($"cat-{i}")" Typo="Typo.h6" Class="mt-4 ss-section-title" Style="font-weight:700">@Title(c)</MudText>
+                @foreach (var item in c.Items)
+                {
+                    <div class="ss-item @(item.IsOrderable ? "" : "ss-unavailable")" @onclick="@(() => OpenItemAsync(item))">
+                        <div style="flex:1; min-width:0">
+                            <MudText Typo="Typo.subtitle1" Style="font-weight:600">@item.Name</MudText>
+                            @if (item.Description is not null) { <MudText Typo="Typo.caption" Class="ss-muted ss-clamp-2">@item.Description</MudText> }
+                            <div class="d-flex align-center gap-2 mt-1">
+                                <MudText Typo="Typo.body1" Style="font-weight:700">@Fmt.Baht(item.Price)</MudText>
+                                @if (item.Kind == "Service" && item.DurationMinutes is { } d) { <MudText Typo="Typo.caption" Class="ss-muted">⏱ @d @L["นาที", "min"]</MudText> }
+                                @if (!item.IsOrderable) { <MudChip T="string" Size="Size.Small" Color="Color.Default">@Reason(item.UnavailableReason)</MudChip> }
+                                else if (item.Remaining is { } r && r <= 5) { <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text">@L[$"เหลือ {r}", $"{r} left"]</MudChip> }
+                            </div>
+                            @if (item.Round is { } round)
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Info">📅 @L["สั่งได้ถึง", "Order by"] @Fmt.DateTime(round.OrderCutoff) · @L["รับ", "pick up"] @Fmt.Window(round.FulfillFrom, round.FulfillTo)
+                                    @if (round.MinTotalQuantity is { } min) { <span> · @L[$"กลุ่มซื้อ {round.OrderedQuantity}/{min}", $"group buy {round.OrderedQuantity}/{min}"]</span> }
+                                </MudText>
+                            }
+                        </div>
+                        <div style="position:relative">
+                            @if (item.ThumbnailUrl is not null) { <img class="ss-item-img" src="@item.ThumbnailUrl" alt="" loading="lazy" /> }
+                            @if (item.IsOrderable)
+                            {
+                                <MudFab Size="Size.Small" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Style="position:absolute; right:-6px; bottom:-6px" />
+                            }
+                        </div>
+                    </div>
+                }
+            }
+        }
+    }
+</div>
+
+@if (CartHere)
+{
+    <div class="ss-cart-bar">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Href="/cart" Style="border-radius:28px; justify-content:space-between; text-transform:none">
+            <span>🛒 @L["ดูตะกร้า", "View cart"] · @_cart!.ItemCount @L["รายการ", "items"]</span>
+            <span>@Fmt.Baht(_cart.Subtotal)</span>
+        </MudButton>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid ShopId { get; set; }
+
+    private ShopDetails? _shop;
+    private Menu? _menu;
+    private Cart? _cart;
+    private bool CartHere => _cart is { ItemCount: > 0 } && _cart.ShopId == ShopId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Realtime.MenuChanged -= OnMenuChanged;
+        Realtime.ShopStatusChanged -= OnMenuChanged;
+        Realtime.MenuChanged += OnMenuChanged;
+        Realtime.ShopStatusChanged += OnMenuChanged;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var shop = Api.Get<ShopDetails>($"api/shops/{ShopId}");
+        var menu = Api.Get<Menu>($"api/shops/{ShopId}/menu", silent: true);
+        var cart = Api.Get<Cart>("api/cart", silent: true);
+        _shop = await shop;
+        _menu = await menu;
+        _cart = await cart;
+        if (_shop is null) Nav.NavigateTo("/");
+    }
+
+    private string Title(MenuCategory c) => c.Name switch
+    {
+        "★" => L["⭐ เมนูแนะนำ", "⭐ Recommended"],
+        "" => L["อื่นๆ", "Others"],
+        _ => c.Name,
+    };
+
+    private string Reason(string? reason) => reason switch
+    {
+        "sold_out" => L["หมด", "Sold out"],
+        "outside_hours" => L["ไม่ใช่เวลาขาย", "Not now"],
+        "not_yet_on_sale" => L["ยังไม่เปิดขาย", "Coming soon"],
+        "sale_ended" => L["หมดช่วงขาย", "Sale ended"],
+        "round_closed" => L["ปิดรับสั่งแล้ว", "Closed"],
+        _ => L["ไม่พร้อมขาย", "Unavailable"],
+    };
+
+    private async Task OpenItemAsync(MenuItem item)
+    {
+        if (!item.IsOrderable || _shop is null) return;
+        var parameters = new DialogParameters<ItemDialog> { { x => x.Item, item }, { x => x.ShopId, ShopId } };
+        var dialog = await Dialogs.ShowAsync<ItemDialog>(item.Name, parameters, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small, Position = DialogPosition.BottomCenter });
+        if (await dialog.Result is { Canceled: false, Data: Cart cart })
+        {
+            _cart = cart;
+            Snackbar.Add(L["เพิ่มลงตะกร้าแล้ว", "Added to cart"], Severity.Success);
+        }
+    }
+
+    private async Task ToggleFavoriteAsync()
+    {
+        if (_shop is null) return;
+        var ok = _shop.IsFavorite ? await Api.Delete($"api/shops/{ShopId}/favorite") : await Api.Put($"api/shops/{ShopId}/favorite", new { });
+        if (ok) _shop = _shop with { IsFavorite = !_shop.IsFavorite };
+        if (ok && _shop.IsFavorite) Snackbar.Add(L["จะแจ้งเตือนเมื่อร้านนี้เปิด", "We'll tell you when this shop opens"], Severity.Info);
+    }
+
+    private async Task ShareAsync()
+    {
+        if (_shop is null) return;
+        // The link only works for members of this village (shops are never public).
+        var shared = await Browser.ShareAsync(_shop.Name, L[$"สั่ง {_shop.Name} ใน SmartShop", $"Order from {_shop.Name} on SmartShop"], Nav.Uri);
+        if (shared) Snackbar.Add(L["คัดลอกลิงก์แล้ว นำไปวางใน OpenChat ได้เลย", "Link copied, paste it in the OpenChat"], Severity.Success);
+    }
+
+    private async void OnMenuChanged(JsonElement e)
+    {
+        if (e.TryGetProperty("shopId", out var id) && id.GetGuid() != ShopId) return;
+        await LoadAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        Realtime.MenuChanged -= OnMenuChanged;
+        Realtime.ShopStatusChanged -= OnMenuChanged;
+    }
+}

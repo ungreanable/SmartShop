@@ -1,0 +1,70 @@
+@* Weekly opening hours: several slots per day (e.g. 06:00-09:00 and 16:00-19:00). *@
+@inject Api Api
+@inject ISnackbar Snackbar
+
+@foreach (var day in Days)
+{
+    <div class="d-flex align-start gap-2 py-1" style="border-bottom:1px solid var(--mud-palette-lines-default)">
+        <MudText Style="width:80px; padding-top:10px">@OpeningHoursView.DayName(day, L)</MudText>
+        <div style="flex:1">
+            @foreach (var slot in _slots.Where(s => s.Day == day).ToList())
+            {
+                <div class="d-flex gap-1 align-center">
+                    <MudTimePicker @bind-Time="slot.Open" Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:105px" />
+                    <span>–</span>
+                    <MudTimePicker @bind-Time="slot.Close" Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:105px" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="@(() => _slots.Remove(slot))" />
+                </div>
+            }
+            @if (!_slots.Any(s => s.Day == day)) { <MudText Typo="Typo.caption" Class="ss-muted" Style="padding-top:10px; display:inline-block">@L["ปิด", "Closed"]</MudText> }
+        </div>
+        <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small" OnClick="@(() => Add(day))" />
+    </div>
+}
+<div class="d-flex gap-2 mt-2">
+    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="CopyMondayToWeekdays">@L["ใช้เวลาวันจันทร์กับ จ-ศ", "Copy Monday to weekdays"]</MudButton>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="SaveAsync">@L["บันทึก", "Save"]</MudButton>
+</div>
+
+@code {
+    [Parameter] public Guid ShopId { get; set; }
+    [Parameter] public List<OpeningHour> Hours { get; set; } = [];
+
+    private static readonly string[] Days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+    private sealed class SlotForm
+    {
+        public string Day { get; set; } = "";
+        public TimeSpan? Open { get; set; }
+        public TimeSpan? Close { get; set; }
+    }
+
+    private List<SlotForm> _slots = [];
+
+    protected override void OnParametersSet() =>
+        _slots = Hours.Select(h => new SlotForm
+        {
+            Day = h.Day,
+            Open = TimeSpan.Parse(h.OpenAt, System.Globalization.CultureInfo.InvariantCulture),
+            Close = TimeSpan.Parse(h.CloseAt, System.Globalization.CultureInfo.InvariantCulture),
+        }).ToList();
+
+    private void Add(string day) => _slots.Add(new SlotForm { Day = day, Open = new TimeSpan(8, 0, 0), Close = new TimeSpan(17, 0, 0) });
+
+    private void CopyMondayToWeekdays()
+    {
+        var monday = _slots.Where(s => s.Day == "Monday").ToList();
+        _slots.RemoveAll(s => s.Day is "Tuesday" or "Wednesday" or "Thursday" or "Friday");
+        foreach (var day in new[] { "Tuesday", "Wednesday", "Thursday", "Friday" })
+            _slots.AddRange(monday.Select(m => new SlotForm { Day = day, Open = m.Open, Close = m.Close }));
+    }
+
+    private async Task SaveAsync()
+    {
+        var hours = _slots.Where(s => s.Open is not null && s.Close is not null)
+            .Select(s => new { day = s.Day, openAt = s.Open!.Value.ToString(@"hh\:mm"), closeAt = s.Close!.Value.ToString(@"hh\:mm") }).ToList();
+        if (await Api.Put($"api/merchant/shops/{ShopId}/hours", new { hours }))
+            Snackbar.Add(L["บันทึกเวลาเปิด-ปิดแล้ว", "Opening hours saved"], Severity.Success);
+    }
+}

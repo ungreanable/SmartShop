@@ -18,6 +18,8 @@ using SmartShop.SharedKernel;
 
 namespace SmartShop.Modules.Media;
 
+public sealed record QrRequest(string Text);
+
 public sealed record UploadResult(Guid Id, string ContentType, int? Width, int? Height, string? Url, string? ThumbnailUrl);
 
 public sealed class MediaModule : IModule
@@ -53,6 +55,16 @@ public sealed class MediaModule : IModule
         .RequireAuthorization()
         .DisableAntiforgery()
         .WithMetadata(new RequestSizeLimitAttributeShim(20 * 1024 * 1024));
+
+        // QR codes for join links / shop invites (rendered client-side as a data URL).
+        media.MapPost("/qr", (QrRequest req) =>
+        {
+            var text = Guard.NotEmpty(req.Text, "Text", 1000);
+            using var generator = new QRCoder.QRCodeGenerator();
+            using var data = generator.CreateQrCode(text, QRCoder.QRCodeGenerator.ECCLevel.M);
+            var png = new QRCoder.PngByteQRCode(data).GetGraphic(8);
+            return Results.Ok(new { dataUrl = "data:image/png;base64," + Convert.ToBase64String(png) });
+        }).RequireAuthorization();
 
         // Anonymous on purpose: <img> tags cannot send tokens. The HMAC signature proves the URL was issued
         // to an authorised viewer and expires within ~2 hours.
