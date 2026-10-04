@@ -186,7 +186,7 @@ sudo nginx -t && sudo systemctl reload nginx
 ```
 
 - ถ้า `nginx -t` แจ้งว่า `$connection_upgrade` ซ้ำ ให้ลบบล็อก `map` ที่ต้นไฟล์ออก (แปลว่ามีอยู่แล้วใน `nginx.conf`)
-- Nginx เวอร์ชันเก่ากว่า 1.25 ให้เปลี่ยน `http2 on;` เป็น `listen 443 ssl http2;`
+- ไฟล์ตัวอย่างใช้ `listen 443 ssl http2;` ซึ่งใช้ได้ทุกเวอร์ชัน ถ้ามีคำเตือน `protocol options redefined for [::]:443` ให้ตั้ง `listen` ของทุก Site ที่ใช้ Port 443 ให้เหมือนกัน (มี `http2` ทุกไฟล์ หรือไม่มีเลย)
 
 สิ่งที่ไฟล์นี้ตั้งไว้: Redirect HTTP→HTTPS, Origin Certificate, ส่ง `CF-Connecting-IP` ต่อให้ระบบ, WebSocket สำหรับ `/hubs/realtime` (Timeout 1 ชม.) และ Upload ได้ถึง 20 MB
 
