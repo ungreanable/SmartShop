@@ -1,0 +1,25 @@
+{
+	email {$ADMIN_EMAIL}
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	# API, SignalR hub and health endpoints go straight to the API.
+	@api path /api/* /hubs/* /health/*
+	handle @api {
+		reverse_proxy api:8080
+	}
+
+	# Everything else is the Blazor web app (PWA / LIFF).
+	handle {
+		reverse_proxy web:8080
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}

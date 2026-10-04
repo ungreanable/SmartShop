@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>SmartShop.Contracts</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\SmartShop.SharedKernel\SmartShop.SharedKernel.csproj" />
+  </ItemGroup>
+</Project>

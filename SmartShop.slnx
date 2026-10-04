@@ -1,0 +1,25 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/src/Aspire/">
+    <Project Path="src/Aspire/SmartShop.AppHost/SmartShop.AppHost.csproj" />
+    <Project Path="src/Aspire/SmartShop.ServiceDefaults/SmartShop.ServiceDefaults.csproj" />
+  </Folder>
+  <Folder Name="/src/BuildingBlocks/">
+    <Project Path="src/BuildingBlocks/SmartShop.Contracts/SmartShop.Contracts.csproj" />
+    <Project Path="src/BuildingBlocks/SmartShop.Infrastructure/SmartShop.Infrastructure.csproj" />
+    <Project Path="src/BuildingBlocks/SmartShop.SharedKernel/SmartShop.SharedKernel.csproj" />
+  </Folder>
+  <Folder Name="/src/Hosts/">
+    <Project Path="src/Hosts/SmartShop.Api/SmartShop.Api.csproj" />
+    <Project Path="src/Hosts/SmartShop.Bootstrap/SmartShop.Bootstrap.csproj" />
+    <Project Path="src/Hosts/SmartShop.Worker/SmartShop.Worker.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/">
+    <Project Path="src/Modules/SmartShop.Modules.Identity/SmartShop.Modules.Identity.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SmartShop.ArchitectureTests/SmartShop.ArchitectureTests.csproj" />
+    <Project Path="tests/SmartShop.IntegrationTests/SmartShop.IntegrationTests.csproj" />
+    <Project Path="tests/SmartShop.UnitTests/SmartShop.UnitTests.csproj" />
+  </Folder>
+</Solution>

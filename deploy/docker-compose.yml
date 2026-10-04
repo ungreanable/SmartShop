@@ -1,0 +1,146 @@
+# SmartShop production stack for a single VPS.
+#   cp .env.example .env   # then edit secrets
+#   docker compose up -d
+# Only Caddy is exposed to the internet; everything else stays on the internal network.
+name: smartshop
+
+x-app-env: &app-env
+  ASPNETCORE_ENVIRONMENT: Production
+  ConnectionStrings__smartshop: "Host=postgres;Database=smartshop;Username=smartshop;Password=${POSTGRES_PASSWORD}"
+  ConnectionStrings__cache: "valkey:6379"
+  ConnectionStrings__rabbitmq: "amqp://smartshop:${RABBITMQ_PASSWORD}@rabbitmq:5672"
+  Auth__Jwt__SigningKey: "${JWT_SIGNING_KEY}"
+  Media__SigningKey: "${MEDIA_SIGNING_KEY}"
+  Auth__Line__ChannelId: "${LINE_LOGIN_CHANNEL_ID}"
+  Auth__Line__ChannelSecret: "${LINE_LOGIN_CHANNEL_SECRET}"
+  Auth__Line__LiffId: "${LINE_LIFF_ID}"
+  Line__MessagingChannelAccessToken: "${LINE_MESSAGING_ACCESS_TOKEN}"
+  Line__MessagingChannelSecret: "${LINE_MESSAGING_CHANNEL_SECRET}"
+  Line__MonthlyQuota: "${LINE_MONTHLY_QUOTA:-300}"
+  Identity__SystemAdminLineUserIds__0: "${SYSTEM_ADMIN_LINE_USER_ID}"
+  WebPush__Subject: "mailto:${ADMIN_EMAIL}"
+  WebPush__PublicKey: "${VAPID_PUBLIC_KEY}"
+  WebPush__PrivateKey: "${VAPID_PRIVATE_KEY}"
+  Storage__Provider: S3
+  Storage__ServiceUrl: "http://seaweedfs:8333"
+  Storage__Bucket: smartshop
+  Storage__AccessKey: smartshop
+  Storage__SecretKey: smartshop
+  App__PublicUrl: "https://${DOMAIN}"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
+
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      DOMAIN: "${DOMAIN}"
+      ADMIN_EMAIL: "${ADMIN_EMAIL}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      api: { condition: service_healthy }
+      web: { condition: service_started }
+
+  web:
+    image: ghcr.io/${GITHUB_OWNER:-smartshop-village}/smartshop-web:${TAG:-latest}
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ReverseProxy__Clusters__api__Destinations__api__Address: "http://api:8080"
+
+  api:
+    image: ghcr.io/${GITHUB_OWNER:-smartshop-village}/smartshop-api:${TAG:-latest}
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      Messaging__Role: Api
+    healthcheck:
+      test: ["CMD", "dotnet", "SmartShop.Api.dll", "--healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    depends_on:
+      migrator: { condition: service_completed_successfully }
+      valkey: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+
+  worker:
+    image: ghcr.io/${GITHUB_OWNER:-smartshop-village}/smartshop-worker:${TAG:-latest}
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+    healthcheck:
+      test: ["CMD", "dotnet", "SmartShop.Worker.dll", "--healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      migrator: { condition: service_completed_successfully }
+      valkey: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+
+  # Applies EF Core migrations of every module, then exits.
+  migrator:
+    image: ghcr.io/${GITHUB_OWNER:-smartshop-village}/smartshop-api:${TAG:-latest}
+    restart: "no"
+    command: ["migrate"]
+    environment:
+      <<: *app-env
+      Messaging__Role: Standalone
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: smartshop
+      POSTGRES_USER: smartshop
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartshop -d smartshop"]
+      interval: 5s
+      retries: 20
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    restart: unless-stopped
+    command: ["valkey-server", "--save", "60", "1", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes: [valkey-data:/data]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: smartshop
+      RABBITMQ_DEFAULT_PASS: "${RABBITMQ_PASSWORD}"
+    volumes: [rabbitmq-data:/var/lib/rabbitmq]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      retries: 20
+
+  # S3-compatible storage. Not exposed: only the API/worker talk to it, media is served through signed API URLs.
+  seaweedfs:
+    image: chrislusf/seaweedfs:3.97
+    restart: unless-stopped
+    command: ["server", "-s3", "-dir=/data", "-master.volumeSizeLimitMB=1024"]
+    volumes: [seaweedfs-data:/data]
+
+volumes:
+  caddy-data:
+  caddy-config:
+  postgres-data:
+  valkey-data:
+  rabbitmq-data:
+  seaweedfs-data:

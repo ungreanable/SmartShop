@@ -1,0 +1,56 @@
+name: Containers
+
+# Builds multi-arch images with the .NET SDK container support (no Dockerfiles) and pushes them to GHCR.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        project:
+          - src/Hosts/SmartShop.Api/SmartShop.Api.csproj
+          - src/Hosts/SmartShop.Worker/SmartShop.Worker.csproj
+          - src/Clients/SmartShop.Web/SmartShop.Web.csproj
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute tags
+        id: tags
+        shell: bash
+        run: |
+          tags="sha-${GITHUB_SHA::7}"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${GITHUB_REF#refs/tags/v}"
+            tags="$tags;$version;latest"
+          else
+            tags="$tags;edge"
+          fi
+          echo "tags=$tags" >> "$GITHUB_OUTPUT"
+
+      - name: Publish container
+        run: >
+          dotnet publish ${{ matrix.project }} -c Release
+          /t:PublishContainer
+          -p:ContainerRegistry=ghcr.io
+          -p:ContainerRepository=${{ github.repository_owner }}/$(basename ${{ matrix.project }} .csproj | tr '[:upper:]' '[:lower:]' | sed 's/\./-/g')
+          -p:ContainerImageTags='"${{ steps.tags.outputs.tags }}"'
+          -p:ContainerRuntimeIdentifiers='"linux-x64;linux-arm64"'

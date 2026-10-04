@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>SmartShop.Bootstrap</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Scalar.AspNetCore" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Aspire\SmartShop.ServiceDefaults\SmartShop.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\..\BuildingBlocks\SmartShop.Infrastructure\SmartShop.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Modules\SmartShop.Modules.Identity\SmartShop.Modules.Identity.csproj" />
+  </ItemGroup>
+</Project>

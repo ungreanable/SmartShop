@@ -1,0 +1,20 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Steps to reproduce, expected vs actual behaviour. Screenshots help.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [Customer app, Merchant mode, Village admin, Notifications / LINE, Deployment, Other]
+  - type: input
+    id: version
+    attributes:
+      label: Version / image tag

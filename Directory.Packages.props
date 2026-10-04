@@ -1,0 +1,85 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>false</CentralPackageTransitivePinningEnabled>
+    <AspNetVersion>10.0.12</AspNetVersion>
+    <EfVersion>10.0.12</EfVersion>
+    <AspireVersion>13.6.0</AspireVersion>
+    <WolverineVersion>6.45.0</WolverineVersion>
+    <OtelVersion>1.19.1</OtelVersion>
+    <OtelInstrVersion>1.19.0</OtelInstrVersion>
+    <ExtVersion>10.10.0</ExtVersion>
+  </PropertyGroup>
+  <ItemGroup Label="ASP.NET Core / EF Core">
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="$(AspNetVersion)" />
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="$(AspNetVersion)" />
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="$(AspNetVersion)" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly" Version="$(AspNetVersion)" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="$(AspNetVersion)" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="$(AspNetVersion)" />
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="$(AspNetVersion)" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="$(AspNetVersion)" />
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="$(AspNetVersion)" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="$(EfVersion)" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="$(EfVersion)" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="$(EfVersion)" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageVersion Include="Npgsql" Version="10.0.3" />
+    <PackageVersion Include="EFCore.NamingConventions" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.Hybrid" Version="$(ExtVersion)" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="$(AspNetVersion)" />
+    <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="$(ExtVersion)" />
+    <PackageVersion Include="Microsoft.IdentityModel.Protocols.OpenIdConnect" Version="8.23.0" />
+    <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.23.0" />
+  </ItemGroup>
+  <ItemGroup Label="Messaging">
+    <PackageVersion Include="WolverineFx" Version="$(WolverineVersion)" />
+    <PackageVersion Include="WolverineFx.EntityFrameworkCore" Version="$(WolverineVersion)" />
+    <PackageVersion Include="WolverineFx.Postgresql" Version="$(WolverineVersion)" />
+    <PackageVersion Include="WolverineFx.RabbitMQ" Version="$(WolverineVersion)" />
+    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="$(WolverineVersion)" />
+  </ItemGroup>
+  <ItemGroup Label="Aspire / Service Defaults">
+    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="$(AspireVersion)" />
+    <PackageVersion Include="Aspire.Hosting.Valkey" Version="$(AspireVersion)" />
+    <PackageVersion Include="Aspire.Hosting.RabbitMQ" Version="$(AspireVersion)" />
+    <PackageVersion Include="Aspire.Hosting.Docker" Version="$(AspireVersion)" />
+    <PackageVersion Include="Aspire.Hosting.Testing" Version="$(AspireVersion)" />
+    <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="$(ExtVersion)" />
+    <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery.Yarp" Version="$(ExtVersion)" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="$(ExtVersion)" />
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="$(OtelVersion)" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="$(OtelVersion)" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="$(OtelInstrVersion)" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="$(OtelInstrVersion)" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="$(OtelInstrVersion)" />
+    <PackageVersion Include="Yarp.ReverseProxy" Version="2.3.0" />
+  </ItemGroup>
+  <ItemGroup Label="Libraries">
+    <PackageVersion Include="FluentValidation" Version="12.1.1" />
+    <PackageVersion Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
+    <PackageVersion Include="Scalar.AspNetCore" Version="2.17.13" />
+    <PackageVersion Include="AWSSDK.S3" Version="4.0.104.1" />
+    <PackageVersion Include="QRCoder" Version="1.8.0" />
+    <PackageVersion Include="ZXing.Net" Version="0.16.11" />
+    <PackageVersion Include="SkiaSharp" Version="4.153.1" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.153.1" />
+    <PackageVersion Include="WebPush" Version="1.0.13" />
+    <PackageVersion Include="FirebaseAdmin" Version="3.7.0" />
+    <PackageVersion Include="MudBlazor" Version="9.11.0" />
+  </ItemGroup>
+  <ItemGroup Label="MAUI">
+    <PackageVersion Include="Microsoft.Maui.Controls" Version="10.0.110" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="10.0.110" />
+  </ItemGroup>
+  <ItemGroup Label="Testing">
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <PackageVersion Include="xunit.v3" Version="4.0.1" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
+    <PackageVersion Include="Shouldly" Version="4.3.0" />
+    <PackageVersion Include="NetArchTest.Rules" Version="1.3.2" />
+    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.15.0" />
+    <PackageVersion Include="Testcontainers.RabbitMq" Version="4.15.0" />
+    <PackageVersion Include="bunit" Version="2.11.3" />
+  </ItemGroup>
+</Project>

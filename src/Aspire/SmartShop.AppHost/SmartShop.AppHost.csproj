@@ -1,0 +1,16 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.6.0">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <UserSecretsId>smartshop-apphost</UserSecretsId>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" />
+    <PackageReference Include="Aspire.Hosting.Valkey" />
+    <PackageReference Include="Aspire.Hosting.RabbitMQ" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Hosts\SmartShop.Api\SmartShop.Api.csproj" />
+    <ProjectReference Include="..\..\Hosts\SmartShop.Worker\SmartShop.Worker.csproj" />
+  </ItemGroup>
+</Project>
