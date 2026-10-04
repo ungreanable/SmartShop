@@ -18,6 +18,7 @@ public interface IPlantDirectory
     Task<MembershipInfo?> GetMembershipAsync(Guid plantId, Guid userId, CancellationToken ct = default);
     Task<PlantInfo?> GetPlantAsync(Guid plantId, CancellationToken ct = default);
     Task<IReadOnlyList<Guid>> GetActiveAdminIdsAsync(Guid plantId, CancellationToken ct = default);
+    Task<IReadOnlyList<Guid>> GetActiveMemberIdsAsync(Guid plantId, CancellationToken ct = default);
 }
 
 public sealed record PlantCreated(Guid PlantId, string Name) : IntegrationEvent(PlantId);

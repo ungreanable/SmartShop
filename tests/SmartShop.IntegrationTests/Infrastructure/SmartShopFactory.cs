@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Time.Testing;
 using SmartShop.Infrastructure.Jobs;
 using Testcontainers.PostgreSql;
 
@@ -19,8 +18,7 @@ public sealed class SmartShopFactory : WebApplicationFactory<Program>, IAsyncLif
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17-alpine").Build();
     private readonly string _mediaRoot = Path.Combine(Path.GetTempPath(), "smartshop-tests", Guid.NewGuid().ToString("N"));
 
-    /// <summary>Controllable clock. Starts at real "now"; tests may advance it.</summary>
-    public FakeTimeProvider Clock { get; } = new(DateTimeOffset.UtcNow);
+    public const string LineChannelSecret = "test-line-channel-secret";
 
     public async ValueTask InitializeAsync()
     {
@@ -39,11 +37,12 @@ public sealed class SmartShopFactory : WebApplicationFactory<Program>, IAsyncLif
         builder.UseSetting("Storage:Provider", "FileSystem");
         builder.UseSetting("Storage:FileSystemRoot", _mediaRoot);
         builder.UseSetting("Line:MessagingChannelAccessToken", "");
+        builder.UseSetting("Line:MessagingChannelSecret", LineChannelSecret);
+        builder.UseSetting("RateLimiting:AuthPerMinute", "100000");
+        builder.UseSetting("RateLimiting:UserTokensPer10Seconds", "100000");
 
         builder.ConfigureServices(services =>
         {
-            services.RemoveAll<TimeProvider>();
-            services.AddSingleton<TimeProvider>(Clock);
             // Recurring jobs are triggered explicitly by tests (RunJobAsync) for determinism.
             services.RemoveAll<Microsoft.Extensions.Hosting.IHostedService>(typeof(RecurringJobRunner));
         });

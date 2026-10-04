@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>SmartShop.Modules.Payments</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="QRCoder" />
+    <PackageReference Include="ZXing.Net" />
+    <PackageReference Include="SkiaSharp" />
+  </ItemGroup>
+</Project>

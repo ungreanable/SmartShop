@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Wolverine.EntityFrameworkCore;
 
 namespace SmartShop.Infrastructure.Persistence;
@@ -28,4 +29,12 @@ public abstract class ModuleDbContext(DbContextOptions options) : DbContext(opti
     }
 
     protected abstract void ConfigureModel(ModelBuilder modelBuilder);
+
+    /// <summary>Npgsql only writes UTC DateTimeOffset values to timestamptz; normalise every value on the way in.</summary>
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        configurationBuilder.Properties<DateTimeOffset>().HaveConversion<UtcDateTimeOffsetConverter>();
+    }
 }
+
+public sealed class UtcDateTimeOffsetConverter() : ValueConverter<DateTimeOffset, DateTimeOffset>(v => v.ToUniversalTime(), v => v);

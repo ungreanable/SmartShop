@@ -8,5 +8,13 @@ internal static class ModuleCatalog
     public static IReadOnlyList<IModule> All() =>
     [
         new Modules.Identity.IdentityModule(),
+        new Modules.Media.MediaModule(),
+        new Modules.Plants.PlantsModule(),
+        new Modules.Shops.ShopsModule(),
+        new Modules.Catalog.CatalogModule(),
+        new Modules.Ordering.OrderingModule(),
+        new Modules.Payments.PaymentsModule(),
+        new Modules.Notifications.NotificationsModule(),
+        new Modules.Search.SearchModule(),
     ];
 }

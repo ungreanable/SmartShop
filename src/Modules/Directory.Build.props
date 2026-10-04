@@ -1,0 +1,11 @@
+<Project>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+  <!-- Every module: ASP.NET Core endpoints, shared infrastructure, EF Core design-time support. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\BuildingBlocks\SmartShop.Infrastructure\SmartShop.Infrastructure.csproj" />
+    <InternalsVisibleTo Include="SmartShop.IntegrationTests" />
+    <InternalsVisibleTo Include="SmartShop.UnitTests" />
+  </ItemGroup>
+</Project>

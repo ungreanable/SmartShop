@@ -53,12 +53,19 @@ public static class MessagingSetup
             opts.Policies.UseDurableOutboxOnAllSendingEndpoints();
             opts.Policies.UseDurableInboxOnAllListeners();
 
+            // Modules expose contracts (interfaces) and keep implementations internal on purpose,
+            // so generated handler code resolves those services from the container.
+            opts.ServiceLocationPolicy = JasperFx.CodeGeneration.Model.ServiceLocationPolicy.AlwaysAllowed;
+
             // Each module reacts to an event independently (own queue, own retries, own transaction).
             opts.MultipleHandlerBehavior = MultipleHandlerBehavior.Separated;
 
             foreach (var assembly in handlerAssemblies.Distinct())
                 opts.Discovery.IncludeAssembly(assembly);
 
+            opts.OnException<Microsoft.EntityFrameworkCore.DbUpdateException>()
+                .RetryWithCooldown(TimeSpan.FromMilliseconds(100), TimeSpan.FromMilliseconds(500), TimeSpan.FromSeconds(2))
+                .Then.MoveToErrorQueue();
             opts.OnException<Npgsql.NpgsqlException>()
                 .RetryWithCooldown(TimeSpan.FromMilliseconds(200), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5))
                 .Then.MoveToErrorQueue();

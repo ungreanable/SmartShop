@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
@@ -35,19 +36,23 @@ public static class SmartShopHost
             builder.Services.AddHostedService<RecurringJobRunner>();
 
         builder.Services.AddOpenApi();
+        builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+        builder.Services.AddSignalR().AddJsonProtocol(o => o.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+        var authPermits = builder.Configuration.GetValue("RateLimiting:AuthPerMinute", 30);
+        var userPermits = builder.Configuration.GetValue("RateLimiting:UserTokensPer10Seconds", 100);
         builder.Services.AddRateLimiter(o =>
         {
             o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
             // Sign-in endpoints: per client IP.
             o.AddPolicy("auth", ctx => RateLimitPartition.GetFixedWindowLimiter(
                 ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1) }));
+                _ => new FixedWindowRateLimiterOptions { PermitLimit = authPermits, Window = TimeSpan.FromMinutes(1) }));
             // Everything else: per authenticated user (or IP).
             o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx => RateLimitPartition.GetTokenBucketLimiter(
                 ctx.User.FindFirst("sub")?.Value ?? ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                 _ => new TokenBucketRateLimiterOptions
                 {
-                    TokenLimit = 200, TokensPerPeriod = 100, ReplenishmentPeriod = TimeSpan.FromSeconds(10), QueueLimit = 0,
+                    TokenLimit = userPermits * 2, TokensPerPeriod = userPermits, ReplenishmentPeriod = TimeSpan.FromSeconds(10), QueueLimit = 0,
                 }));
         });
         builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
@@ -101,6 +106,14 @@ public static class SmartShopHost
 
     public static async Task RunSmartShopAsync(this WebApplication app, string[] args)
     {
+        if (args.Contains("vapid", StringComparer.OrdinalIgnoreCase))
+        {
+            var (publicKey, privateKey) = SmartShop.Modules.Notifications.NotificationsModule.GenerateVapidKeys();
+            Console.WriteLine($"VAPID_PUBLIC_KEY={publicKey}");
+            Console.WriteLine($"VAPID_PRIVATE_KEY={privateKey}");
+            return;
+        }
+
         if (args.Contains("migrate", StringComparer.OrdinalIgnoreCase))
         {
             await MigrateAsync(app.Services);

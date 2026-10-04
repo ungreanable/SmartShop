@@ -137,7 +137,8 @@ public static class ShopScheduleEvaluator
     private static DateTimeOffset ToInstant(DateOnly day, TimeOnly time, TimeZoneInfo tz)
     {
         var local = day.ToDateTime(time, DateTimeKind.Unspecified);
-        return new DateTimeOffset(local, tz.GetUtcOffset(local));
+        // Always UTC: PostgreSQL timestamptz (Npgsql) only accepts offset 0, and clients render local time themselves.
+        return new DateTimeOffset(local, tz.GetUtcOffset(local)).ToUniversalTime();
     }
 
     private static List<TimeWindow> Merge(List<TimeWindow> windows)

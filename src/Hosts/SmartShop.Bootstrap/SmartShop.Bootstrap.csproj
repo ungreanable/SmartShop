@@ -11,5 +11,13 @@
     <ProjectReference Include="..\..\Aspire\SmartShop.ServiceDefaults\SmartShop.ServiceDefaults.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\SmartShop.Infrastructure\SmartShop.Infrastructure.csproj" />
     <ProjectReference Include="..\..\Modules\SmartShop.Modules.Identity\SmartShop.Modules.Identity.csproj" />
+    <ProjectReference Include="..\..\Modules\SmartShop.Modules.Media\SmartShop.Modules.Media.csproj" />
+    <ProjectReference Include="..\..\Modules\SmartShop.Modules.Plants\SmartShop.Modules.Plants.csproj" />
+    <ProjectReference Include="..\..\Modules\SmartShop.Modules.Shops\SmartShop.Modules.Shops.csproj" />
+    <ProjectReference Include="..\..\Modules\SmartShop.Modules.Catalog\SmartShop.Modules.Catalog.csproj" />
+    <ProjectReference Include="..\..\Modules\SmartShop.Modules.Ordering\SmartShop.Modules.Ordering.csproj" />
+    <ProjectReference Include="..\..\Modules\SmartShop.Modules.Payments\SmartShop.Modules.Payments.csproj" />
+    <ProjectReference Include="..\..\Modules\SmartShop.Modules.Notifications\SmartShop.Modules.Notifications.csproj" />
+    <ProjectReference Include="..\..\Modules\SmartShop.Modules.Search\SmartShop.Modules.Search.csproj" />
   </ItemGroup>
 </Project>

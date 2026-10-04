@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>SmartShop.Modules.Notifications</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="WebPush" />
+    <PackageReference Include="FirebaseAdmin" />
+  </ItemGroup>
+</Project>

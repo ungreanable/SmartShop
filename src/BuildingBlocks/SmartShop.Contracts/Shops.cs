@@ -31,7 +31,7 @@ public sealed record ShopMemberInfo(Guid UserId, ShopRole Role, bool ReceiveOrde
 
 /// <summary>Denormalisation source for the Search read model.</summary>
 public sealed record ShopListingSnapshot(
-    Guid ShopId, Guid PlantId, string Name, string? Description, Guid? CategoryId,
+    Guid ShopId, Guid PlantId, string Name, string? Description, string? Category,
     Guid? LogoId, Guid? CoverId, string? HouseNo,
     bool PickupEnabled, bool DeliveryEnabled, bool AllowPreorderWhenClosed, int PrepTimeMinutes,
     decimal RatingAverage, int RatingCount, bool IsActive,

@@ -3,15 +3,7 @@
     <RootNamespace>SmartShop.Modules.Identity</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
     <PackageReference Include="Microsoft.IdentityModel.Protocols.OpenIdConnect" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\..\BuildingBlocks\SmartShop.Infrastructure\SmartShop.Infrastructure.csproj" />
-  </ItemGroup>
-  <ItemGroup>
-    <InternalsVisibleTo Include="SmartShop.IntegrationTests" />
   </ItemGroup>
 </Project>

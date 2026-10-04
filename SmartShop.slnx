@@ -15,7 +15,15 @@
     <Project Path="src/Hosts/SmartShop.Worker/SmartShop.Worker.csproj" />
   </Folder>
   <Folder Name="/src/Modules/">
+    <Project Path="src/Modules/SmartShop.Modules.Catalog/SmartShop.Modules.Catalog.csproj" />
     <Project Path="src/Modules/SmartShop.Modules.Identity/SmartShop.Modules.Identity.csproj" />
+    <Project Path="src/Modules/SmartShop.Modules.Media/SmartShop.Modules.Media.csproj" />
+    <Project Path="src/Modules/SmartShop.Modules.Notifications/SmartShop.Modules.Notifications.csproj" />
+    <Project Path="src/Modules/SmartShop.Modules.Ordering/SmartShop.Modules.Ordering.csproj" />
+    <Project Path="src/Modules/SmartShop.Modules.Payments/SmartShop.Modules.Payments.csproj" />
+    <Project Path="src/Modules/SmartShop.Modules.Plants/SmartShop.Modules.Plants.csproj" />
+    <Project Path="src/Modules/SmartShop.Modules.Search/SmartShop.Modules.Search.csproj" />
+    <Project Path="src/Modules/SmartShop.Modules.Shops/SmartShop.Modules.Shops.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/SmartShop.ArchitectureTests/SmartShop.ArchitectureTests.csproj" />

@@ -83,3 +83,21 @@ public class ModuleBoundaryTests
         }
     }
 }
+
+public class HandlerConventionTests
+{
+    /// <summary>Wolverine only discovers classes whose name ends with "Handler" (or "Consumer").</summary>
+    [Fact]
+    public void Classes_in_handler_namespaces_follow_the_wolverine_naming_convention()
+    {
+        var offenders = SmartShopHost.Modules.Select(m => m.GetType().Assembly).Distinct()
+            .SelectMany(a => a.GetTypes())
+            .Where(t => t.IsPublic && t.Namespace?.EndsWith(".Handlers", StringComparison.Ordinal) == true)
+            .Where(t => t.GetMethods().Any(m => m.Name is "Handle" or "HandleAsync" && m.IsStatic))
+            .Where(t => !t.Name.EndsWith("Handler", StringComparison.Ordinal))
+            .Select(t => t.FullName)
+            .ToList();
+
+        offenders.ShouldBeEmpty();
+    }
+}
