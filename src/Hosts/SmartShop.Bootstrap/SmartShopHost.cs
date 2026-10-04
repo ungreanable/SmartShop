@@ -47,6 +47,11 @@ public static class SmartShopHost
             o.AddPolicy("auth", ctx => RateLimitPartition.GetFixedWindowLimiter(
                 ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = authPermits, Window = TimeSpan.FromMinutes(1) }));
+            // Public API: per API key (falls back to IP for missing keys).
+            var apiPermits = builder.Configuration.GetValue("RateLimiting:PublicApiPerMinute", 120);
+            o.AddPolicy("public-api", ctx => RateLimitPartition.GetFixedWindowLimiter(
+                ctx.Request.Headers["X-Api-Key"].ToString() is { Length: > 0 } key ? "key:" + key : ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions { PermitLimit = apiPermits, Window = TimeSpan.FromMinutes(1) }));
             // Everything else: per authenticated user (or IP).
             o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx => RateLimitPartition.GetTokenBucketLimiter(
                 ctx.User.FindFirst("sub")?.Value ?? ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",

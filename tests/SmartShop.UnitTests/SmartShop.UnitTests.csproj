@@ -4,5 +4,7 @@
     <ProjectReference Include="..\..\src\Modules\SmartShop.Modules.Payments\SmartShop.Modules.Payments.csproj" />
     <ProjectReference Include="..\..\src\Modules\SmartShop.Modules.Ordering\SmartShop.Modules.Ordering.csproj" />
     <ProjectReference Include="..\..\src\Modules\SmartShop.Modules.Catalog\SmartShop.Modules.Catalog.csproj" />
+    <ProjectReference Include="..\..\src\Modules\SmartShop.Modules.Promotions\SmartShop.Modules.Promotions.csproj" />
+    <ProjectReference Include="..\..\src\Modules\SmartShop.Modules.Integrations\SmartShop.Modules.Integrations.csproj" />
   </ItemGroup>
 </Project>

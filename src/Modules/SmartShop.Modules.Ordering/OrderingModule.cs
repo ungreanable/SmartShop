@@ -45,6 +45,26 @@ internal sealed class OrderDirectory(OrderingDbContext db) : IOrderDirectory
         db.Orders.AsNoTracking().Where(o => o.Id == orderId)
             .Select(o => new OrderSummaryInfo(o.Id, o.PlantId, o.ShopId, o.CustomerId, o.OrderNo, o.Status, o.Total, o.PaymentMethodId, o.FulfillmentType))
             .FirstOrDefaultAsync(ct);
+
+    public async Task<IReadOnlyList<OrderExport>> ListForShopAsync(Guid shopId, DateTimeOffset? placedSince, OrderStatus? status, int limit, CancellationToken ct = default)
+    {
+        var query = db.Orders.AsNoTracking().Where(o => o.ShopId == shopId);
+        if (placedSince is { } since) query = query.Where(o => o.PlacedAt >= since);
+        if (status is { } s) query = query.Where(o => o.Status == s);
+        var orders = await query.OrderByDescending(o => o.PlacedAt).Take(Math.Clamp(limit, 1, 200)).ToListAsync(ct);
+        return orders.Select(Export).ToList();
+    }
+
+    public async Task<OrderExport?> GetForShopAsync(Guid shopId, Guid orderId, CancellationToken ct = default) =>
+        await db.Orders.AsNoTracking().FirstOrDefaultAsync(o => o.Id == orderId && o.ShopId == shopId, ct) is { } order ? Export(order) : null;
+
+    private static OrderExport Export(Domain.Order o) => new(
+        o.Id, o.OrderNo, o.Status, o.CustomerId, o.FulfillmentType,
+        o.DeliveryAddress?.HouseNo, o.DeliveryAddress?.Soi, o.DeliveryAddress?.Note, o.Note,
+        o.ScheduledFrom, o.ScheduledTo, o.Subtotal, o.Discount, o.Total, o.PaymentMethodType, o.PaymentStatus,
+        o.PlacedAt, o.AcceptedAt, o.CompletedAt,
+        o.Lines.Select(l => new OrderExportLine(l.ItemId, l.Name, l.Quantity, l.UnitPrice, l.LineTotal,
+            l.Options.Select(x => $"{x.Group}: {x.Name}").ToList(), l.Note, l.SlotStart)).ToList());
 }
 
 internal sealed class OrderingPersonalData(OrderingDbContext db) : IPersonalDataContributor

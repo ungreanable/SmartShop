@@ -42,7 +42,13 @@ public interface ICatalogService
     Task ReserveAsync(DbTransaction transaction, Guid orderId, IReadOnlyList<ReserveLine> lines, Guid actorId, CancellationToken ct = default);
 
     Task<ItemListingSnapshot?> GetListingSnapshotAsync(Guid itemId, CancellationToken ct = default);
+
+    /// <summary>All (non-deleted) items of a shop with current availability, for integrations.</summary>
+    Task<IReadOnlyList<ItemExport>> ListItemsAsync(Guid shopId, CancellationToken ct = default);
 }
+
+public sealed record ItemExport(Guid ItemId, string Name, string? Description, string? Category, decimal Price, ItemKind Kind, StockMode StockMode,
+    bool IsAvailable, bool IsSoldOut, int? Available);
 
 public sealed record ItemChanged(Guid PlantId, Guid ShopId, Guid ItemId, bool Deleted) : IntegrationEvent(PlantId);
 public sealed record ItemSoldOut(Guid PlantId, Guid ShopId, Guid ItemId) : IntegrationEvent(PlantId);

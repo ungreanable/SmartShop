@@ -42,6 +42,8 @@ public sealed class SmartShopFactory : WebApplicationFactory<Program>, IAsyncLif
         builder.UseSetting("RateLimiting:UserTokensPer10Seconds", "100000");
         builder.UseSetting("Payments:SlipVerifier:Url", "http://slip-verifier.test/verify");
         builder.UseSetting("Payments:SlipVerifier:AutoConfirm", "true");
+        builder.UseSetting("Integrations:Webhooks:AllowInsecure", "true");
+        builder.UseSetting("Integrations:Webhooks:AllowPrivateNetworks", "true");
 
         builder.ConfigureServices(services =>
         {
@@ -50,6 +52,7 @@ public sealed class SmartShopFactory : WebApplicationFactory<Program>, IAsyncLif
             // The slip verification plug-in talks to a fake service (only slips with a readable QR reach it).
             services.AddHttpClient(nameof(SmartShop.Modules.Payments.Services.ISlipVerifier))
                 .ConfigurePrimaryHttpMessageHandler(() => new FakeSlipVerifierHandler());
+            services.AddHttpClient("webhooks").ConfigurePrimaryHttpMessageHandler(() => new FakeWebhookReceiver());
         });
     }
 

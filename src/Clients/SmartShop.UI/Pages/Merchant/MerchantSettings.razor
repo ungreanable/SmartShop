@@ -104,6 +104,12 @@
             <MudExpansionPanel Text="@L["👥 สมาชิกร้าน", "👥 Shop team"]">
                 <MembersEditor ShopId="ShopId" MyRole="@(_s.Shop.MyRole ?? "Staff")" />
             </MudExpansionPanel>
+            @if (_s.Shop.MyRole == "Owner")
+            {
+                <MudExpansionPanel Text="@L["🔌 เชื่อมต่อระบบอื่น (API / Webhook)", "🔌 Integrations (API / webhooks)"]">
+                    <IntegrationsEditor ShopId="ShopId" />
+                </MudExpansionPanel>
+            }
         </MudExpansionPanels>
     }
 </div>

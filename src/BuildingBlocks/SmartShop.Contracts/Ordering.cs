@@ -1,3 +1,4 @@
+using SmartShop.Contracts.Payments;
 using SmartShop.Contracts.Shops;
 
 namespace SmartShop.Contracts.Ordering;
@@ -17,7 +18,21 @@ public sealed record OrderSummaryInfo(
 public interface IOrderDirectory
 {
     Task<OrderSummaryInfo?> GetAsync(Guid orderId, CancellationToken ct = default);
+
+    /// <summary>Orders of one shop for integrations (public API), newest first.</summary>
+    Task<IReadOnlyList<OrderExport>> ListForShopAsync(Guid shopId, DateTimeOffset? placedSince, OrderStatus? status, int limit, CancellationToken ct = default);
+
+    Task<OrderExport?> GetForShopAsync(Guid shopId, Guid orderId, CancellationToken ct = default);
 }
+
+public sealed record OrderExportLine(Guid ItemId, string Name, int Quantity, decimal UnitPrice, decimal LineTotal, IReadOnlyList<string> Options, string? Note, DateTimeOffset? SlotStart);
+
+public sealed record OrderExport(
+    Guid OrderId, string OrderNo, OrderStatus Status, Guid CustomerId, FulfillmentType FulfillmentType,
+    string? HouseNo, string? Soi, string? AddressNote, string? Note,
+    DateTimeOffset? ScheduledFrom, DateTimeOffset? ScheduledTo,
+    decimal Subtotal, decimal Discount, decimal Total, PaymentMethodType PaymentMethodType, PaymentStatus PaymentStatus,
+    DateTimeOffset PlacedAt, DateTimeOffset? AcceptedAt, DateTimeOffset? CompletedAt, IReadOnlyList<OrderExportLine> Lines);
 
 public sealed record OrderPlaced(
     Guid PlantId, Guid OrderId, string OrderNo, Guid ShopId, string ShopName, Guid CustomerId,

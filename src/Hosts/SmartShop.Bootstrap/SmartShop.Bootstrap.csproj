@@ -22,5 +22,6 @@
     <ProjectReference Include="..\..\Modules\SmartShop.Modules.Reviews\SmartShop.Modules.Reviews.csproj" />
     <ProjectReference Include="..\..\Modules\SmartShop.Modules.Promotions\SmartShop.Modules.Promotions.csproj" />
     <ProjectReference Include="..\..\Modules\SmartShop.Modules.Audit\SmartShop.Modules.Audit.csproj" />
+    <ProjectReference Include="..\..\Modules\SmartShop.Modules.Integrations\SmartShop.Modules.Integrations.csproj" />
   </ItemGroup>
 </Project>

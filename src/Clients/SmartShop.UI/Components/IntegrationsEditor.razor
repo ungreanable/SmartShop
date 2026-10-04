@@ -1,0 +1,169 @@
+@* Shop owner: API keys for the public API and webhook endpoints (POS, printers, spreadsheets, automation tools). *@
+@inject Api Api
+@inject Browser Browser
+@inject ISnackbar Snackbar
+@inject AppConfig Config
+
+<MudText Typo="Typo.body2" Class="ss-muted mb-2">
+    @L["สำหรับเชื่อมต่อเครื่องพิมพ์ใบสั่ง ระบบ POS หรือ Google Sheets ผ่าน API (ไม่จำเป็นสำหรับร้านทั่วไป)", "Connect order printers, POS or spreadsheets through the API (optional)."]
+</MudText>
+
+<MudText Typo="Typo.subtitle2" Style="font-weight:600">🔑 API keys</MudText>
+@if (_newSecret is not null)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-2">
+        @L["คัดลอกเก็บไว้ตอนนี้ จะไม่แสดงอีก", "Copy it now, it will not be shown again"]:
+        <code style="word-break:break-all">@_newSecret</code>
+        <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" OnClick="@(() => Browser.CopyAsync(_newSecret))" />
+    </MudAlert>
+}
+@foreach (var k in _keys)
+{
+    <div class="d-flex align-center gap-2 py-1">
+        <MudText Typo="Typo.body2" Style="flex:1">
+            <b>@k.Name</b> <code>ssk_@(k.Prefix)_…</code> <span class="ss-muted">@string.Join(", ", k.Scopes)</span>
+            @if (k.LastUsedAt is { } used) { <span class="ss-muted"> · @L["ใช้ล่าสุด", "last used"] @Fmt.DateTime(used)</span> }
+        </MudText>
+        @if (k.Revoked) { <MudChip T="string" Size="Size.Small">@L["ยกเลิกแล้ว", "Revoked"]</MudChip> }
+        else { <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Text" OnClick="@(() => RevokeAsync(k))">@L["ยกเลิก", "Revoke"]</MudButton> }
+    </div>
+}
+<div class="d-flex gap-2 align-center flex-wrap mt-1">
+    <MudTextField @bind-Value="_keyName" Label="@L["ชื่อ เช่น เครื่องพิมพ์หน้าร้าน", "Name, e.g. counter printer"]" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Style="min-width:200px" />
+    <MudCheckBox T="bool" @bind-Value="_scopeOrders" Label="orders:read" Dense="true" />
+    <MudCheckBox T="bool" @bind-Value="_scopeMenu" Label="menu:read" Dense="true" />
+    <MudButton Variant="Variant.Outlined" Size="Size.Small" Disabled="@(string.IsNullOrWhiteSpace(_keyName) || !(_scopeOrders || _scopeMenu))" OnClick="CreateKeyAsync">
+        @L["สร้าง key", "Create key"]
+    </MudButton>
+</div>
+<MudText Typo="Typo.caption" Class="ss-muted d-block">
+    @L["เรียกใช้", "Usage"]: <code>GET @(Config.ApiBaseUrl)api/public/v1/orders</code> + header <code>X-Api-Key</code>
+</MudText>
+
+<MudDivider Class="my-3" />
+<MudText Typo="Typo.subtitle2" Style="font-weight:600">🔔 Webhooks</MudText>
+@foreach (var w in _hooks)
+{
+    <MudPaper Outlined="true" Class="pa-2 my-1">
+        <div class="d-flex align-center gap-2">
+            <MudIcon Icon="@(w.Active ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.PauseCircle)" Color="@(w.Active ? Color.Success : Color.Warning)" Size="Size.Small" />
+            <MudText Typo="Typo.body2" Style="flex:1; word-break:break-all">@w.Url</MudText>
+            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => TestAsync(w))">@L["ทดสอบ", "Test"]</MudButton>
+            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => ToggleDeliveriesAsync(w))">@L["ประวัติ", "Log"]</MudButton>
+            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => DeleteHookAsync(w))">@L["ลบ", "Delete"]</MudButton>
+        </div>
+        <MudText Typo="Typo.caption" Class="ss-muted">@string.Join(", ", w.Events)</MudText>
+        @if (!w.Active && w.DisabledReason is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true">
+                @L["ปิดอัตโนมัติเพราะส่งไม่สำเร็จหลายครั้ง", "Disabled after repeated failures"]
+                <MudButton Size="Size.Small" OnClick="@(() => ReactivateAsync(w))">@L["เปิดใหม่", "Re-enable"]</MudButton>
+            </MudAlert>
+        }
+        <MudText Typo="Typo.caption" Class="ss-muted d-block">
+            Signing secret: <code>@(_revealed.Contains(w.Id) ? w.Secret : "whsec_••••••")</code>
+            <MudLink Typo="Typo.caption" OnClick="@(() => _revealed.Add(w.Id))">@L["แสดง", "show"]</MudLink>
+        </MudText>
+        @if (_deliveries.TryGetValue(w.Id, out var log))
+        {
+            @foreach (var d in log)
+            {
+                <MudText Typo="Typo.caption" Class="d-block">
+                    @(d.Status switch { "Delivered" => "✅", "Pending" => "⏳", "Failed" => "❌", _ => "⏭️" }) @Fmt.DateTime(d.CreatedAt) · @d.EventType
+                    @if (d.ResponseStatus is { } httpStatus) { <span> · HTTP @httpStatus</span> } @if (d.Error is not null) { <span class="ss-muted"> · @d.Error</span> }
+                </MudText>
+            }
+        }
+    </MudPaper>
+}
+<MudTextField @bind-Value="_hookUrl" Label="https://..." Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="mt-1" />
+<div class="d-flex flex-wrap">
+    @foreach (var e in AllEvents)
+    {
+        <MudCheckBox T="bool" Value="@_events.Contains(e)" ValueChanged="@(v => { if (v) _events.Add(e); else _events.Remove(e); })" Label="@e" Dense="true" Size="Size.Small" />
+    }
+</div>
+<MudButton Variant="Variant.Outlined" Size="Size.Small" Disabled="@(string.IsNullOrWhiteSpace(_hookUrl) || _events.Count == 0)" OnClick="CreateHookAsync">
+    @L["เพิ่ม webhook", "Add webhook"]
+</MudButton>
+
+@code {
+    private sealed record ApiKeyRow(Guid Id, string Name, string Prefix, List<string> Scopes, DateTimeOffset CreatedAt, DateTimeOffset? LastUsedAt, bool Revoked);
+    private sealed record CreatedKey(ApiKeyRow Key, string Secret);
+    private sealed record WebhookRow(Guid Id, string Url, List<string> Events, bool Active, int ConsecutiveFailures, string? DisabledReason, string Secret, DateTimeOffset CreatedAt);
+    private sealed record DeliveryRow(Guid Id, string EventType, string Status, int Attempts, int? ResponseStatus, string? Error, DateTimeOffset CreatedAt, DateTimeOffset? LastAttemptAt);
+
+    private static readonly string[] AllEvents =
+        ["order.placed", "order.accepted", "order.preparing", "order.ready", "order.delivered", "order.completed", "order.cancelled", "order.rejected", "order.expired", "payment.verified"];
+
+    [Parameter, EditorRequired] public Guid ShopId { get; set; }
+
+    private List<ApiKeyRow> _keys = [];
+    private List<WebhookRow> _hooks = [];
+    private readonly Dictionary<Guid, List<DeliveryRow>> _deliveries = [];
+    private readonly HashSet<Guid> _revealed = [];
+    private readonly HashSet<string> _events = ["order.placed"];
+    private string? _keyName, _hookUrl, _newSecret;
+    private bool _scopeOrders = true, _scopeMenu;
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _keys = await Api.Get<List<ApiKeyRow>>($"api/merchant/shops/{ShopId}/api-keys", silent: true) ?? [];
+        _hooks = await Api.Get<List<WebhookRow>>($"api/merchant/shops/{ShopId}/webhooks", silent: true) ?? [];
+    }
+
+    private async Task CreateKeyAsync()
+    {
+        var scopes = new List<string>();
+        if (_scopeOrders) scopes.Add("orders:read");
+        if (_scopeMenu) scopes.Add("menu:read");
+        var created = await Api.Post<CreatedKey>($"api/merchant/shops/{ShopId}/api-keys", new { name = _keyName!.Trim(), scopes });
+        if (created is null) return;
+        _newSecret = created.Secret;
+        _keyName = null;
+        await LoadAsync();
+    }
+
+    private async Task RevokeAsync(ApiKeyRow k)
+    {
+        if (await Api.Delete($"api/merchant/api-keys/{k.Id}")) await LoadAsync();
+    }
+
+    private async Task CreateHookAsync()
+    {
+        if (await Api.Post($"api/merchant/shops/{ShopId}/webhooks", new { url = _hookUrl!.Trim(), events = _events.ToList() }))
+        {
+            _hookUrl = null;
+            await LoadAsync();
+        }
+    }
+
+    private async Task TestAsync(WebhookRow w)
+    {
+        var result = await Api.Post<DeliveryRow>($"api/merchant/webhooks/{w.Id}/test");
+        if (result is null) return;
+        Snackbar.Add(result.Status == "Delivered" ? L["ส่งทดสอบสำเร็จ", "Test delivered"] : L[$"ส่งไม่สำเร็จ: {result.Error}", $"Failed: {result.Error}"],
+            result.Status == "Delivered" ? Severity.Success : Severity.Error);
+        if (_deliveries.ContainsKey(w.Id)) await LoadDeliveriesAsync(w.Id);
+    }
+
+    private async Task ToggleDeliveriesAsync(WebhookRow w)
+    {
+        if (!_deliveries.Remove(w.Id)) await LoadDeliveriesAsync(w.Id);
+    }
+
+    private async Task LoadDeliveriesAsync(Guid id) =>
+        _deliveries[id] = await Api.Get<List<DeliveryRow>>($"api/merchant/webhooks/{id}/deliveries") ?? [];
+
+    private async Task ReactivateAsync(WebhookRow w)
+    {
+        if (await Api.Put($"api/merchant/webhooks/{w.Id}", new { url = w.Url, events = w.Events, active = true })) await LoadAsync();
+    }
+
+    private async Task DeleteHookAsync(WebhookRow w)
+    {
+        if (await Api.Delete($"api/merchant/webhooks/{w.Id}")) await LoadAsync();
+    }
+}

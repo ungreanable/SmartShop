@@ -125,4 +125,19 @@ internal sealed class CatalogService(CatalogDbContext db, TimeProvider clock) : 
             item.ImageIds.FirstOrDefault() is var img && img != Guid.Empty ? img : null,
             item.DeletedAt is null && item.IsAvailable, soldOut);
     }
+
+    public async Task<IReadOnlyList<ItemExport>> ListItemsAsync(Guid shopId, CancellationToken ct = default)
+    {
+        var items = await db.Items.AsNoTracking().Where(i => i.ShopId == shopId && i.DeletedAt == null).OrderBy(i => i.Name).ToListAsync(ct);
+        var categories = await db.Categories.AsNoTracking().Where(c => c.ShopId == shopId).ToDictionaryAsync(c => c.Id, c => c.Name, ct);
+        var counted = items.Where(i => i.IsCounted).Select(i => i.Id).ToList();
+        var stock = await db.Inventories.AsNoTracking().Where(s => counted.Contains(s.ItemId)).ToDictionaryAsync(s => s.ItemId, ct);
+        var now = clock.GetUtcNow();
+        return items.Select(i =>
+        {
+            int? available = stock.TryGetValue(i.Id, out var s) ? s.Available : null;
+            return new ItemExport(i.Id, i.Name, i.Description, i.CategoryId is { } c ? categories.GetValueOrDefault(c) : null, i.Price, i.Kind, i.StockMode,
+                i.IsAvailable, i.UnavailableReason(now, available) == "sold_out", available);
+        }).ToList();
+    }
 }

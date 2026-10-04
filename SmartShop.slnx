@@ -31,6 +31,7 @@
     <Project Path="src/Modules/SmartShop.Modules.Reviews/SmartShop.Modules.Reviews.csproj" />
     <Project Path="src/Modules/SmartShop.Modules.Promotions/SmartShop.Modules.Promotions.csproj" />
     <Project Path="src/Modules/SmartShop.Modules.Audit/SmartShop.Modules.Audit.csproj" />
+    <Project Path="src/Modules/SmartShop.Modules.Integrations/SmartShop.Modules.Integrations.csproj" />
     <Project Path="src/Modules/SmartShop.Modules.Shops/SmartShop.Modules.Shops.csproj" />
   </Folder>
   <Folder Name="/tests/">
