@@ -51,6 +51,7 @@ dotnet run --project src/Clients/SmartShop.Web --launch-profile http    # :5100 
 5. [Roadmap](docs/05-roadmap.md): สถานะแต่ละ Phase และ Decisions Log
 6. [Public API & Webhooks](docs/06-public-api.md): เชื่อมต่อ POS / เครื่องพิมพ์ / ระบบอื่น
 7. [Installation](docs/07-installation.md): สิ่งที่ต้องเตรียม และวิธีติดตั้งแต่ละแบบ
+8. [Deploy หลัง Cloudflare](docs/08-cloudflare.md): Cloud (เช่น Hetzner) + Cloudflare + Nginx ที่มีอยู่แล้ว
 
 ## Tech Stack (สรุป)
 

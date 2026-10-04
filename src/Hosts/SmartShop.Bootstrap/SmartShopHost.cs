@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -75,6 +76,19 @@ public static class SmartShopHost
 
     public static WebApplication MapSmartShop(this WebApplication app)
     {
+        // Behind Caddy (and Cloudflare) the TCP peer is the proxy. Take the client IP from X-Forwarded-For, but only
+        // when the request comes from a private network (the reverse proxy): the API port is never published.
+        var forwarded = new ForwardedHeadersOptions
+        {
+            ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+            ForwardLimit = null,
+        };
+        forwarded.KnownIPNetworks.Clear();
+        forwarded.KnownProxies.Clear();
+        foreach (var network in new[] { "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "::1/128", "fc00::/7" })
+            forwarded.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(network));
+        app.UseForwardedHeaders(forwarded);
+
         app.UseExceptionHandler();
         app.UseStatusCodePages();
         app.UseCors();

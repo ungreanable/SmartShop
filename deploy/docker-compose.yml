@@ -42,10 +42,15 @@ services:
     restart: unless-stopped
     ports: ["80:80", "443:443", "443:443/udp"]
     environment:
-      DOMAIN: "${DOMAIN}"
+      # Site address: the domain (automatic HTTPS) or http://<domain> behind a Cloudflare Tunnel.
+      CADDY_SITE: "${CADDY_SITE:-${DOMAIN}}"
       ADMIN_EMAIL: "${ADMIN_EMAIL}"
+      TRUSTED_PROXIES: "${TRUSTED_PROXIES:-private_ranges}"
+      # e.g. "tls /etc/caddy/certs/origin.pem /etc/caddy/certs/origin.key" for a Cloudflare Origin Certificate
+      TLS_DIRECTIVE: "${TLS_DIRECTIVE:-}"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/etc/caddy/certs:ro
       - caddy-data:/data
       - caddy-config:/config
     depends_on:

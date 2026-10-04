@@ -1,19 +1,31 @@
 {
 	email {$ADMIN_EMAIL}
+
+	servers {
+		# Who may tell us the real client IP. Default: private networks (cloudflared / a local load balancer).
+		# Behind Cloudflare's proxy (orange cloud) set TRUSTED_PROXIES to Cloudflare's IP ranges (see docs/08-cloudflare.md).
+		trusted_proxies static {$TRUSTED_PROXIES:private_ranges}
+		client_ip_headers CF-Connecting-IP X-Forwarded-For
+	}
 }
 
-{$DOMAIN} {
+{$CADDY_SITE} {
+	{$TLS_DIRECTIVE:}
 	encode zstd gzip
 
 	# API, SignalR hub and health endpoints go straight to the API.
 	@api path /api/* /hubs/* /health/*
 	handle @api {
-		reverse_proxy api:8080
+		reverse_proxy api:8080 {
+			header_up X-Forwarded-For {client_ip}
+		}
 	}
 
 	# Everything else is the Blazor web app (PWA / LIFF).
 	handle {
-		reverse_proxy web:8080
+		reverse_proxy web:8080 {
+			header_up X-Forwarded-For {client_ip}
+		}
 	}
 
 	header {

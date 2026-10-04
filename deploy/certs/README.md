@@ -1,0 +1,1 @@
+# Cloudflare Origin Certificate (origin.pem / origin.key) goes here. Never commit the key.

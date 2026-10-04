@@ -224,6 +224,8 @@ docker compose ps        # api, worker ต้องขึ้น (healthy), migra
 
 ## 5. แบบ C: ติดตั้งบน Server จริง
 
+> Server มี Nginx อยู่แล้ว หรือ Domain อยู่บน Cloudflare: ดู **[08-cloudflare.md](08-cloudflare.md)** แทนข้อนี้
+
 ### 5.1 เตรียม Server
 ตั้ง DNS A record ของ Domain ให้ชี้ IP ของ VPS ให้เรียบร้อยก่อน (ตรวจด้วย `nslookup shop.example.com`) ไม่อย่างนั้น Caddy ขอ HTTPS ไม่ได้
 

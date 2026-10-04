@@ -1,0 +1,20 @@
+# Cloudflare Tunnel: the server needs no open ports and no certificate; Cloudflare terminates HTTPS.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.cloudflare.yml up -d
+#
+# In .env: CLOUDFLARE_TUNNEL_TOKEN=<token> and CADDY_SITE=http://<your domain>
+# In Cloudflare Zero Trust → Networks → Tunnels → Public hostname: <your domain> → Service: http://caddy:80
+# See docs/08-cloudflare.md
+
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:2025.9.1
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: "${CLOUDFLARE_TUNNEL_TOKEN}"
+    depends_on: [caddy]
+
+  caddy:
+    # Only reachable through the tunnel.
+    ports: !reset []
