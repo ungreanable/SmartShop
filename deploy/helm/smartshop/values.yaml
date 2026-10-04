@@ -3,7 +3,7 @@
 
 image:
   registry: ghcr.io
-  owner: smartshop-village
+  owner: ungreanable
   # Defaults to the chart appVersion.
   tag: ""
   pullPolicy: IfNotPresent

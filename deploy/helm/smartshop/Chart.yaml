@@ -4,6 +4,6 @@ description: SmartShop - village shop ordering (web, API, worker). PostgreSQL, V
 type: application
 version: 0.1.0
 appVersion: "latest"
-home: https://github.com/smartshop-village/smartshop
+home: https://github.com/ungreanable/SmartShop
 license: MIT
 keywords: [ordering, line, community, blazor, dotnet]

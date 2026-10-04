@@ -74,7 +74,7 @@ docker version          # ต้องเห็นทั้ง Client และ 
 ### 2.1 ติดตั้ง
 
 ```bash
-git clone <URL ของ Repository> SmartShop
+git clone https://github.com/ungreanable/SmartShop.git SmartShop
 cd SmartShop
 dotnet tool restore
 ```
@@ -243,7 +243,7 @@ docker compose version
 
 ```bash
 sudo apt-get install -y dotnet-sdk-10.0      # หรือดูวิธีติดตั้งที่ learn.microsoft.com/dotnet/core/install/linux
-git clone <URL ของ Repository> SmartShop && cd SmartShop
+git clone https://github.com/ungreanable/SmartShop.git SmartShop && cd SmartShop
 bash scripts/build-images.sh                  # IMAGE_PREFIX=smartshop-local
 ```
 

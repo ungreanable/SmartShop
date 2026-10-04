@@ -67,7 +67,27 @@
 
 > ถ้าเว็บอื่นบน Server ไม่ได้อยู่หลัง Cloudflare และต้องเปิด 443 ให้ทุกคน ก็ยังใช้งานได้ ผลกระทบของการปลอม Header จำกัดอยู่ที่การจำกัดจำนวนครั้ง (Rate limit) เท่านั้น
 
-## 3. Build Image แล้วส่งขึ้น Server (จากเครื่อง Windows นี้)
+## 3. เตรียม Image
+
+### ทางหลัก: ใช้ Image จาก GitHub (ง่ายที่สุด)
+
+ทุกครั้งที่ Push เข้า `main` ของ [github.com/ungreanable/SmartShop](https://github.com/ungreanable/SmartShop) Workflow **Containers** จะ Build Image ทั้ง x64 และ ARM ไปที่ `ghcr.io/ungreanable/smartshop-{api,worker,web}`
+- Push เข้า `main` ได้ Tag `edge`
+- สร้าง Release/Tag `v1.2.3` ได้ Tag `1.2.3` และ `latest`
+
+บน Server ต้องมีแค่โฟลเดอร์ `deploy/`:
+
+```bash
+sudo mkdir -p /opt/smartshop && sudo chown $USER /opt/smartshop && cd /opt/smartshop
+git clone --depth 1 https://github.com/ungreanable/SmartShop.git src && cp -r src/deploy . && cd deploy
+```
+
+ใน `.env` ตั้ง `IMAGE_PREFIX=ghcr.io/ungreanable` และ `TAG=edge` (หรือเลขเวอร์ชัน) แล้วรัน `docker compose pull`
+
+> Package บน GHCR ที่สร้างครั้งแรกอาจเป็น Private ถ้า `docker compose pull` แจ้ง `denied` ให้ไปที่ GitHub → Profile → **Packages** → แต่ละ Package → **Package settings** → Change visibility → **Public**
+> หรือบน Server รัน `docker login ghcr.io` ด้วย Token ที่มีสิทธิ์ `read:packages`
+
+### ทางเลือก: Build บนเครื่อง Windows แล้วส่งขึ้น Server
 
 ใช้ **Git Bash** ที่โฟลเดอร์โปรเจกต์:
 
@@ -108,7 +128,7 @@ nano .env
 | `DOMAIN` | `shop.ungrean.com` |
 | `CADDY_SITE` | `:80` (Caddy ไม่ทำ HTTPS เพราะ Nginx ทำแล้ว) |
 | `SMARTSHOP_HTTP_PORT` | `8088` (ถ้าชนกับโปรแกรมอื่นบน Server ให้เปลี่ยน และแก้ใน Nginx ด้วย) |
-| `IMAGE_PREFIX` / `TAG` | `smartshop-local` / `latest` |
+| `IMAGE_PREFIX` / `TAG` | `ghcr.io/ungreanable` / `edge` (หรือ `smartshop-local` / `latest` ถ้า Build เอง) |
 | `ADMIN_EMAIL` | อีเมลผู้ดูแล |
 | `POSTGRES_PASSWORD`, `RABBITMQ_PASSWORD`, `JWT_SIGNING_KEY`, `MEDIA_SIGNING_KEY`, `STORAGE_SECRET_KEY` | ค่าสุ่มจาก `openssl rand -hex 32` คนละค่ากัน |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | รัน `docker run --rm smartshop-local/smartshop-api:latest vapid` |
@@ -182,11 +202,13 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ## 9. อัปเดตเวอร์ชันและสำรองข้อมูล
 
-อัปเดต: ทำข้อ 3 ใหม่ (Build → save → scp → load) แล้ว:
+อัปเดต (Image จาก GitHub):
 
 ```bash
-cd /opt/smartshop/deploy && docker compose up -d       # migrator อัปเดตฐานข้อมูลให้อัตโนมัติ
+cd /opt/smartshop/deploy && docker compose pull && docker compose up -d       # migrator อัปเดตฐานข้อมูลให้อัตโนมัติ
 ```
+
+ถ้า Build เอง ให้ทำข้อ 3 ทางเลือกใหม่ (Build → save → scp → load) แล้ว `docker compose up -d`
 
 สำรองข้อมูล (ควรตั้ง cron ทุกวัน และเก็บไว้นอก Server ด้วย):
 
