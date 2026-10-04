@@ -85,6 +85,8 @@ dotnet tool restore
 docker compose -f deploy/docker-compose.dev.yml up -d
 ```
 
+> ⚠️ คำสั่งนี้เปิด **เฉพาะบริการพื้นฐาน** เท่านั้น ยังเข้า http://localhost:5100 ไม่ได้จนกว่าจะรันข้อ 2.3 ครบทั้ง 3 ตัว
+
 จะได้ PostgreSQL (`5432`, user/pass `postgres`/`postgres`), Valkey (`6379`), RabbitMQ (`5672`, หน้าจัดการ http://localhost:15672 `guest`/`guest`) และ SeaweedFS S3 (`8333`)
 
 ### 2.3 รันระบบ (เปิด Terminal 3 หน้าต่าง)
