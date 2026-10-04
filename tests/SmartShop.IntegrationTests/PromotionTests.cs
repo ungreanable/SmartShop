@@ -79,6 +79,16 @@ public class PromotionTests(SmartShopFactory factory)
     }
 
     [Fact]
+    public async Task Preview_without_code_or_promotions_returns_no_content()
+    {
+        // The cart page previews the automatic discount on load; "nothing applies" must not be an empty 200 body.
+        var c = await ShopAsync();
+        var customer = await factory.JoinAsync(c.Plant, c.Admin);
+        var response = await customer.PostRawAsync($"/api/shops/{c.ShopId}/promotions/preview", new { code = (string?)null, subtotal = 100 });
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
     public async Task Best_automatic_promotion_applies_without_code_and_codes_are_unique_per_shop()
     {
         var c = await ShopAsync();

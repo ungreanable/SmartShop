@@ -61,7 +61,9 @@ public sealed class Api(HttpClient http, Session session, PlantContextAccessor p
     {
         using var response = await SendRaw(method, url, body, silent, idempotencyKey);
         if (response is null || response.StatusCode == HttpStatusCode.NoContent) return default;
-        return await response.Content.ReadFromJsonAsync<T>(ApiJson.Options);
+        // An empty 200 body means "nothing" too; never let it crash the page.
+        var json = await response.Content.ReadAsStringAsync();
+        return string.IsNullOrWhiteSpace(json) ? default : System.Text.Json.JsonSerializer.Deserialize<T>(json, ApiJson.Options);
     }
 
     public async Task<UploadResult?> UploadAsync(Stream content, string fileName, string contentType, string purpose)

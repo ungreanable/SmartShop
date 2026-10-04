@@ -44,7 +44,7 @@ public sealed class PromotionsModule : IModule
             var result = await promotions.EvaluateAsync(shopId, user.Id, req.Code, req.Subtotal, clock.GetUtcNow(), ct);
             if (result is null && !string.IsNullOrWhiteSpace(req.Code))
                 throw new DomainException("coupon_invalid", "This coupon cannot be used for this order.");
-            return Results.Json(result);
+            return result is null ? Results.NoContent() : Results.Ok(result);
         });
 
         // Automatic promotions shown on the shop page (coupon codes stay private to whoever the shop shares them with).
