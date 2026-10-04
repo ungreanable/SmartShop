@@ -63,3 +63,4 @@ jobs:
           "-p:ContainerRepository=${{ github.repository_owner }}/$(basename ${{ matrix.project }} .csproj | tr '[:upper:]' '[:lower:]' | sed 's/\./-/g')"
           -p:ContainerImageTags='"${{ steps.tags.outputs.tags }}"'
           -p:ContainerRuntimeIdentifiers='"linux-x64;linux-arm64"'
+          -p:RuntimeIdentifiers='"linux-x64;linux-arm64"'
