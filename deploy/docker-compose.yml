@@ -4,7 +4,13 @@
 # Only Caddy is exposed to the internet; everything else stays on the internal network.
 name: smartshop
 
+# .NET memory: workstation GC + conserve memory suits small servers (server GC keeps a heap per core).
+x-dotnet-env: &dotnet-env
+  DOTNET_gcServer: "${DOTNET_GC_SERVER:-0}"
+  DOTNET_GCConserveMemory: "${DOTNET_GC_CONSERVE_MEMORY:-5}"
+
 x-app-env: &app-env
+  <<: *dotnet-env
   ASPNETCORE_ENVIRONMENT: "${APP_ENVIRONMENT:-Production}"
   Auth__DevLogin__Enabled: "${DEV_LOGIN_ENABLED:-false}"
   ConnectionStrings__smartshop: "Host=postgres;Database=smartshop;Username=smartshop;Password=${POSTGRES_PASSWORD}"
@@ -61,6 +67,7 @@ services:
     image: ${IMAGE_PREFIX:-ghcr.io/ungreanable}/smartshop-web:${TAG:-latest}
     restart: unless-stopped
     environment:
+      <<: *dotnet-env
       ASPNETCORE_ENVIRONMENT: "${APP_ENVIRONMENT:-Production}"
       Auth__DevLogin__Enabled: "${DEV_LOGIN_ENABLED:-false}"
       ReverseProxy__Clusters__api__Destinations__api__Address: "http://api:8080"

@@ -161,6 +161,8 @@ DEV_LOGIN_ENABLED=false
 
 ## 6. เปิด SmartShop
 
+> **Server เล็ก (RAM 2 GB):** ใช้โปรไฟล์ `docker-compose.small.yml` เพิ่ม (ดูข้อ 9) ใช้ RAM ราว **335 MB** แทน 540 MB
+
 ```bash
 cd /opt/smartshop/deploy
 docker compose -f docker-compose.yml -f docker-compose.behind-proxy.yml up -d
@@ -200,7 +202,45 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ผ่านการทดสอบสาย Nginx → Caddy → API ด้วย Docker แล้ว: หน้าเว็บ, API, WebSocket (`101 Switching Protocols`) และ Rate limit แยกตาม IP จริงของแต่ละคน
 
-## 9. อัปเดตเวอร์ชันและสำรองข้อมูล
+## 9. ลดการใช้ทรัพยากร (Server เล็ก)
+
+วัดจริงด้วยการใช้งานเบา ๆ (Login + เปิดหน้า + แจ้งเตือน):
+
+| โปรไฟล์ | Container | RAM รวม |
+|---|---|---|
+| ปกติ | api, worker, web, rabbitmq, postgres, seaweedfs, caddy, valkey | ~540 MB |
+| **เล็ก** (`docker-compose.small.yml`) | api (ทำงานเบื้องหลังเอง), web, postgres, seaweedfs, caddy, valkey | **~335 MB** |
+
+โปรไฟล์เล็กทำอะไร:
+- **ไม่มี RabbitMQ และ Worker:** API รันแบบ `Standalone` จัดการ Event และงานตั้งเวลาในตัว โดยคิวงานเก็บใน PostgreSQL จึงไม่หายตอนรีสตาร์ต ตัดได้ ~240 MB
+- ลด Buffer ของ PostgreSQL และ Valkey ให้พอดีกับไม่กี่หมู่บ้าน
+- จำกัด RAM ต่อ Container (`mem_limit`) ไม่ให้ตัวใดตัวหนึ่งกินจนเครื่องค้าง
+- ทุกโปรไฟล์ใช้ .NET แบบ Workstation GC + Conserve memory อยู่แล้ว (ตั้งใน `docker-compose.yml`)
+
+เปิดใช้ (ใส่ใน `.env` ครั้งเดียว):
+
+```ini
+COMPOSE_FILE=docker-compose.yml:docker-compose.behind-proxy.yml:docker-compose.small.yml
+```
+
+```bash
+docker compose up -d
+docker compose --profile full rm -sf worker rabbitmq     # ปิด Worker/RabbitMQ ตัวเดิม (ครั้งแรกที่เปลี่ยนโปรไฟล์)
+docker volume rm smartshop_rabbitmq-data                 # ไม่บังคับ: คืนพื้นที่ดิสก์
+```
+
+กลับไปโปรไฟล์ปกติ (เช่น ขยายหลายเครื่อง): เอา `:docker-compose.small.yml` ออกจาก `COMPOSE_FILE` แล้ว `docker compose up -d` สลับไปมาได้ปลอดภัย
+
+**แนะนำเพิ่มบน Server 2 GB:** สร้าง Swap 2 GB ไว้กันเครื่องค้างตอนหน่วยความจำพุ่ง (เช่น ตอน `docker compose pull`)
+
+```bash
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+
+ดูการใช้ RAM จริง: `docker stats --no-stream`
+
+## 10. อัปเดตเวอร์ชันและสำรองข้อมูล
 
 อัปเดต (Image จาก GitHub):
 

@@ -1,0 +1,35 @@
+# Small server profile (e.g. 1-2 vCPU / 2 GB RAM): one app process instead of api + worker, no RabbitMQ.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.behind-proxy.yml -f docker-compose.small.yml up -d
+#   (or add it to COMPOSE_FILE in .env, separated by ":")
+#
+# The API runs in "Standalone" messaging mode: integration events and scheduled jobs are handled in-process
+# through durable queues stored in PostgreSQL (nothing is lost on restart). Use the full profile again when you
+# need to scale out to several servers. Switching back and forth is safe.
+
+services:
+  api:
+    environment:
+      Messaging__Role: Standalone
+    depends_on: !override
+      migrator: { condition: service_completed_successfully }
+      valkey: { condition: service_healthy }
+    mem_limit: 384m
+
+  web:
+    mem_limit: 128m
+
+  postgres:
+    # Fewer connections and smaller buffers are plenty for a few villages.
+    command: ["postgres", "-c", "max_connections=40", "-c", "shared_buffers=64MB", "-c", "work_mem=4MB"]
+    mem_limit: 256m
+
+  valkey:
+    command: ["valkey-server", "--save", "60", "1", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]
+    mem_limit: 96m
+
+  # Not needed in this profile.
+  worker:
+    profiles: ["full"]
+  rabbitmq:
+    profiles: ["full"]
