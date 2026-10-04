@@ -1,7 +1,7 @@
 /* SmartShop: mobile-first, delivery-app style. */
 :root {
   --ss-max: 720px;
-  --ss-bottom-nav: 64px;
+  --ss-bottom-nav: 70px;
   --ss-radius: 14px;
 }
 
@@ -27,7 +27,7 @@ body { overscroll-behavior-y: contain; }
 .ss-bottom-nav .ss-nav-inner { display: flex; width: 100%; max-width: var(--ss-max); }
 .ss-bottom-nav a {
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-  font-size: 0.72rem; color: var(--mud-palette-text-secondary); text-decoration: none;
+  font-size: 0.875rem; color: var(--mud-palette-text-secondary); text-decoration: none;
 }
 .ss-bottom-nav a.active { color: var(--mud-palette-primary); font-weight: 600; }
 
@@ -62,7 +62,7 @@ body { overscroll-behavior-y: contain; }
 /* Order status timeline */
 .ss-steps { display: flex; justify-content: space-between; position: relative; margin: 12px 0 8px; }
 .ss-steps::before { content: ""; position: absolute; top: 11px; left: 8%; right: 8%; height: 3px; background: var(--mud-palette-lines-default); }
-.ss-step { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; width: 25%; font-size: 0.72rem; text-align: center; }
+.ss-step { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; width: 25%; font-size: 0.875rem; text-align: center; }
 .ss-step .dot { width: 24px; height: 24px; border-radius: 50%; background: var(--mud-palette-lines-default); display: flex; align-items: center; justify-content: center; color: #fff; }
 .ss-step.done .dot { background: var(--mud-palette-primary); }
 .ss-step.current .dot { box-shadow: 0 0 0 5px rgba(0, 168, 81, 0.2); }
@@ -81,3 +81,25 @@ body { overscroll-behavior-y: contain; }
 .ss-center { display: flex; align-items: center; justify-content: center; min-height: 60vh; flex-direction: column; gap: 12px; text-align: center; }
 .ss-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 @media (max-width: 380px) { .ss-shop-card .ss-thumb { width: 76px; height: 76px; } }
+
+/* Larger, easier text and touch targets */
+.mud-input, .mud-input-slot, .mud-select-input, .mud-list-item-text p { font-size: 1.0625rem !important; }
+.mud-input-label { font-size: 1rem !important; }
+.mud-input-helper-text { font-size: 0.9375rem !important; }
+.mud-chip { font-size: 0.9375rem; }
+.mud-chip.mud-chip-size-small { font-size: 0.875rem; }
+.mud-snackbar { font-size: 1rem; }
+.ss-bottom-nav .mud-icon-root { font-size: 1.75rem; }
+
+/* Opening hours editor (phone-first) */
+.ss-hours-day { padding: 10px 0; border-bottom: 1px solid var(--mud-palette-lines-default); }
+.ss-hours-slot { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.ss-hours-slot .ss-time-field { flex: 1 1 0; min-width: 0; }
+.ss-time-field .mud-select-input, .ss-time-field input { font-variant-numeric: tabular-nums; }
+
+/* Customer menu: "+" sits on the picture corner, or alone (vertically centred) when there is no picture */
+.ss-item-media { position: relative; flex: none; }
+.ss-item-media .ss-item-add { position: absolute; right: -6px; bottom: -6px; }
+.ss-item-add-only { flex: none; display: flex; align-items: center; }
+.ss-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; color: var(--mud-palette-action-default); }
+.ss-icon-btn:hover { background: var(--mud-palette-action-default-hover); }

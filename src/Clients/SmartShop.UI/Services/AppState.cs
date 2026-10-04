@@ -103,11 +103,24 @@ public static class UiSetup
         },
         Typography = new Typography
         {
+            // Thai script needs more room than Latin; sizes are deliberately larger than Material defaults
+            // so the app stays comfortable for older villagers on small phones.
             Default = new DefaultTypography
             {
                 FontFamily = ["IBM Plex Sans Thai", "Noto Sans Thai", "system-ui", "sans-serif"],
-                FontSize = "0.95rem",
+                FontSize = "1.0625rem",
+                LineHeight = "1.6",
             },
+            H4 = new H4Typography { FontSize = "2rem", FontWeight = "700", LineHeight = "1.3" },
+            H5 = new H5Typography { FontSize = "1.625rem", FontWeight = "700", LineHeight = "1.35" },
+            H6 = new H6Typography { FontSize = "1.3125rem", FontWeight = "600", LineHeight = "1.4" },
+            Subtitle1 = new Subtitle1Typography { FontSize = "1.125rem", LineHeight = "1.5" },
+            Subtitle2 = new Subtitle2Typography { FontSize = "1.0625rem", FontWeight = "600", LineHeight = "1.5" },
+            Body1 = new Body1Typography { FontSize = "1.0625rem", LineHeight = "1.6" },
+            Body2 = new Body2Typography { FontSize = "1rem", LineHeight = "1.55" },
+            Button = new ButtonTypography { FontSize = "1rem", FontWeight = "600", LineHeight = "1.5", TextTransform = "none" },
+            Caption = new CaptionTypography { FontSize = "0.9375rem", LineHeight = "1.5" },
+            Overline = new OverlineTypography { FontSize = "0.875rem", LineHeight = "1.5" },
         },
         LayoutProperties = new LayoutProperties { DefaultBorderRadius = "12px" },
     };

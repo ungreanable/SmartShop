@@ -57,7 +57,7 @@
                 case "Daily":
                     <div class="ss-grid-2">
                         <MudNumericField T="int?" @bind-Value="_dailyQuota" Label="@L["จำนวนต่อวัน", "Per day"]" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                        <MudTimePicker @bind-Time="_resetTime" Label="@L["รีเซ็ตเวลา", "Reset at"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                        <TimeField @bind-Value="_resetTime" Label="@L["รีเซ็ตเวลา", "Reset at"]" />
                     </div>
                     <MudNumericField T="int?" @bind-Value="_lowStock" Label="@L["แจ้งเตือนเมื่อเหลือน้อยกว่า", "Warn when below"]" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" />
                     break;
@@ -84,8 +84,8 @@
                                        Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:180px" ToStringFunc="@(d => OpeningHoursView.DayName(d, L))">
                                 @foreach (var d in AllDays) { <MudSelectItem Value="d">@OpeningHoursView.DayName(d, L)</MudSelectItem> }
                             </MudSelect>
-                            <MudTimePicker @bind-Time="w.From" Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:110px" />
-                            <MudTimePicker @bind-Time="w.To" Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:110px" />
+                            <TimeField @bind-Value="w.From" Label="@L["ตั้งแต่", "From"]" />
+                            <TimeField @bind-Value="w.To" Label="@L["ถึง", "To"]" />
                             <MudIconButton Icon="@Icons.Material.Filled.Delete" OnClick="@(() => _windows.Remove(w))" />
                         </div>
                     }

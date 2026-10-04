@@ -1,30 +1,33 @@
-@* Weekly opening hours: several slots per day (e.g. 06:00-09:00 and 16:00-19:00). *@
+@* Weekly opening hours: several slots per day (e.g. 06:00-09:00 and 16:00-19:00). Phone-first: one day per block. *@
 @inject Api Api
 @inject ISnackbar Snackbar
 
 @foreach (var day in Days)
 {
-    <div class="d-flex align-start gap-2 py-1" style="border-bottom:1px solid var(--mud-palette-lines-default)">
-        <MudText Style="width:80px; padding-top:10px">@OpeningHoursView.DayName(day, L)</MudText>
-        <div style="flex:1">
-            @foreach (var slot in _slots.Where(s => s.Day == day).ToList())
-            {
-                <div class="d-flex gap-1 align-center">
-                    <MudTimePicker @bind-Time="slot.Open" Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:105px" />
-                    <span>–</span>
-                    <MudTimePicker @bind-Time="slot.Close" Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:105px" />
-                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="@(() => _slots.Remove(slot))" />
-                </div>
-            }
-            @if (!_slots.Any(s => s.Day == day)) { <MudText Typo="Typo.caption" Class="ss-muted" Style="padding-top:10px; display:inline-block">@L["ปิด", "Closed"]</MudText> }
+    var slots = _slots.Where(s => s.Day == day).ToList();
+    <div class="ss-hours-day">
+        <div class="d-flex align-center">
+            <MudText Typo="Typo.subtitle1" Style="font-weight:600; flex:1">@OpeningHoursView.DayName(day, L)</MudText>
+            @if (slots.Count == 0) { <MudText Typo="Typo.body2" Class="ss-muted mr-2">@L["ปิด", "Closed"]</MudText> }
+            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => Add(day))">
+                @L["เพิ่มช่วง", "Add"]
+            </MudButton>
         </div>
-        <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small" OnClick="@(() => Add(day))" />
+        @foreach (var slot in slots)
+        {
+            <div class="ss-hours-slot">
+                <TimeField @bind-Value="slot.Open" Label="@L["เปิด", "Open"]" />
+                <span class="ss-muted">–</span>
+                <TimeField @bind-Value="slot.Close" Label="@L["ปิด", "Close"]" />
+                <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error" OnClick="@(() => _slots.Remove(slot))" aria-label="@L["ลบช่วงเวลา", "Remove"]" />
+            </div>
+        }
     </div>
 }
-<div class="d-flex gap-2 mt-2">
-    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="CopyMondayToWeekdays">@L["ใช้เวลาวันจันทร์กับ จ-ศ", "Copy Monday to weekdays"]</MudButton>
+<div class="d-flex flex-wrap gap-2 mt-3 align-center">
+    <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="CopyMondayToWeekdays">@L["ใช้เวลาวันจันทร์กับ จ-ศ", "Copy Monday to weekdays"]</MudButton>
     <MudSpacer />
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="SaveAsync">@L["บันทึก", "Save"]</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync">@L["บันทึก", "Save"]</MudButton>
 </div>
 
 @code {

@@ -1,0 +1,34 @@
+@* 24-hour time chooser: a dropdown in 15-minute steps. No typing, no clock dial, and it never shows AM/PM
+   (a native <input type="time"> follows the phone's language and may). Values that are not on a 15-minute
+   step (e.g. saved earlier) are kept and shown too. *@
+
+<MudSelect T="TimeSpan?" Value="Value" ValueChanged="OnChangedAsync" Label="@Label" Variant="Variant.Outlined" Margin="Margin.Dense"
+           Clearable="Clearable" Disabled="Disabled" ToStringFunc="Format" AnchorOrigin="Origin.BottomCenter" MaxHeight="320"
+           Class="@($"ss-time-field {Class}")">
+    @foreach (var t in Options)
+    {
+        <MudSelectItem T="TimeSpan?" Value="t">@Format(t)</MudSelectItem>
+    }
+</MudSelect>
+
+@code {
+    [Parameter] public TimeSpan? Value { get; set; }
+    [Parameter] public EventCallback<TimeSpan?> ValueChanged { get; set; }
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public bool Clearable { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private static readonly TimeSpan?[] Steps = Enumerable.Range(0, 24 * 4).Select(i => (TimeSpan?)TimeSpan.FromMinutes(i * 15)).ToArray();
+
+    private IEnumerable<TimeSpan?> Options =>
+        Value is { } v && !Steps.Contains(v) ? Steps.Append(v).OrderBy(t => t) : Steps;
+
+    private static string Format(TimeSpan? t) => t?.ToString(@"hh\:mm") ?? "";
+
+    private async Task OnChangedAsync(TimeSpan? value)
+    {
+        Value = value;
+        await ValueChanged.InvokeAsync(value);
+    }
+}

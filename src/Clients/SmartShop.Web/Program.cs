@@ -35,7 +35,15 @@ app.MapGet("/app-config.json", (IConfiguration config, HttpResponse response) =>
 });
 
 app.UseBlazorFrameworkFiles();
-app.UseStaticFiles();
+// css/js/html are not fingerprinted: make browsers revalidate (cheap 304 via ETag) so updates show up right away.
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = ctx =>
+    {
+        if (!ctx.Context.Request.Path.StartsWithSegments("/_framework"))
+            ctx.Context.Response.Headers.CacheControl = "no-cache";
+    },
+});
 app.MapReverseProxy();
 app.MapFallbackToFile("index.html");
 

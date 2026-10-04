@@ -20,7 +20,8 @@
     </div>
     <div class="d-flex gap-1 align-center mt-2">
         <ImageUploader Purpose="ChatImage" Uploaded="SendImageAsync">
-            <MudIconButton Icon="@Icons.Material.Filled.Image" Size="Size.Small" />
+            @* A plain icon: a MudIconButton would swallow the click that opens the file picker. *@
+            <span class="ss-icon-btn" role="button" aria-label="@L["ส่งรูป", "Send a picture"]"><MudIcon Icon="@Icons.Material.Filled.Image" /></span>
         </ImageUploader>
         <MudTextField @bind-Value="_text" Placeholder="@L["พิมพ์ข้อความ...", "Type a message..."]" Variant="Variant.Outlined" Margin="Margin.Dense"
                       OnKeyUp="@(async e => { if (e.Key == "Enter") await SendAsync(); })" Immediate="true" />

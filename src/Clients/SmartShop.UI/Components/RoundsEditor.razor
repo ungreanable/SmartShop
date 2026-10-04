@@ -18,11 +18,11 @@
 <MudTextField @bind-Value="_title" Immediate="true" Label="@L["ชื่อรอบ เช่น ขนมจีบรอบเสาร์", "Title, e.g. Saturday dumplings"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
 <div class="ss-grid-2">
     <MudDatePicker @bind-Date="_cutoffDate" Label="@L["ปิดรับวันที่", "Order by (date)"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
-    <MudTimePicker @bind-Time="_cutoffTime" Label="@L["เวลา", "time"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+    <TimeField @bind-Value="_cutoffTime" Label="@L["เวลา", "time"]" />
     <MudDatePicker @bind-Date="_pickupDate" Label="@L["วันรับ", "Pick-up date"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
     <div class="d-flex gap-1">
-        <MudTimePicker @bind-Time="_fromTime" Label="@L["ตั้งแต่", "from"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
-        <MudTimePicker @bind-Time="_toTime" Label="@L["ถึง", "to"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+        <TimeField @bind-Value="_fromTime" Label="@L["ตั้งแต่", "from"]" />
+        <TimeField @bind-Value="_toTime" Label="@L["ถึง", "to"]" />
     </div>
 </div>
 <MudNumericField T="int?" @bind-Value="_min" Label="@L["ยอดขั้นต่ำรวม (ซื้อกลุ่ม, ไม่บังคับ)", "Minimum total (group buy, optional)"]" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" />

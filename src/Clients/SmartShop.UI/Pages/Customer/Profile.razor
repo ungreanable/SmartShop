@@ -82,10 +82,10 @@
                 <MudDivider Class="my-2" />
                 <MudSwitch T="bool" Value="@(_settings.PushMode == "OnlyWhenLineFails")" ValueChanged="SetPushModeAsync" Color="Color.Primary"
                            Label="@L["ส่ง Push เฉพาะเมื่อ LINE ส่งไม่ได้", "Push only when LINE fails"]" />
-                <div class="d-flex gap-2 align-center">
+                <div class="d-flex gap-2 align-center flex-wrap">
                     <MudText Typo="Typo.body2">🌙 @L["ห้ามรบกวน", "Quiet hours"]</MudText>
-                    <MudTimePicker Time="_quietFrom" TimeChanged="@(t => { _quietFrom = t; })" Label="@L["ตั้งแต่", "From"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" />
-                    <MudTimePicker Time="_quietTo" TimeChanged="@(t => { _quietTo = t; })" Label="@L["ถึง", "To"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" />
+                    <TimeField @bind-Value="_quietFrom" Label="@L["ตั้งแต่", "From"]" Clearable="true" />
+                    <TimeField @bind-Value="_quietTo" Label="@L["ถึง", "To"]" Clearable="true" />
                     <MudIconButton Icon="@Icons.Material.Filled.Save" OnClick="SaveQuietAsync" />
                 </div>
                 <MudText Typo="Typo.caption" Class="ss-muted">@L["ออเดอร์ใหม่ของร้านคุณจะยังแจ้งเตือนเสมอ", "New orders for your shop always notify"]</MudText>

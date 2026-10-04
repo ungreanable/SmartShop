@@ -96,11 +96,13 @@
                                 </MudText>
                             }
                         </div>
-                        <div style="position:relative">
+                        <div class="@(item.ThumbnailUrl is null ? "ss-item-add-only" : "ss-item-media")">
                             @if (item.ThumbnailUrl is not null) { <img class="ss-item-img" src="@item.ThumbnailUrl" alt="" loading="lazy" /> }
                             @if (item.IsOrderable)
                             {
-                                <MudFab Size="Size.Small" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Style="position:absolute; right:-6px; bottom:-6px" />
+                                @* MudBlazor buttons stop click propagation, so the button needs its own handler. *@
+                                <MudFab Size="Size.Small" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Class="ss-item-add"
+                                        OnClick="@(() => OpenItemAsync(item))" aria-label="@L["เพิ่มลงตะกร้า", "Add to cart"]" />
                             }
                         </div>
                     </div>
