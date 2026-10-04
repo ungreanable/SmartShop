@@ -126,3 +126,21 @@ public class PromotionTests
         p.IsLive(now.AddHours(-2)).ShouldBeFalse();
     }
 }
+
+public class AmqpUriTests
+{
+    [Theory]
+    [InlineData("amqp://smartshop:abc123@rabbitmq:5672", "abc123")]
+    [InlineData("amqp://smartshop:a/b+c=d@rabbitmq:5672", "a/b+c=d")] // base64-style password from .env
+    [InlineData("amqp://smartshop:p@ss:w0rd@rabbitmq:5672", "p@ss:w0rd")]
+    [InlineData("amqp://smartshop:a%2Fb@rabbitmq:5672", "a/b")] // already escaped stays the same password
+    public void Passwords_with_reserved_characters_are_accepted(string connection, string password)
+    {
+        var uri = SmartShop.Infrastructure.Messaging.MessagingSetup.ParseAmqpUri(connection);
+        uri.Host.ShouldBe("rabbitmq");
+        uri.Port.ShouldBe(5672);
+        var parts = uri.UserInfo.Split(':', 2);
+        Uri.UnescapeDataString(parts[0]).ShouldBe("smartshop");
+        Uri.UnescapeDataString(parts[1]).ShouldBe(password);
+    }
+}

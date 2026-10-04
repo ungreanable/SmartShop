@@ -73,7 +73,7 @@ public static class MessagingSetup
             if (role == MessagingRole.Standalone)
                 return;
 
-            var rabbit = opts.UseRabbitMq(new Uri(rabbitConnection!)).AutoProvision();
+            var rabbit = opts.UseRabbitMq(ParseAmqpUri(rabbitConnection!)).AutoProvision();
             rabbit.DeclareExchange(EventsExchange, exchange =>
             {
                 exchange.ExchangeType = ExchangeType.Fanout;
@@ -94,5 +94,23 @@ public static class MessagingSetup
         });
 
         return builder;
+    }
+
+    /// <summary>
+    /// Parses amqp://user:password@host:port/vhost. The password usually comes straight from an environment variable
+    /// and may contain URI-reserved characters (e.g. base64 "/" "+" "="), so user and password are escaped first.
+    /// </summary>
+    public static Uri ParseAmqpUri(string connection)
+    {
+        var schemeEnd = connection.IndexOf("://", StringComparison.Ordinal);
+        var at = connection.LastIndexOf('@');
+        if (schemeEnd < 0 || at < schemeEnd) return new Uri(connection);
+
+        var userInfo = connection[(schemeEnd + 3)..at];
+        var colon = userInfo.IndexOf(':', StringComparison.Ordinal);
+        var user = colon < 0 ? userInfo : userInfo[..colon];
+        var escaped = Uri.EscapeDataString(Uri.UnescapeDataString(user));
+        if (colon >= 0) escaped += ":" + Uri.EscapeDataString(Uri.UnescapeDataString(userInfo[(colon + 1)..]));
+        return new Uri(connection[..(schemeEnd + 3)] + escaped + connection[at..]);
     }
 }
