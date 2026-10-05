@@ -48,10 +48,12 @@ internal sealed class WebLoginLauncher(IJSRuntime js, AppConfig config, Navigati
 
     public async Task<(ExternalLoginResult? Result, string ReturnUrl)> CompleteRedirectAsync(string code, string state)
     {
-        var pkce = await js.InvokeAsync<JsonElement?>("smartshop.takePkce");
-        if (pkce is not { } saved || saved.GetProperty("state").GetString() != state) return (null, "/");
+        // A different saved state means another login was started after this one; no saved state means LINE came
+        // back in a new tab or browser (common on phones), which is fine: the server validates the code itself.
+        var saved = await js.InvokeAsync<string?>("smartshop.takeLoginState");
+        if (saved is not null && saved != state) return (null, "/");
         var returnUrl = state.Split('|', 2) is [_, var url] ? url : "/";
-        return (new ExternalLoginResult("code", code, RedirectUri, saved.GetProperty("verifier").GetString()), returnUrl);
+        return (new ExternalLoginResult("code", code, RedirectUri, null), returnUrl);
     }
 
     private string RedirectUri => nav.ToAbsoluteUri("/auth/callback").ToString();

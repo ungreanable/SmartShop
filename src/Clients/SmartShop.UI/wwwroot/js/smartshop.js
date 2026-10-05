@@ -52,21 +52,19 @@ window.smartshop = (() => {
     idToken: () => window.liff?.getIDToken() ?? null,
     login: (redirectUri) => window.liff.login({ redirectUri }),
   };
-  const b64url = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  const lineLogin = async (channelId, redirectUri, state) => {
-    const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
-    const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
-    sessionStorage.setItem('smartshop.pkce', JSON.stringify({ verifier, state }));
+  // Web login is a confidential client (the server exchanges the code with the channel secret), so no PKCE:
+  // on phones LINE often returns to a new tab or another browser, where a per-tab verifier would be missing
+  // ("login link expired" loop). The state is kept in localStorage so the same browser can still verify it.
+  const lineLogin = (channelId, redirectUri, state) => {
+    try { localStorage.setItem('smartshop.loginState', state); } catch { }
     const url = new URL('https://access.line.me/oauth2/v2.1/authorize');
     url.search = new URLSearchParams({
-      response_type: 'code', client_id: channelId, redirect_uri: redirectUri, state, scope: 'openid profile',
-      code_challenge: challenge, code_challenge_method: 'S256', bot_prompt: 'aggressive',
+      response_type: 'code', client_id: channelId, redirect_uri: redirectUri, state, scope: 'openid profile', bot_prompt: 'aggressive',
     }).toString();
     window.location.href = url.toString();
   };
-  const takePkce = () => {
-    const raw = sessionStorage.getItem('smartshop.pkce'); sessionStorage.removeItem('smartshop.pkce');
-    return raw ? JSON.parse(raw) : null;
+  const takeLoginState = () => {
+    try { const s = localStorage.getItem('smartshop.loginState'); localStorage.removeItem('smartshop.loginState'); return s; } catch { return null; }
   };
 
   // ---------- Web Push ----------
@@ -106,5 +104,5 @@ window.smartshop = (() => {
     return `${browser} · ${os}`;
   };
 
-  return { storage, alarm, liff, lineLogin, takePkce, push, copy, share, download, scrollTo, setBadge, deviceLabel };
+  return { storage, alarm, liff, lineLogin, takeLoginState, push, copy, share, download, scrollTo, setBadge, deviceLabel };
 })();
