@@ -18,7 +18,7 @@
                 <MudToggleItem Value="@("Service")" Text="@L["💆 บริการ", "💆 Service"]" />
             </MudToggleGroup>
 
-            <MudTextField @bind-Value="_name" Label="@L["ชื่อ *", "Name *"]" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudTextField @bind-Value="_name" Label="@L["ชื่อ", "Name"]" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
             <MudTextField @bind-Value="_description" Label="@L["รายละเอียด", "Description"]" Lines="2" Variant="Variant.Outlined" Margin="Margin.Dense" />
             <div class="ss-grid-2">
                 <MudNumericField T="decimal" @bind-Value="_price" Label="@L["ราคา (บาท) *", "Price (THB) *"]" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" />

@@ -19,7 +19,10 @@
             </MudAvatar>
             <div>
                 <MudText Typo="Typo.h6">@_me.DisplayName</MudText>
-                <MudText Typo="Typo.caption" Class="ss-muted">@Plant.Current?.PlantName · @L["บ้าน", "House"] @Plant.Current?.HouseNo</MudText>
+                <MudText Typo="Typo.caption" Class="ss-muted">
+                    @Plant.Current?.PlantName
+                    @if (!string.IsNullOrWhiteSpace(Plant.Current?.HouseNo)) { <span class="ss-nowrap"> · @L["บ้าน", "House"] @Plant.Current.HouseNo</span> }
+                </MudText>
             </div>
         </div>
 
@@ -29,7 +32,10 @@
             @foreach (var shop in Plant.MyShops)
             {
                 <div class="d-flex align-center py-1">
-                    <MudText>@shop.Name <span class="ss-muted">(@shop.Role)</span></MudText>
+                    <div style="min-width:0">
+                        <MudText Class="ss-ellipsis">@shop.Name</MudText>
+                        <MudText Typo="Typo.caption" Class="ss-muted">@Fmt.ShopRole(shop.Role, L)</MudText>
+                    </div>
                     <MudSpacer />
                     <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Href="@($"/merchant/{shop.Id}")">@L["จัดการร้าน", "Manage"]</MudButton>
                 </div>
@@ -46,9 +52,8 @@
                 {
                     <MudAlert Severity="Severity.Warning" Dense="true" Class="my-2">@L["ยังไม่มีช่องทางแจ้งเตือนแบบ Push อาจพลาดออเดอร์หรือข่าวสาร", "No push channel yet: you may miss orders and updates"]</MudAlert>
                 }
-                <div class="d-flex align-center py-1">
+                <div class="ss-setting-row">
                     <MudText>LINE Official Account</MudText>
-                    <MudSpacer />
                     @if (!_channels.LineConfigured) { <MudText Typo="Typo.caption" Class="ss-muted">@L["ยังไม่ได้ตั้งค่าบนเซิร์ฟเวอร์", "not configured"]</MudText> }
                     else if (_channels.LineFriend) { <MudChip T="string" Color="Color.Success" Size="Size.Small">✓ @L["เป็นเพื่อนแล้ว", "Friend"]</MudChip> }
                     else
@@ -60,9 +65,8 @@
                         <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" OnClick="RefreshLineAsync" title="@L["ตรวจสอบอีกครั้ง", "Check again"]" />
                     }
                 </div>
-                <div class="d-flex align-center py-1">
+                <div class="ss-setting-row">
                     <MudText>@L["แจ้งเตือนบนอุปกรณ์นี้ (Web Push)", "Push on this device"]</MudText>
-                    <MudSpacer />
                     @if (!_channels.WebPushConfigured && Push.Kind == "WebPush") { <MudText Typo="Typo.caption" Class="ss-muted">@L["ยังไม่ได้ตั้งค่าบนเซิร์ฟเวอร์", "not configured"]</MudText> }
                     else if (!_pushSupported) { <MudText Typo="Typo.caption" Class="ss-muted">@(PushHint)</MudText> }
                     else { <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" OnClick="EnablePushAsync">@L["เปิด", "Enable"]</MudButton> }
@@ -82,11 +86,12 @@
                 <MudDivider Class="my-2" />
                 <MudSwitch T="bool" Value="@(_settings.PushMode == "OnlyWhenLineFails")" ValueChanged="SetPushModeAsync" Color="Color.Primary"
                            Label="@L["ส่ง Push เฉพาะเมื่อ LINE ส่งไม่ได้", "Push only when LINE fails"]" />
-                <div class="d-flex gap-2 align-center flex-wrap">
-                    <MudText Typo="Typo.body2">🌙 @L["ห้ามรบกวน", "Quiet hours"]</MudText>
+                <MudText Typo="Typo.body2" Class="mt-2">🌙 @L["ห้ามรบกวน", "Quiet hours"]</MudText>
+                <div class="ss-hours-slot">
                     <TimeField @bind-Value="_quietFrom" Label="@L["ตั้งแต่", "From"]" Clearable="true" />
+                    <span class="ss-muted">–</span>
                     <TimeField @bind-Value="_quietTo" Label="@L["ถึง", "To"]" Clearable="true" />
-                    <MudIconButton Icon="@Icons.Material.Filled.Save" OnClick="SaveQuietAsync" />
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" OnClick="SaveQuietAsync">@L["บันทึก", "Save"]</MudButton>
                 </div>
                 <MudText Typo="Typo.caption" Class="ss-muted">@L["ออเดอร์ใหม่ของร้านคุณจะยังแจ้งเตือนเสมอ", "New orders for your shop always notify"]</MudText>
             }

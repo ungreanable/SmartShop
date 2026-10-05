@@ -42,6 +42,13 @@ public sealed class Loc(IAppStorage storage)
 
 public static class Fmt
 {
+    public static string ShopRole(string role, Loc l) => role switch
+    {
+        "Owner" => l["เจ้าของร้าน", "Owner"],
+        "Manager" => l["ผู้จัดการ", "Manager"],
+        _ => l["พนักงาน", "Staff"],
+    };
+
     public static string Baht(decimal amount) => "฿" + amount.ToString("#,0.##", CultureInfo.InvariantCulture);
 
     public static DateTimeOffset Local(DateTimeOffset value) => value.ToLocalTime();

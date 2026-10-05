@@ -16,6 +16,7 @@ body { overscroll-behavior-y: contain; }
 }
 .ss-page.ss-has-cart { padding-bottom: calc(var(--ss-bottom-nav) + 96px); }
 .ss-page.ss-no-nav { padding-bottom: 32px; }
+.mud-main-content.ss-bare-main { padding-top: 12px; }
 
 /* Bottom navigation, like delivery apps */
 .ss-bottom-nav {
@@ -106,3 +107,26 @@ body { overscroll-behavior-y: contain; }
 
 /* Shop switcher in the merchant app bar: keep the shop name as typed */
 .ss-shop-switcher .mud-button-label { text-transform: none; font-size: 1.0625rem; font-weight: 600; }
+
+/* Layout review fixes */
+.ss-nowrap { white-space: nowrap; }
+.ss-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Badge on the bottom-nav icon must not push its label down */
+.ss-bottom-nav .ss-nav-badge { display: inline-flex; line-height: 0; height: 1.75rem; }
+/* Tabs share the full width instead of scrolling */
+.ss-tabs-fill .mud-tabs-tabbar-wrapper { width: 100%; }
+.ss-tabs-fill .mud-tabs-tabbar-wrapper > * { flex: 1 1 0; min-width: 0; }
+.ss-tabs-fill .mud-tab { width: 100%; min-width: 0; padding: 6px 2px; overflow: visible; white-space: nowrap; font-size: 0.95rem; }
+/* Count badge sits right after the tab text instead of over it */
+.ss-tabs-fill .mud-tab .mud-badge-root { display: inline-flex; align-items: center; gap: 3px; }
+.ss-tabs-fill .mud-tab .mud-badge-wrapper { position: static; display: inline-flex; }
+.ss-tabs-fill .mud-tab .mud-badge.mud-badge-top.right { position: static; inset: auto; transform: none; }
+.ss-tabs-fill .mud-tabs-scroll-button { display: none; }
+/* Expansion panels: never a nested scrollbar when content grows after opening (e.g. images load) */
+.mud-collapse-entered, .mud-collapse-entered > .mud-collapse-wrapper { height: auto !important; max-height: none !important; overflow: visible !important; }
+/* "+" on a menu picture stays inside the picture */
+.ss-item-media .ss-item-add { right: 4px; bottom: 4px; }
+/* Label above, value or action below on narrow screens */
+.ss-setting-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 6px 0; }
+.ss-setting-row > :first-child { flex: 1 1 180px; }
+

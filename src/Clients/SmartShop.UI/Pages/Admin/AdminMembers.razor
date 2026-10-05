@@ -6,7 +6,7 @@
 
 <div class="ss-page">
     <MudText Typo="Typo.h5" Class="mb-2" Style="font-weight:700">@L["สมาชิกหมู่บ้าน", "Members"]</MudText>
-    <MudTabs @bind-ActivePanelIndex="_tab" Elevation="0" Color="Color.Transparent" SliderColor="Color.Primary" ApplyEffectsToContainer="true">
+    <MudTabs @bind-ActivePanelIndex="_tab" MinimumTabWidth="0px" Class="ss-tabs-fill" Elevation="0" Color="Color.Transparent" SliderColor="Color.Primary" ApplyEffectsToContainer="true">
         <MudTabPanel Text="@L["รออนุมัติ", "Pending"]" OnClick="@(() => LoadAsync(0))" />
         <MudTabPanel Text="@L["สมาชิก", "Active"]" OnClick="@(() => LoadAsync(1))" />
         <MudTabPanel Text="@L["ระงับ", "Suspended"]" OnClick="@(() => LoadAsync(2))" />

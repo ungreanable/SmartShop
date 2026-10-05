@@ -4,16 +4,14 @@
 @inject Browser Browser
 
 <div class="ss-page">
-    <div class="d-flex align-center mb-2">
-        <MudText Typo="Typo.h5" Style="font-weight:700">@L["ยอดขาย", "Sales"]</MudText>
-        <MudSpacer />
-        <MudButton Href="@($"/merchant/{ShopId}/promotions")" Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.LocalOffer" Class="mr-2">@L["โปรโมชั่น", "Promotions"]</MudButton>
-        <MudButton Href="@($"/merchant/{ShopId}/reviews")" Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Star">@L["รีวิว", "Reviews"]</MudButton>
+    <MudText Typo="Typo.h5" Class="mb-2" Style="font-weight:700">@L["ยอดขาย", "Sales"]</MudText>
+    <div class="ss-grid-2 mb-3">
+        <MudButton Href="@($"/merchant/{ShopId}/promotions")" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.LocalOffer" FullWidth="true">@L["โปรโมชั่น", "Promotions"]</MudButton>
+        <MudButton Href="@($"/merchant/{ShopId}/reviews")" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Star" FullWidth="true">@L["รีวิว", "Reviews"]</MudButton>
     </div>
-    <div class="d-flex gap-2 align-center mb-3">
-        <MudDatePicker @bind-Date="_from" Label="@L["ตั้งแต่", "From"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
-        <MudDatePicker @bind-Date="_to" Label="@L["ถึง", "To"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
-        <MudIconButton Icon="@Icons.Material.Filled.Search" OnClick="LoadAsync" />
+    <div class="ss-grid-2 mb-3">
+        <MudDatePicker Date="_from" DateChanged="@(d => DateAsync(d, true))" Label="@L["ตั้งแต่", "From"]" Variant="Variant.Outlined" Margin="Margin.Dense" DateFormat="d MMM yy" />
+        <MudDatePicker Date="_to" DateChanged="@(d => DateAsync(d, false))" Label="@L["ถึง", "To"]" Variant="Variant.Outlined" Margin="Margin.Dense" DateFormat="d MMM yy" />
     </div>
 
     @if (_report is null) { <Loading Rows="2" /> }
@@ -42,15 +40,18 @@
             }
         }
 
-        <MudText Typo="Typo.subtitle1" Class="mt-3" Style="font-weight:600">@L["ขายดี", "Top items"]</MudText>
-        <MudSimpleTable Dense="true" Elevation="0">
-            <tbody>
-                @foreach (var t in _report.TopItems)
-                {
-                    <tr><td>@t.Name</td><td>@t.Quantity</td><td style="text-align:right">@Fmt.Baht(t.Revenue)</td></tr>
-                }
-            </tbody>
-        </MudSimpleTable>
+        @if (_report.TopItems.Count > 0)
+        {
+            <MudText Typo="Typo.subtitle1" Class="mt-3" Style="font-weight:600">@L["ขายดี", "Top items"]</MudText>
+            <MudSimpleTable Dense="true" Elevation="0">
+                <tbody>
+                    @foreach (var t in _report.TopItems)
+                    {
+                        <tr><td>@t.Name</td><td>@t.Quantity</td><td style="text-align:right">@Fmt.Baht(t.Revenue)</td></tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
 
         <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" Class="mt-3" OnClick="ExportAsync">@L["ดาวน์โหลด CSV", "Download CSV"]</MudButton>
     }
@@ -60,6 +61,12 @@
     [Parameter] public Guid ShopId { get; set; }
 
     private DateTime? _from = DateTime.Today.AddDays(-6), _to = DateTime.Today;
+
+    private async Task DateAsync(DateTime? date, bool from)
+    {
+        if (from) _from = date; else _to = date;
+        await LoadAsync();
+    }
     private SalesReport? _report;
 
     protected override async Task OnParametersSetAsync() => await LoadAsync();

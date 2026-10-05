@@ -22,9 +22,13 @@
                 @if (_shop.LogoUrl is not null) { <MudAvatar Size="Size.Large" Style="width:64px;height:64px"><MudImage Src="@_shop.LogoUrl" /></MudAvatar> }
                 <div style="flex:1; min-width:0">
                     <MudText Typo="Typo.h6" Style="font-weight:700">@_shop.Name</MudText>
-                    <MudText Typo="Typo.caption" Class="ss-muted">
-                        @if (_shop.RatingCount > 0) { <a href="@($"/shops/{ShopId}/reviews")">⭐ @_shop.RatingAverage.ToString("0.0") (@_shop.RatingCount)</a><span> · </span> }
-                        @_shop.Category @if (_shop.HouseNo is not null) { <span>· @L["บ้าน", "House"] @_shop.HouseNo</span> }
+                    @if (_shop.RatingCount > 0)
+                    {
+                        <MudLink Href="@($"/shops/{ShopId}/reviews")" Typo="Typo.body2" Class="d-block">⭐ @_shop.RatingAverage.ToString("0.0") <span class="ss-muted">(@_shop.RatingCount @L["รีวิว", "reviews"])</span></MudLink>
+                    }
+                    <MudText Typo="Typo.body2" Class="ss-muted">
+                        @if (!string.IsNullOrWhiteSpace(_shop.Category)) { <span class="ss-nowrap">@_shop.Category</span> }
+                        @if (!string.IsNullOrWhiteSpace(_shop.HouseNo)) { <span class="ss-nowrap">@(string.IsNullOrWhiteSpace(_shop.Category) ? "" : " · ")@L["บ้าน", "House"] @_shop.HouseNo</span> }
                     </MudText>
                 </div>
                 <MudIconButton Icon="@(_shop.IsFavorite ? Icons.Material.Filled.Favorite : Icons.Material.Outlined.FavoriteBorder)" Color="Color.Error" OnClick="ToggleFavoriteAsync" />

@@ -1,0 +1,10 @@
+@page "/merchant/{ShopId:guid}/orders/{OrderId:guid}"
+@layout MerchantLayout
+@* Same order page as the customer's, but inside the merchant app (shop switcher and shop navigation). *@
+
+<OrderDetail OrderId="OrderId" ShopId="ShopId" />
+
+@code {
+    [Parameter] public Guid ShopId { get; set; }
+    [Parameter] public Guid OrderId { get; set; }
+}

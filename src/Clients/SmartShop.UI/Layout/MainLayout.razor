@@ -38,7 +38,7 @@
         <NavLink href="/" Match="NavLinkMatch.All"><MudIcon Icon="@Icons.Material.Filled.Home" />@L["หน้าแรก", "Home"]</NavLink>
         <NavLink href="/orders"><MudIcon Icon="@Icons.Material.Filled.ReceiptLong" />@L["ออเดอร์", "Orders"]</NavLink>
         <NavLink href="/notifications">
-            <MudBadge Content="@State.UnreadNotifications" Visible="@(State.UnreadNotifications > 0)" Color="Color.Error" Overlap="true" Max="99">
+            <MudBadge Content="@State.UnreadNotifications" Visible="@(State.UnreadNotifications > 0)" Color="Color.Error" Overlap="true" Max="99" Class="ss-nav-badge">
                 <MudIcon Icon="@Icons.Material.Filled.Notifications" />
             </MudBadge>
             @L["แจ้งเตือน", "Alerts"]

@@ -5,6 +5,7 @@
 @inject ISnackbar Snackbar
 
 <div class="ss-page">
+    <MudText Typo="Typo.h5" Class="mb-2" Style="font-weight:700">@L["เพิ่มเติม", "More"]</MudText>
     <MudExpansionPanels Elevation="0" Outlined="true" MultiExpansion="true">
         <MudExpansionPanel Text="@L["🚩 รายงานปัญหา", "🚩 Reports"]" Expanded="true">
             @if (_reports.Count == 0) { <MudText Typo="Typo.body2" Class="ss-muted">@L["ไม่มีรายงาน", "No reports"]</MudText> }

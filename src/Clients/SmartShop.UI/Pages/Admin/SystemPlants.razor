@@ -5,37 +5,70 @@
 @inject NavigationManager Nav
 
 <AppGuard RequirePlant="false" RequireSystemAdmin="true">
-    <div class="d-flex align-center mb-3">
-        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="/villages" />
-        <MudText Typo="Typo.h5" Style="font-weight:700">@L["ผู้ดูแลระบบ: หมู่บ้าน", "System admin: villages"]</MudText>
+    <div class="d-flex align-center gap-1 mb-3">
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="/villages" Edge="Edge.Start" />
+        <MudText Typo="Typo.h5" Style="font-weight:700">@L["หมู่บ้านทั้งหมด", "All villages"]</MudText>
     </div>
-    @foreach (var p in _plants)
+
+    @if (_plants is null) { <Loading Rows="2" /> }
+    else
     {
-        <MudPaper Outlined="true" Class="pa-3 mb-2 ss-card">
-            <MudText Typo="Typo.subtitle1">@p.Name</MudText>
-            <MudText Typo="Typo.caption" Class="ss-muted">@L["โค้ด", "Code"] @p.JoinCode · @p.ActiveMembers @L["สมาชิก", "members"] · @p.PendingMembers @L["รออนุมัติ", "pending"] · @p.TimeZoneId</MudText>
-        </MudPaper>
+        @if (_plants.Count == 0) { <MudText Typo="Typo.body2" Class="ss-muted mb-2">@L["ยังไม่มีหมู่บ้าน", "No villages yet"]</MudText> }
+        @foreach (var p in _plants)
+        {
+            var member = Plant.Memberships.FirstOrDefault(m => m.PlantId == p.Id && m.IsActive);
+            <MudPaper Outlined="true" Class="pa-3 mb-2 ss-card">
+                <div class="d-flex align-center gap-3">
+                    <MudAvatar Color="Color.Primary" Variant="Variant.Outlined"><MudIcon Icon="@Icons.Material.Filled.HolidayVillage" /></MudAvatar>
+                    <div style="flex:1; min-width:0">
+                        <MudText Typo="Typo.subtitle1" Class="ss-ellipsis">@p.Name</MudText>
+                        <MudText Typo="Typo.caption" Class="ss-muted">
+                            <span class="ss-nowrap">@L["โค้ด", "Code"] @p.JoinCode</span>
+                            <span class="ss-nowrap">· @p.ActiveMembers @L["สมาชิก", "members"]</span>
+                            @if (p.PendingMembers > 0) { <span class="ss-nowrap">· @p.PendingMembers @L["รออนุมัติ", "pending"]</span> }
+                        </MudText>
+                    </div>
+                    @if (member is not null)
+                    {
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" OnClick="@(() => OpenAsync(p.Id))">@L["เข้า", "Open"]</MudButton>
+                    }
+                </div>
+            </MudPaper>
+        }
     }
-    <MudPaper Outlined="true" Class="pa-3 mt-3 ss-card">
-        <MudText Typo="Typo.subtitle1" Style="font-weight:600">@L["สร้างหมู่บ้านใหม่", "Create a village"]</MudText>
-        <MudTextField @bind-Value="_name" Label="@L["ชื่อหมู่บ้าน", "Village name"]" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
-        <MudText Typo="Typo.caption" Class="ss-muted">@L["คุณจะเป็นผู้ดูแลหมู่บ้านคนแรก แต่งตั้งคนอื่นเพิ่มได้ภายหลัง", "You become the first village admin and can appoint others later."]</MudText>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" Disabled="@string.IsNullOrWhiteSpace(_name)" OnClick="CreateAsync">@L["สร้าง", "Create"]</MudButton>
+
+    <MudPaper Outlined="true" Class="pa-3 mt-4 ss-card">
+        <MudText Typo="Typo.subtitle1" Class="mb-1" Style="font-weight:600">@L["สร้างหมู่บ้านใหม่", "Create a village"]</MudText>
+        <MudTextField @bind-Value="_name" Label="@L["ชื่อหมู่บ้าน", "Village name"]" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" MaxLength="100" />
+        <MudText Typo="Typo.caption" Class="ss-muted d-block mt-1">@L["คุณจะเป็นผู้ดูแลหมู่บ้านคนแรก แต่งตั้งคนอื่นเพิ่มได้ภายหลัง", "You become the first village admin and can appoint others later."]</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Class="mt-3" Disabled="@(string.IsNullOrWhiteSpace(_name) || _busy)" OnClick="CreateAsync">@L["สร้างหมู่บ้าน", "Create village"]</MudButton>
     </MudPaper>
 </AppGuard>
 
 @code {
-    private List<PlantSummary> _plants = [];
+    private List<PlantSummary>? _plants;
     private string? _name;
+    private bool _busy;
 
     protected override async Task OnInitializedAsync() => _plants = await Api.Get<List<PlantSummary>>("api/admin/plants") ?? [];
 
+    private async Task OpenAsync(Guid plantId)
+    {
+        await Plant.SelectAsync(plantId);
+        Nav.NavigateTo("/admin");
+    }
+
     private async Task CreateAsync()
     {
-        var plant = await Api.Post<PlantSummary>("api/admin/plants", new { name = _name, timeZoneId = "Asia/Bangkok" });
-        if (plant is null) return;
-        await Plant.LoadAsync(force: true);
-        await Plant.SelectAsync(plant.Id);
-        Nav.NavigateTo("/admin");
+        _busy = true;
+        try
+        {
+            var plant = await Api.Post<PlantSummary>("api/admin/plants", new { name = _name?.Trim(), timeZoneId = "Asia/Bangkok" });
+            if (plant is null) return;
+            await Plant.LoadAsync(force: true);
+            await Plant.SelectAsync(plant.Id);
+            Nav.NavigateTo("/admin");
+        }
+        finally { _busy = false; }
     }
 }

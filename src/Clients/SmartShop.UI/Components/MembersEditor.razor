@@ -108,10 +108,5 @@
             Snackbar.Add(L["คัดลอกลิงก์แล้ว", "Link copied"], Severity.Success);
     }
 
-    private string RoleText(string role) => role switch
-    {
-        "Owner" => L["เจ้าของร้าน", "Owner"],
-        "Manager" => L["ผู้จัดการ", "Manager"],
-        _ => L["พนักงาน", "Staff"],
-    };
+    private string RoleText(string role) => Fmt.ShopRole(role, L);
 }
