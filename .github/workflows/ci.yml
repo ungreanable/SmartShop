@@ -12,8 +12,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
   build-test:
@@ -25,11 +29,15 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: NuGet cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Packages.props', 'Directory.Build.props', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-
+
       - name: Restore
         run: dotnet restore SmartShop.slnx
-
-      - name: Format check
-        run: dotnet format SmartShop.slnx --verify-no-changes --no-restore --severity error
 
       - name: Build
         run: dotnet build SmartShop.slnx --no-restore -c Release
@@ -45,6 +53,25 @@ jobs:
       - name: Integration tests (Testcontainers)
         run: dotnet test --project tests/SmartShop.IntegrationTests -c Release --no-build
 
+  # Separate job so the analyzer-heavy format check runs in parallel with build & tests.
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: NuGet cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Packages.props', 'Directory.Build.props', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-
+      - name: Restore
+        run: dotnet restore SmartShop.slnx
+      - name: Format check
+        run: dotnet format SmartShop.slnx --verify-no-changes --no-restore --severity error
+
   deploy-config:
     runs-on: ubuntu-latest
     steps:
@@ -59,6 +86,7 @@ jobs:
         run: |
           docker compose --env-file .env.example config -q
           docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.observability.yml config -q
+          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.behind-proxy.yml -f docker-compose.small.yml config -q
 
   license-check:
     runs-on: ubuntu-latest
@@ -67,5 +95,11 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
+      - name: NuGet cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Packages.props', 'Directory.Build.props', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-
       - name: Reject copyleft / commercial NuGet licenses
         run: bash scripts/check-licenses.sh

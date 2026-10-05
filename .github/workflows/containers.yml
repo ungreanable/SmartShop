@@ -2,6 +2,7 @@ name: Containers
 
 # Runs the full CI first; only when it passes, builds multi-arch images with the .NET SDK container support
 # (no Dockerfiles) and pushes them to GHCR: main -> :edge + :sha-xxxxxxx, tag v1.2.3 -> :1.2.3 + :latest.
+# A release tag on a commit main already built just re-tags those images (they passed CI on main) in seconds.
 on:
   push:
     branches: [main]
@@ -11,17 +12,66 @@ on:
 permissions:
   contents: read
   packages: write
+  actions: read
 
 concurrency:
   group: containers-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  IMAGES: smartshop-api smartshop-worker smartshop-web
+
 jobs:
+  # Release tags: reuse the sha-xxxxxxx images that main already built and tested.
+  retag:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    outputs:
+      done: ${{ steps.retag.outputs.done }}
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Re-tag existing images
+        id: retag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"; sha="sha-${GITHUB_SHA::7}"; version="${GITHUB_REF#refs/tags/v}"
+          # The tag is usually pushed right after main: wait for main's run of this commit instead of rebuilding.
+          for _ in $(seq 1 60); do
+            state="$(gh run list -R "$GITHUB_REPOSITORY" --workflow containers.yml --branch main --commit "$GITHUB_SHA"               --json status,conclusion --jq '.[0] | "\(.status) \(.conclusion)"' 2>/dev/null || true)"
+            case "$state" in
+              "completed success") break ;;
+              completed*|"") echo "No successful main build for this commit ($state), doing a full build"; echo "done=false" >> "$GITHUB_OUTPUT"; exit 0 ;;
+              *) echo "Waiting for main's build of this commit ($state)"; sleep 20 ;;
+            esac
+          done
+          for image in $IMAGES; do
+            if ! docker buildx imagetools inspect "ghcr.io/$owner/$image:$sha" > /dev/null 2>&1; then
+              echo "ghcr.io/$owner/$image:$sha not found, doing a full build"
+              echo "done=false" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+          done
+          for image in $IMAGES; do
+            docker buildx imagetools create -t "ghcr.io/$owner/$image:$version" -t "ghcr.io/$owner/$image:latest" "ghcr.io/$owner/$image:$sha"
+          done
+          echo "done=true" >> "$GITHUB_OUTPUT"
+
   ci:
+    needs: retag
+    if: ${{ !cancelled() && needs.retag.outputs.done != 'true' }}
     uses: ./.github/workflows/ci.yml
 
-  publish:
+  # One job per image and architecture, all in parallel.
+  build:
     needs: ci
+    if: ${{ !cancelled() && needs.ci.result == 'success' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -30,38 +80,53 @@ jobs:
           - src/Hosts/SmartShop.Api/SmartShop.Api.csproj
           - src/Hosts/SmartShop.Worker/SmartShop.Worker.csproj
           - src/Clients/SmartShop.Web/SmartShop.Web.csproj
+        arch: [x64, arm64]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
+      - name: NuGet cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Packages.props', 'Directory.Build.props', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-
+      - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Compute tags
-        id: tags
+      - name: Publish ${{ matrix.arch }} image
         shell: bash
         run: |
-          tags="sha-${GITHUB_SHA::7}"
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            version="${GITHUB_REF#refs/tags/v}"
-            tags="$tags;$version;latest"
-          else
-            tags="$tags;edge"
-          fi
-          echo "tags=$tags" >> "$GITHUB_OUTPUT"
+          project="${{ matrix.project }}"
+          name="$(basename "$project" .csproj | tr '[:upper:]' '[:lower:]' | sed 's/\./-/g')"
+          bash scripts/codegen.sh "$project"
+          dotnet publish "$project" -c Release -t:PublishContainer \
+            -p:ContainerRegistry=ghcr.io -p:ContainerRepository="${GITHUB_REPOSITORY_OWNER,,}/$name" \
+            -p:ContainerRuntimeIdentifier="linux-${{ matrix.arch }}" -p:ContainerImageTag="build-$GITHUB_RUN_ID-${{ matrix.arch }}"
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # Builds linux-x64 and linux-arm64 one after the other, then creates multi-arch tags.
-      - name: Publish container
+  # Combine both architectures into the public multi-arch tags.
+  manifest:
+    needs: build
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create multi-arch tags
         shell: bash
         run: |
-          name="$(basename "${{ matrix.project }}" .csproj | tr '[:upper:]' '[:lower:]' | sed 's/\./-/g')"
-          bash scripts/publish-multiarch.sh "${{ matrix.project }}" ghcr.io "${{ github.repository_owner }}/$name" "${{ steps.tags.outputs.tags }}"
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          tags=("sha-${GITHUB_SHA::7}")
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then tags+=("${GITHUB_REF#refs/tags/v}" latest); else tags+=(edge); fi
+          for image in $IMAGES; do
+            args=()
+            for tag in "${tags[@]}"; do args+=(-t "ghcr.io/$owner/$image:$tag"); done
+            docker buildx imagetools create "${args[@]}" \
+              "ghcr.io/$owner/$image:build-$GITHUB_RUN_ID-x64" "ghcr.io/$owner/$image:build-$GITHUB_RUN_ID-arm64"
+          done
