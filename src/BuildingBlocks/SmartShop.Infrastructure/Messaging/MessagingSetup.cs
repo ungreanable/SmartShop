@@ -45,8 +45,11 @@ public static class MessagingSetup
 
             // Handler code is pre-generated at image build time ("codegen write" into each host's Internal/Generated,
             // see scripts/build-images.sh and the Containers workflow). Auto = use those types when present, otherwise
-            // compile at runtime (development). Runtime compilation with Roslyn costs ~1 GB of memory that is never released.
-            opts.CodeGeneration.TypeLoadMode = JasperFx.CodeGeneration.TypeLoadMode.Auto;
+            // compile at runtime. Runtime compilation with Roslyn costs ~1 GB of memory that is never released.
+            // Development/tests always compile in memory so no generated files land in the source tree and go stale.
+            opts.CodeGeneration.TypeLoadMode = builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Testing")
+                ? JasperFx.CodeGeneration.TypeLoadMode.Dynamic
+                : JasperFx.CodeGeneration.TypeLoadMode.Auto;
             // The generated types are compiled into the host (entry) assembly; without this Wolverine looks for them in
             // the assembly that called UseWolverine, misses them and compiles everything again.
             if (System.Reflection.Assembly.GetEntryAssembly() is { } host && host.GetName().Name?.StartsWith("SmartShop.", StringComparison.Ordinal) == true)
