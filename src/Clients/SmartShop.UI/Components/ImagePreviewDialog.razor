@@ -1,0 +1,21 @@
+@* Full-size view of a picture (shop logo, cover, item, slip). Tap anywhere to close. *@
+<MudDialog ContentClass="pa-0" Class="ss-preview-dialog">
+    <DialogContent>
+        <div class="ss-preview" @onclick="@(() => Dialog.Close())">
+            <img src="@Url" alt="@Alt" />
+        </div>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter, EditorRequired] public string Url { get; set; } = "";
+    [Parameter] public string? Alt { get; set; }
+
+    public static Task ShowAsync(IDialogService dialogs, string? url, string? alt = null) =>
+        string.IsNullOrEmpty(url)
+            ? Task.CompletedTask
+            : dialogs.ShowAsync<ImagePreviewDialog>(alt ?? "",
+                new DialogParameters<ImagePreviewDialog> { { x => x.Url, url }, { x => x.Alt, alt } },
+                new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true, CloseOnEscapeKey = true, BackdropClick = true });
+}

@@ -5,19 +5,22 @@
 @if (_summary is null) { <Loading /> }
 else
 {
-    <div class="d-flex align-center gap-4 mb-3">
-        <MudText Typo="Typo.h3">@_summary.Average.ToString("0.0")</MudText>
-        <div style="flex:1">
-            <MudRating SelectedValue="@((int)Math.Round(_summary.Average))" ReadOnly="true" />
+    <div class="ss-review-head mb-3">
+        <div class="ss-review-score">
+            <MudText Typo="Typo.h3" Style="line-height:1">@_summary.Average.ToString("0.0")</MudText>
+            <MudRating SelectedValue="@((int)Math.Round(_summary.Average))" ReadOnly="true" Size="Size.Small" />
             <MudText Typo="Typo.caption" Class="ss-muted">@_summary.Count @L["รีวิว", "reviews"]</MudText>
         </div>
-        <div style="min-width:140px">
-            @for (var star = 5; star >= 1; star--)
+        <div class="ss-review-bars">
+            @for (var i = 5; i >= 1; i--)
             {
+                // Copy the loop variable: child content renders after the loop has finished.
+                var star = i;
                 var n = _summary.Distribution.GetValueOrDefault(star);
-                <div class="d-flex align-center gap-1">
-                    <MudText Typo="Typo.caption" Style="width:12px">@star</MudText>
+                <div class="ss-rating-row">
+                    <MudText Typo="Typo.caption" Style="white-space:nowrap">@star ★</MudText>
                     <MudProgressLinear Value="@(_summary.Count == 0 ? 0 : n * 100.0 / _summary.Count)" Color="Color.Warning" Rounded="true" />
+                    <MudText Typo="Typo.caption" Class="ss-muted" Style="text-align:right">@n</MudText>
                 </div>
             }
         </div>

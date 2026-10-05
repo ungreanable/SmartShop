@@ -15,11 +15,11 @@
     else
     {
         <div class="ss-cover-wrap">
-            @if (_shop.CoverUrl is not null) { <img class="ss-cover" src="@_shop.CoverUrl" alt="" /> } else { <div class="ss-cover"></div> }
+            @if (_shop.CoverUrl is not null) { <img class="ss-cover ss-zoomable" src="@_shop.CoverUrl" alt="" @onclick="@(() => ImagePreviewDialog.ShowAsync(Dialogs, _shop.CoverUrl, _shop.Name))" /> } else { <div class="ss-cover"></div> }
         </div>
         <MudPaper Class="pa-4 ss-shop-head ss-card" Elevation="1">
             <div class="d-flex gap-3 align-start">
-                @if (_shop.LogoUrl is not null) { <MudAvatar Size="Size.Large" Style="width:64px;height:64px"><MudImage Src="@_shop.LogoUrl" /></MudAvatar> }
+                @if (_shop.LogoUrl is not null) { <span class="ss-zoomable" @onclick="@(() => ImagePreviewDialog.ShowAsync(Dialogs, _shop.LogoUrl, _shop.Name))"><MudAvatar Size="Size.Large" Style="width:64px;height:64px"><MudImage Src="@_shop.LogoUrl" /></MudAvatar></span> }
                 <div style="flex:1; min-width:0">
                     <MudText Typo="Typo.h6" Style="font-weight:700">@_shop.Name</MudText>
                     @if (_shop.RatingCount > 0)

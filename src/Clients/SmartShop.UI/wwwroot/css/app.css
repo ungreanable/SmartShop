@@ -140,3 +140,17 @@ body { overscroll-behavior-y: contain; }
 .ss-suspended-box { border-top: 1px dashed var(--mud-palette-lines-default); padding-top: 6px; }
 /* Remove button on photo thumbnails: bigger touch area than the visible circle */
 .ss-img-remove.mud-icon-button { position: absolute; top: -10px; right: -10px; padding: 8px; background: var(--mud-palette-surface) !important; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+/* Never squash photos: fill the box and crop the overflow instead of stretching */
+.mud-avatar img, .mud-avatar .mud-image { width: 100%; height: 100%; object-fit: cover; }
+.ss-item-img { object-fit: cover; border-radius: 12px; background: #E9ECEF; flex: none; }
+.ss-rating-row { display: grid; grid-template-columns: 26px 1fr 22px; align-items: center; gap: 6px; }
+/* Image preview: whole picture, never cropped */
+.ss-preview { display: flex; justify-content: center; align-items: center; background: #000; cursor: zoom-out; }
+.ss-preview img { max-width: 100%; max-height: 80vh; object-fit: contain; display: block; }
+.ss-zoomable { cursor: zoom-in; }
+.ss-review-head { display: flex; align-items: center; gap: 16px; }
+.ss-review-score { display: flex; flex-direction: column; align-items: center; flex: none; }
+.ss-review-bars { flex: 1; min-width: 0; }
+/* Long unbroken text (file names, URLs, error messages) wraps instead of widening the page */
+.mud-typography, .mud-snackbar-content-message, .mud-alert-message, .mud-dialog-content, .mud-chip-content, .mud-link { overflow-wrap: anywhere; }
+.mud-chip { max-width: 100%; }

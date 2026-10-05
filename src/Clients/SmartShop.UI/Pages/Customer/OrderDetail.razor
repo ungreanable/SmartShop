@@ -127,7 +127,7 @@
         @if (_order.DeliveryPhotoUrl is not null)
         {
             <MudText Typo="Typo.subtitle2" Class="mt-3">@L["รูปการส่ง", "Delivery photo"]</MudText>
-            <img src="@_order.DeliveryPhotoUrl" alt="" style="width:100%; border-radius:12px" />
+            <img src="@_order.DeliveryPhotoUrl" alt="" class="ss-zoomable" style="width:100%; border-radius:12px" @onclick="@(() => ImagePreviewDialog.ShowAsync(Dialogs, _order.DeliveryPhotoUrl))" />
         }
 
         @* ---------------- customer actions ---------------- *@

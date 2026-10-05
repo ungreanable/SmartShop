@@ -46,7 +46,7 @@
                     <MudText Typo="Typo.body2" Style="font-weight:600">@L["ยอดที่ต้องโอน", "Amount"] @Fmt.Baht(_payment.Amount)</MudText>
                 </MudPaper>
             }
-            @if (_payment.ImageUrl is not null) { <img src="@_payment.ImageUrl" alt="" style="max-width:100%; border-radius:8px" class="mt-2" /> }
+            @if (_payment.ImageUrl is not null) { <img src="@_payment.ImageUrl" alt="" style="max-width:100%; border-radius:8px" class="mt-2 ss-zoomable" @onclick="@(() => ImagePreviewDialog.ShowAsync(Dialogs, _payment.ImageUrl))" /> }
             @if (_payment.Instructions is not null) { <MudText Typo="Typo.body2" Class="mt-2">ℹ️ @_payment.Instructions</MudText> }
             @if (_payment.MethodType == "Cash") { <MudText Typo="Typo.body2" Class="mt-2">💵 @L["ชำระเงินสดตอนรับสินค้า", "Pay cash on receipt"] · @Fmt.Baht(_payment.Amount)</MudText> }
         }
@@ -57,10 +57,15 @@
             <div class="d-flex flex-wrap gap-2 mt-1">
                 @foreach (var proof in _payment.Proofs)
                 {
-                    <a href="@proof.Url" target="_blank" rel="noopener">
-                        @if (proof.ThumbnailUrl is not null) { <img src="@proof.ThumbnailUrl" alt="" style="width:88px;height:88px;object-fit:cover;border-radius:8px" /> }
-                        else { <MudChip T="string" Icon="@Icons.Material.Filled.PictureAsPdf">PDF</MudChip> }
-                    </a>
+                    @if (proof.ThumbnailUrl is not null)
+                    {
+                        <img src="@proof.ThumbnailUrl" alt="" class="ss-zoomable" style="width:88px;height:88px;object-fit:cover;border-radius:8px"
+                             @onclick="@(() => ImagePreviewDialog.ShowAsync(Dialogs, proof.Url, L["สลิป", "Slip"]))" />
+                    }
+                    else
+                    {
+                        <a href="@proof.Url" target="_blank" rel="noopener"><MudChip T="string" Icon="@Icons.Material.Filled.PictureAsPdf">PDF</MudChip></a>
+                    }
                     @if (proof.DuplicateOfOrderNo is not null)
                     {
                         <MudAlert Severity="Severity.Error" Dense="true">⚠️ @L[$"สลิปนี้เคยใช้กับออเดอร์ #{proof.DuplicateOfOrderNo}", $"This slip was already used for order #{proof.DuplicateOfOrderNo}"]</MudAlert>
