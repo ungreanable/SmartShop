@@ -41,24 +41,35 @@
         </MudPaper>
     }
 
-    <MudText Typo="Typo.subtitle1" Class="mt-6 mb-2">@L["มีโค้ดเชิญ?", "Have a code?"]</MudText>
-    <div class="d-flex gap-2">
-        <MudTextField @bind-Value="_code" Immediate="true" Placeholder="ABCD2345" Variant="Variant.Outlined" Margin="Margin.Dense" Style="text-transform:uppercase" />
-        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="@(string.IsNullOrWhiteSpace(_code))" Href="@($"/join/{_code?.Trim()}")">@L["ถัดไป", "Next"]</MudButton>
+    <MudPaper Outlined="true" Class="pa-3 mt-4 ss-card">
+        <MudText Typo="Typo.subtitle1" Style="font-weight:600">@L["เข้าร่วมหมู่บ้านด้วยโค้ด", "Join with a code"]</MudText>
+        <MudText Typo="Typo.caption" Class="ss-muted d-block mb-2">@L["โค้ด 8 ตัวจากผู้ดูแลหมู่บ้าน", "The 8-character code from your village admin"]</MudText>
+        <div class="ss-code-row">
+            <MudTextField @bind-Value="_code" Immediate="true" Placeholder="ABCD2345" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Class="ss-code-input" MaxLength="16" OnKeyUp="@(e => { if (e.Key == "Enter") Join(); })" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(string.IsNullOrWhiteSpace(_code))" OnClick="Join">@L["ถัดไป", "Next"]</MudButton>
+        </div>
+    </MudPaper>
+
+    <div class="d-flex flex-column align-start gap-1 mt-4">
+        @if (Session.User?.IsSystemAdmin == true)
+        {
+            <MudButton Href="/system" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.HolidayVillage">@L["จัดการหมู่บ้านทั้งหมด (ผู้ดูแลระบบ)", "All villages (system admin)"]</MudButton>
+        }
+        <MudButton Variant="Variant.Text" Class="ss-muted" OnClick="SignOutAsync" StartIcon="@Icons.Material.Filled.Logout">@L["ออกจากระบบ", "Log out"]</MudButton>
     </div>
-
-    @if (Session.User?.IsSystemAdmin == true)
-    {
-        <MudButton Href="/system" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" Class="mt-6">@L["สร้างหมู่บ้าน (ผู้ดูแลระบบ)", "Create a village (system admin)"]</MudButton>
-    }
-
-    <MudButton Variant="Variant.Text" Class="mt-2" OnClick="SignOutAsync" StartIcon="@Icons.Material.Filled.Logout">@L["ออกจากระบบ", "Log out"]</MudButton>
 </AppGuard>
 
 @code {
     private string? _code;
 
     protected override async Task OnInitializedAsync() => await Plant.LoadAsync(force: true);
+
+    private void Join()
+    {
+        var code = _code?.Trim().ToUpperInvariant();
+        if (!string.IsNullOrEmpty(code)) Nav.NavigateTo($"/join/{Uri.EscapeDataString(code)}");
+    }
 
     private async Task RefreshAsync() => await Plant.LoadAsync(force: true);
 

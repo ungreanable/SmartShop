@@ -46,8 +46,8 @@
                 {
                     <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@L["ลูกค้าขอยกเลิก", "Customer asks to cancel"]: @_order.CancelRequestReason</MudAlert>
                     <div class="d-flex gap-2 mb-2">
-                        <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="@(() => ShopActionAsync("cancel", new { reason = _order.CancelRequestReason }))">@L["อนุมัติยกเลิก", "Approve cancel"]</MudButton>
-                        <MudButton Variant="Variant.Outlined" OnClick="@(() => ShopActionAsync("decline-cancel", new { }))">@L["ไม่อนุมัติ", "Decline"]</MudButton>
+                        <MudButton Disabled="_busy" Variant="Variant.Filled" Color="Color.Error" OnClick="@(() => ShopActionAsync("cancel", new { reason = _order.CancelRequestReason }))">@L["อนุมัติยกเลิก", "Approve cancel"]</MudButton>
+                        <MudButton Disabled="_busy" Variant="Variant.Outlined" OnClick="@(() => ShopActionAsync("decline-cancel", new { }))">@L["ไม่อนุมัติ", "Decline"]</MudButton>
                     </div>
                 }
                 @switch (_order.Status)
@@ -55,21 +55,21 @@
                     case "PendingAcceptance":
                         @if (_order.ExpiresAt is { } exp) { <MudText Typo="Typo.caption" Color="Color.Warning">⏳ @L["ต้องรับก่อน", "Accept before"] @Fmt.Time(exp)</MudText> }
                         <div class="d-flex gap-2 mt-1">
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true" OnClick="@(() => ShopActionAsync("accept", null))">@L["รับออเดอร์", "Accept"]</MudButton>
+                            <MudButton Disabled="_busy" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true" OnClick="@(() => ShopActionAsync("accept", null))">@L["รับออเดอร์", "Accept"]</MudButton>
                             <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Large" OnClick="RejectAsync">@L["ปฏิเสธ", "Reject"]</MudButton>
                         </div>
                         break;
                     case "Accepted":
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large" OnClick="@(() => ShopActionAsync("start", null))">@L["เริ่มทำ", "Start preparing"]</MudButton>
+                        <MudButton Disabled="_busy" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large" OnClick="@(() => ShopActionAsync("start", null))">@L["เริ่มทำ", "Start preparing"]</MudButton>
                         <MudButton Variant="Variant.Text" FullWidth="true" OnClick="DeliverAsync">@L["ส่งมอบเลย (ข้ามขั้นตอน)", "Hand over now"]</MudButton>
                         break;
                     case "Preparing":
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large" OnClick="@(() => ShopActionAsync("ready", null))">@L["พร้อมแล้ว", "Ready"]</MudButton>
+                        <MudButton Disabled="_busy" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large" OnClick="@(() => ShopActionAsync("ready", null))">@L["พร้อมแล้ว", "Ready"]</MudButton>
                         break;
                     case "Ready":
                         @if (_order.FulfillmentType == "Delivery")
                         {
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large" OnClick="@(() => ShopActionAsync("dispatch", null))">🛵 @L["ออกไปส่ง", "Out for delivery"]</MudButton>
+                            <MudButton Disabled="_busy" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large" OnClick="@(() => ShopActionAsync("dispatch", null))">🛵 @L["ออกไปส่ง", "Out for delivery"]</MudButton>
                         }
                         <MudButton Variant="@(_order.FulfillmentType == "Delivery" ? Variant.Text : Variant.Filled)" Color="Color.Primary" FullWidth="true" Size="Size.Large" OnClick="DeliverAsync">@L["ลูกค้ารับของแล้ว", "Handed over"]</MudButton>
                         break;
@@ -136,7 +136,7 @@
             <div class="d-flex flex-column gap-2 mt-3">
                 @if (_order.Status == "Delivered")
                 {
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" OnClick="@(() => CustomerActionAsync("confirm-received", null))">✅ @L["ยืนยันได้รับสินค้าแล้ว", "I received my order"]</MudButton>
+                    <MudButton Disabled="_busy" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" OnClick="@(() => CustomerActionAsync("confirm-received", null))">✅ @L["ยืนยันได้รับสินค้าแล้ว", "I received my order"]</MudButton>
                 }
                 @if (_order.Status == "PendingAcceptance")
                 {
@@ -220,18 +220,33 @@
 
     private async Task LoadAsync() => _order = await Api.Get<Order>($"api/orders/{OrderId}");
 
+    // Guards every order action against double taps on slow connections.
+    private bool _busy;
+
     private async Task ShopActionAsync(string action, object? body)
     {
-        var updated = await Api.Post<Order>($"api/merchant/orders/{OrderId}/{action}", body ?? new { });
-        if (updated is null) return;
-        _order = updated;
-        if (updated.Status != "PendingAcceptance") await Alarm.Dismiss(OrderId);
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            var updated = await Api.Post<Order>($"api/merchant/orders/{OrderId}/{action}", body ?? new { });
+            if (updated is null) return;
+            _order = updated;
+            if (updated.Status != "PendingAcceptance") await Alarm.Dismiss(OrderId);
+        }
+        finally { _busy = false; }
     }
 
     private async Task CustomerActionAsync(string action, object? body)
     {
-        var updated = await Api.Post<Order>($"api/orders/{OrderId}/{action}", body ?? new { });
-        if (updated is not null) _order = updated;
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            var updated = await Api.Post<Order>($"api/orders/{OrderId}/{action}", body ?? new { });
+            if (updated is not null) _order = updated;
+        }
+        finally { _busy = false; }
     }
 
     private async Task<string?> AskAsync(string title, string label, bool required = true)

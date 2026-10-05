@@ -76,7 +76,7 @@
                     <div class="d-flex align-center ps-4">
                         <MudText Typo="Typo.caption">📱 @(d.Label ?? d.Kind) · @Fmt.Ago(d.LastSeenAt, L)</MudText>
                         <MudSpacer />
-                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="@(() => RemoveDeviceAsync(d))" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="@(() => RemoveDeviceAsync(d))" aria-label="@L["เลิกแจ้งเตือนอุปกรณ์นี้", "Remove device"]" />
                     </div>
                 }
                 <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.NotificationsActive" OnClick="TestAsync">@L["ทดสอบแจ้งเตือน", "Send a test"]</MudButton>
@@ -188,6 +188,9 @@
 
     private async Task RemoveDeviceAsync(Device d)
     {
+        if (await Dialogs.ShowMessageBoxAsync(L["เลิกแจ้งเตือนบนอุปกรณ์นี้?", "Stop notifications on this device?"],
+                L["อุปกรณ์นี้จะไม่ได้รับแจ้งเตือนออเดอร์อีก", "This device will no longer receive order alerts."],
+                yesText: L["เลิกแจ้งเตือน", "Remove"], cancelText: L["ยกเลิก", "Cancel"]) != true) return;
         if (await Api.Delete($"api/notifications/devices/{d.Id}")) await LoadChannelsAsync();
     }
 

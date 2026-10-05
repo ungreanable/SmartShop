@@ -32,8 +32,10 @@
                         @if (line.Note is not null) { <MudText Typo="Typo.caption" Class="ss-muted">📝 @line.Note</MudText> }
                         @if (!line.IsOrderable) { <MudText Typo="Typo.caption" Color="Color.Error">⚠️ @Problem(line.Problem)</MudText> }
                     </div>
-                    <MudIconButton Size="Size.Small" Icon="@(line.Quantity == 1 ? Icons.Material.Filled.DeleteOutline : Icons.Material.Filled.Remove)" OnClick="@(() => ChangeAsync(line, -1))" />
-                    <MudText>@line.Quantity</MudText>
+                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error" OnClick="@(() => ChangeAsync(line, -line.Quantity))"
+                                   aria-label="@L["ลบออกจากตะกร้า", "Remove from cart"]" />
+                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Remove" Disabled="@(line.Quantity <= 1)" OnClick="@(() => ChangeAsync(line, -1))" />
+                    <MudText Style="min-width:16px; text-align:center">@line.Quantity</MudText>
                     <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Add" OnClick="@(() => ChangeAsync(line, 1))" />
                     <MudText Style="min-width:64px; text-align:right">@Fmt.Baht(line.LineTotal)</MudText>
                 </div>

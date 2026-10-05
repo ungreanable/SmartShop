@@ -1,5 +1,7 @@
 @* Village notices shown on the home page ("water outage tomorrow", "market on Saturday"). *@
 @inject Api Api
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
 
 @foreach (var a in _items)
 {
@@ -8,7 +10,7 @@
             <MudText Typo="Typo.body2">@(a.IsPinned ? "📌 " : "")<b>@a.Title</b></MudText>
             <MudText Typo="Typo.caption" Class="ss-muted">@Fmt.DateTime(a.StartsAt) @(a.EndsAt is { } e ? $"– {Fmt.DateTime(e)}" : "")</MudText>
         </div>
-        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="@(() => DeleteAsync(a))" />
+        <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="@(() => DeleteAsync(a))" aria-label="@L["ลบประกาศ", "Delete announcement"]" />
     </div>
 }
 <MudTextField @bind-Value="_title" Immediate="true" Label="@L["หัวข้อ", "Title"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
@@ -45,6 +47,11 @@
 
     private async Task DeleteAsync(Announcement a)
     {
-        if (await Api.Delete($"api/plant/admin/announcements/{a.Id}")) await LoadAsync();
+        if (await Dialogs.ShowMessageBoxAsync(L["ลบประกาศ?", "Delete announcement?"], a.Title, yesText: L["ลบ", "Delete"], cancelText: L["ยกเลิก", "Cancel"]) != true) return;
+        if (await Api.Delete($"api/plant/admin/announcements/{a.Id}"))
+        {
+            Snackbar.Add(L["ลบแล้ว", "Deleted"], Severity.Success);
+            await LoadAsync();
+        }
     }
 }

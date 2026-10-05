@@ -130,3 +130,11 @@ body { overscroll-behavior-y: contain; }
 .ss-setting-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 6px 0; }
 .ss-setting-row > :first-child { flex: 1 1 180px; }
 
+
+/* Join-by-code row: input and button share one height */
+.ss-code-row { display: flex; gap: 8px; align-items: stretch; }
+.ss-code-row .ss-code-input { flex: 1; margin: 0; }
+.ss-code-row .ss-code-input input { text-transform: uppercase; letter-spacing: 2px; }
+.ss-code-row .mud-input-control { margin: 0; }
+.ss-code-row > .mud-button-root { min-width: 84px; }
+.ss-suspended-box { border-top: 1px dashed var(--mud-palette-lines-default); padding-top: 6px; }
