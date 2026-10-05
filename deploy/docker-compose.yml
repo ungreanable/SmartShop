@@ -64,7 +64,7 @@ services:
       web: { condition: service_started }
 
   web:
-    image: ${IMAGE_PREFIX:-ghcr.io/ungreanable}/smartshop-web:${TAG:-latest}
+    image: ${IMAGE_PREFIX:-ghcr.io/ungreanable}/smartshop-web:${TAG:-edge}
     restart: unless-stopped
     environment:
       <<: *dotnet-env
@@ -78,7 +78,7 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
 
   api:
-    image: ${IMAGE_PREFIX:-ghcr.io/ungreanable}/smartshop-api:${TAG:-latest}
+    image: ${IMAGE_PREFIX:-ghcr.io/ungreanable}/smartshop-api:${TAG:-edge}
     restart: unless-stopped
     environment:
       <<: *app-env
@@ -95,7 +95,7 @@ services:
       rabbitmq: { condition: service_healthy }
 
   worker:
-    image: ${IMAGE_PREFIX:-ghcr.io/ungreanable}/smartshop-worker:${TAG:-latest}
+    image: ${IMAGE_PREFIX:-ghcr.io/ungreanable}/smartshop-worker:${TAG:-edge}
     restart: unless-stopped
     environment:
       <<: *app-env
@@ -111,7 +111,7 @@ services:
 
   # Applies EF Core migrations of every module, then exits.
   migrator:
-    image: ${IMAGE_PREFIX:-ghcr.io/ungreanable}/smartshop-api:${TAG:-latest}
+    image: ${IMAGE_PREFIX:-ghcr.io/ungreanable}/smartshop-api:${TAG:-edge}
     restart: "no"
     command: ["migrate"]
     environment:

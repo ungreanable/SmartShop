@@ -265,7 +265,7 @@ cd deploy && cp .env.example .env && nano .env
 | ตัวแปร | ค่า |
 |---|---|
 | `DOMAIN` / `ADMIN_EMAIL` | Domain และอีเมลผู้ดูแล |
-| `IMAGE_PREFIX` / `TAG` | `smartshop-local` / `latest` (หรือ `ghcr.io/<owner>`) |
+| `IMAGE_PREFIX` / `TAG` | `smartshop-local` / `latest` (Build เอง) หรือ `ghcr.io/ungreanable` / `edge` (Image จาก GitHub ไม่มี Tag `latest` จนกว่าจะออก Release) |
 | `APP_ENVIRONMENT` / `DEV_LOGIN_ENABLED` | **`Production` / `false`** |
 | `POSTGRES_PASSWORD`, `RABBITMQ_PASSWORD`, `JWT_SIGNING_KEY`, `MEDIA_SIGNING_KEY`, `STORAGE_SECRET_KEY` | ค่าสุ่ม `openssl rand -hex 32` (ตั้งครั้งเดียว อย่าเปลี่ยน `POSTGRES_PASSWORD` หลังติดตั้ง) |
 | `LINE_*`, `SYSTEM_ADMIN_LINE_USER_ID` | จากข้อ 4 |
