@@ -15,6 +15,7 @@ cd "$(dirname "$0")/.."
 for project in src/Hosts/SmartShop.Api src/Hosts/SmartShop.Worker src/Clients/SmartShop.Web; do
   name="smartshop-$(basename "$project" | sed 's/^SmartShop\.//' | tr '[:upper:]' '[:lower:]')"
   echo "==> $prefix/$name:$tag ($runtime)"
+  bash scripts/codegen.sh "$project"
   dotnet publish "$project" -c Release -t:PublishContainer \
     -p:ContainerRuntimeIdentifier="$runtime" \
     -p:ContainerRepository="$prefix/$name" -p:ContainerImageTag="$tag"

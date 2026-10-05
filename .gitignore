@@ -496,3 +496,6 @@ src/Clients/SmartShop.Web.Client/Properties/launchSettings.json
 # TLS keys (Cloudflare Origin Certificate)
 deploy/certs/*
 !deploy/certs/README.md
+
+# Wolverine handler code, generated at image build time (dotnet run --project <host> -- codegen write)
+src/Hosts/*/Internal/Generated/

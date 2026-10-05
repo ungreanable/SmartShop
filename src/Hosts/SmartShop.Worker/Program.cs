@@ -10,5 +10,6 @@ builder.AddSmartShop(MessagingRole.Worker);
 
 var app = builder.Build();
 app.MapDefaultEndpoints();
+if (await app.TryRunCodegenAsync(args)) return Environment.ExitCode;
 await app.RunAsync();
 return 0;

@@ -38,6 +38,16 @@ Integration tests boot the real API against PostgreSQL in `Standalone` messaging
 through durable local queues) with **row-level security enabled**. External services (LINE, slip verifier, webhook
 receivers) are replaced by fakes in `tests/SmartShop.IntegrationTests/Infrastructure`.
 
+## Container images and handler code generation
+
+`scripts/build-images.sh` (local) and `scripts/publish-multiarch.sh` (CI) run `scripts/codegen.sh` first, which
+pre-generates the Wolverine message-handler code into `src/Hosts/<Api|Worker>/Internal/Generated` (git-ignored).
+Without it every container compiles its handlers with Roslyn at start-up, which costs about 1 GB of memory that is
+never given back. Locally (`dotnet run`) handlers are still compiled at runtime, so nothing changes for development.
+
+If you ran `codegen.sh` yourself and later change a handler, delete `src/Hosts/*/Internal` (stale generated code
+fails the build loudly rather than misbehaving).
+
 ## Architecture rules (enforced by `tests/SmartShop.ArchitectureTests`)
 
 - A module never references another module. Cross-module calls go through `SmartShop.Contracts`

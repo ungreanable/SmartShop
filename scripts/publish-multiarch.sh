@@ -10,6 +10,8 @@ set -euo pipefail
 project="$1"; registry="$2"; repository="$3"; tags="$4"
 build_tag="build-$(date +%s)"
 
+bash "$(dirname "$0")/codegen.sh" "$project"
+
 for arch in x64 arm64; do
   echo "==> $registry/$repository:$build_tag-$arch"
   dotnet publish "$project" -c Release -t:PublishContainer \

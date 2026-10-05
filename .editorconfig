@@ -395,3 +395,8 @@ dotnet_naming_style.s_camelcase.capitalization = camel_case
 [**/Migrations/*.cs]
 generated_code = true
 dotnet_analyzer_diagnostic.severity = none
+
+# Wolverine handler code generated at image build time
+[src/Hosts/*/Internal/Generated/**.cs]
+generated_code = true
+

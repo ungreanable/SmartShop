@@ -144,8 +144,18 @@ public static class SmartShopHost
         return true;
     }
 
+    /// <summary>"codegen write" pre-generates Wolverine handler code (run before building images); "codegen preview" shows it.</summary>
+    public static async Task<bool> TryRunCodegenAsync(this WebApplication app, string[] args)
+    {
+        if (args.Length == 0 || !args[0].Equals("codegen", StringComparison.OrdinalIgnoreCase)) return false;
+        Environment.ExitCode = await JasperFx.CommandLineHostingExtensions.RunJasperFxCommands(app, args);
+        return true;
+    }
+
     public static async Task RunSmartShopAsync(this WebApplication app, string[] args)
     {
+        if (await app.TryRunCodegenAsync(args)) return;
+
         if (args.Contains("migrate", StringComparer.OrdinalIgnoreCase))
         {
             await MigrateAsync(app.Services);
