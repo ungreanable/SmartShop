@@ -165,7 +165,11 @@ public static class SendMobilePushHandler
 
         var response = await messaging.SendEachForMulticastAsync(new MulticastMessage
         {
+            // FirebaseAdmin 3.7 marks Tokens obsolete in favour of Fids (installation IDs), but the app registers FCM
+            // registration tokens, which are not FIDs. Keep Tokens until the mobile app switches to installation IDs.
+#pragma warning disable CS0618
             Tokens = devices.Select(d => d.Endpoint).ToList(),
+#pragma warning restore CS0618
             Notification = new FirebaseAdmin.Messaging.Notification { Title = notification.Title, Body = notification.Body },
             Data = new Dictionary<string, string> { ["url"] = notification.Link ?? "/", ["type"] = notification.Type },
             Android = new AndroidConfig { Priority = notification.Priority == NotificationPriority.High ? Priority.High : Priority.Normal },

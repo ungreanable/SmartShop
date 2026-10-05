@@ -233,7 +233,7 @@
 
     private async Task DeleteAsync()
     {
-        if (await Dialogs.ShowMessageBoxAsync(L["ลบรายการนี้?", "Delete this item?"], _name, yesText: L["ลบ", "Delete"], cancelText: L["ยกเลิก", "Cancel"]) == true
+        if (await Dialogs.ShowMessageBoxAsync(L["ลบรายการนี้?", "Delete this item?"], _name ?? "", yesText: L["ลบ", "Delete"], cancelText: L["ยกเลิก", "Cancel"]) == true
             && await Api.Delete($"api/merchant/shops/{ShopId}/catalog/items/{ItemId}"))
             Nav.NavigateTo($"/merchant/{ShopId}/menu");
     }

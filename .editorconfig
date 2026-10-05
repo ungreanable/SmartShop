@@ -400,3 +400,7 @@ dotnet_analyzer_diagnostic.severity = none
 [src/Hosts/*/Internal/Generated/**.cs]
 generated_code = true
 
+
+# Tests: constant arrays in request bodies are clearer inline than as static fields.
+[tests/**.cs]
+dotnet_diagnostic.CA1861.severity = none

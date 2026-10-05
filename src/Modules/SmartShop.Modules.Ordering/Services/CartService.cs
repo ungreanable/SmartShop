@@ -27,8 +27,9 @@ internal sealed class CartService(
     {
         var shop = await shops.GetOrderingInfoAsync(req.ShopId, ct);
         if (shop is null || shop.PlantId != plant.PlantId) throw new NotFoundException("Shop", req.ShopId);
-        var item = (await catalog.GetCheckoutItemsAsync(req.ShopId, [req.ItemId], req.SlotStart ?? clock.GetUtcNow(), ct)).FirstOrDefault()
-                   ?? throw new NotFoundException("Item", req.ItemId);
+        var item = await catalog.GetCheckoutItemsAsync(req.ShopId, [req.ItemId], req.SlotStart ?? clock.GetUtcNow(), ct) is [var found, ..]
+            ? found
+            : throw new NotFoundException("Item", req.ItemId);
         var priced = LinePricer.Price(item, req.OptionIds ?? []);
         if (priced.Error is { } error) throw new DomainException("option_invalid", LinePricer.ErrorMessage(item.Name, error));
         if (item.StockMode == StockMode.Slot && req.SlotStart is null)

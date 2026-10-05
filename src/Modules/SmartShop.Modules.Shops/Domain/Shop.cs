@@ -260,7 +260,7 @@ public sealed class Shop
     public void SetNotifications(Guid userId, bool enabled)
     {
         var member = Member(userId) ?? throw new NotFoundException("Shop member", userId);
-        if (!enabled && Members.Count(m => m.ReceiveOrderNotifications && m.UserId != userId) == 0)
+        if (!enabled && !Members.Any(m => m.ReceiveOrderNotifications && m.UserId != userId))
             throw new DomainException("last_notification_recipient",
                 "At least one member must keep order notifications on, otherwise new orders could be missed.");
         member.SetNotifications(enabled);
