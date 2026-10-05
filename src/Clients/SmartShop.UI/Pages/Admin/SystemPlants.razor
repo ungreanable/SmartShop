@@ -3,6 +3,7 @@
 @inject Api Api
 @inject PlantContext Plant
 @inject NavigationManager Nav
+@inject Session Session
 
 <AppGuard RequirePlant="false" RequireSystemAdmin="true">
     <div class="d-flex align-center gap-1 mb-3">
@@ -50,7 +51,10 @@
     private string? _name;
     private bool _busy;
 
-    protected override async Task OnInitializedAsync() => _plants = await Api.Get<List<PlantSummary>>("api/admin/plants") ?? [];
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session.User?.IsSystemAdmin == true) _plants = await Api.Get<List<PlantSummary>>("api/admin/plants") ?? [];
+    }
 
     private async Task OpenAsync(Guid plantId)
     {

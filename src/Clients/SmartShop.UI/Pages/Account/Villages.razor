@@ -63,7 +63,10 @@
 @code {
     private string? _code;
 
-    protected override async Task OnInitializedAsync() => await Plant.LoadAsync(force: true);
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session.IsAuthenticated) await Plant.LoadAsync(force: true);
+    }
 
     private void Join()
     {

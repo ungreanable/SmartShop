@@ -141,7 +141,10 @@ public sealed class Api(HttpClient http, Session session, PlantContextAccessor p
         if (response.StatusCode == HttpStatusCode.Unauthorized)
         {
             await session.SignOutAsync();
-            nav.NavigateTo("/login?returnUrl=" + Uri.EscapeDataString(nav.ToBaseRelativePath(nav.Uri)));
+            // Keep the page the user wanted (e.g. a join link) and never nest login inside login.
+            var here = "/" + nav.ToBaseRelativePath(nav.Uri);
+            if (!here.StartsWith("/login", StringComparison.OrdinalIgnoreCase))
+                nav.NavigateTo("/login?returnUrl=" + Uri.EscapeDataString(here));
             return;
         }
         if (!silent) snackbar.Add(LastProblem.Message, Severity.Warning);

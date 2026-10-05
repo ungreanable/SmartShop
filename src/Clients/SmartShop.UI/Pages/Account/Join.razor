@@ -3,6 +3,7 @@
 @inject Api Api
 @inject PlantContext Plant
 @inject NavigationManager Nav
+@inject Session Session
 
 <AppGuard RequirePlant="false">
     @if (_preview is null)
@@ -48,6 +49,8 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        // Not signed in yet: AppGuard sends the user to login and back here; loading now would lose the link.
+        if (!Session.IsAuthenticated) return;
         _preview = await Api.Get<JoinPreview>($"api/plants/join/{Uri.EscapeDataString(Code.Trim())}");
         if (_preview is null) { Nav.NavigateTo("/villages"); return; }
         await Plant.LoadAsync(force: true);
