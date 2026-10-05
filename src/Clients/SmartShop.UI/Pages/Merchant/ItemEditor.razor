@@ -35,7 +35,7 @@
                 {
                     <div style="position:relative">
                         <img src="@img.Url" alt="" style="width:80px;height:80px;object-fit:cover;border-radius:8px" />
-                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Style="position:absolute;top:-8px;right:-8px;background:#fff" OnClick="@(() => _images.Remove(img))" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Class="ss-img-remove" OnClick="@(() => _images.Remove(img))" aria-label="@L["นำรูปออก", "Remove photo"]" />
                     </div>
                 }
                 @if (_images.Count < 5) { <ImageUploader Purpose="ItemImage" Uploaded="@(f => { if (f is not null) _images.Add((f.Id, f.ThumbnailUrl)); })" /> }
@@ -103,7 +103,7 @@
                                 <MudTextField @bind-Value="g.Name" Label="@L["ชื่อกลุ่ม เช่น ขนาด", "Group, e.g. Size"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
                                 <MudNumericField T="int" @bind-Value="g.MinSelect" Label="@L["เลือกอย่างน้อย", "Min"]" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:90px" />
                                 <MudNumericField T="int" @bind-Value="g.MaxSelect" Label="@L["มากสุด", "Max"]" Min="1" Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:90px" />
-                                <MudIconButton Icon="@Icons.Material.Filled.Delete" OnClick="@(() => _groups.Remove(g))" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="@(() => RemoveGroupAsync(g))" aria-label="@L["ลบกลุ่มตัวเลือก", "Delete option group"]" />
                             </div>
                             @foreach (var o in g.Options)
                             {
@@ -240,4 +240,14 @@
 
     private async Task ShowMovementsAsync() =>
         _movements = await Api.Get<List<Movement>>($"api/merchant/shops/{ShopId}/catalog/items/{ItemId}/movements") ?? [];
+
+    private async Task RemoveGroupAsync(GroupForm g)
+    {
+        var named = g.Options.Count(o => !string.IsNullOrWhiteSpace(o.Name));
+        if (named > 0 && await Dialogs.ShowMessageBoxAsync(L["ลบกลุ่มตัวเลือก?", "Delete option group?"],
+                L[$"ตัวเลือก {named} รายการในกลุ่มนี้จะถูกลบด้วย (มีผลเมื่อกดบันทึก)", $"Its {named} options are removed too (applies when you save)"],
+                yesText: L["ลบ", "Delete"], cancelText: L["ยกเลิก", "Cancel"]) != true)
+            return;
+        _groups.Remove(g);
+    }
 }

@@ -14,7 +14,7 @@ public sealed class Loc(IAppStorage storage)
     public bool IsThai => Language == "th";
     public event Action? Changed;
 
-    public string this[string th, string en] => IsThai ? th : en;
+    public string this[string th, string en] => IsThai ? ThaiText.KeepLoanwords(th) : en;
 
     public async Task InitializeAsync()
     {
@@ -75,5 +75,25 @@ public static class Fmt
         if (span.TotalMinutes < 60) return l[$"{(int)span.TotalMinutes} นาทีที่แล้ว", $"{(int)span.TotalMinutes} min ago"];
         if (span.TotalHours < 24) return l[$"{(int)span.TotalHours} ชม.ที่แล้ว", $"{(int)span.TotalHours} h ago"];
         return DateTime(value);
+    }
+}
+
+/// <summary>
+/// Browsers split Thai lines with a dictionary that lacks many loanwords, so "ออเดอร์" can wrap as "ออเดอ|ร์".
+/// Joining their letters with U+2060 WORD JOINER (invisible) keeps them on one line.
+/// </summary>
+public static class ThaiText
+{
+    private const char Joiner = '⁠';
+
+    private static readonly (string Word, string Joined)[] Loanwords =
+        new[] { "ออเดอร์", "โปรโมชั่น", "สต็อก", "เซิร์ฟเวอร์", "แอดมิน", "ออนไลน์", "เมนู", "สลิป", "คิวอาร์", "ล็อกอิน", "แอป", "ไลน์", "เช็ค" }
+            .Select(w => (w, string.Join(Joiner, w.ToCharArray()))).ToArray();
+
+    public static string KeepLoanwords(string text)
+    {
+        foreach (var (word, joined) in Loanwords)
+            if (text.Contains(word, StringComparison.Ordinal)) text = text.Replace(word, joined, StringComparison.Ordinal);
+        return text;
     }
 }

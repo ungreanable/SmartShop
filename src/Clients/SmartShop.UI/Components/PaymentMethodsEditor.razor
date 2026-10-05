@@ -8,7 +8,7 @@
         <MudText>@CartPage.PaymentIcon(m.Type) @m.DisplayName @(m.Enabled ? "" : L["(ปิด)", "(off)"])</MudText>
         <MudSpacer />
         <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => EditAsync(m))" />
-        @if (m.Type != "Cash") { <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="@(() => DeleteAsync(m))" /> }
+        @if (m.Type != "Cash") { <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="@(() => DeleteAsync(m))" aria-label="@L["ลบช่องทางชำระเงิน", "Delete payment method"]" /> }
     </div>
 }
 <MudMenu Label="@L["เพิ่มวิธีชำระเงิน", "Add payment method"]" StartIcon="@Icons.Material.Filled.Add" Variant="Variant.Outlined" Size="Size.Small" Class="mt-2">

@@ -3,6 +3,7 @@
 @inject Session Session
 @inject Browser Browser
 @inject IDialogService Dialogs
+@inject NavigationManager Nav
 @inject ISnackbar Snackbar
 
 @foreach (var m in _members)
@@ -84,8 +85,17 @@
 
     private async Task RemoveAsync(ShopMember m)
     {
-        if (await Dialogs.ShowMessageBoxAsync(L["ยืนยัน?", "Are you sure?"], m.DisplayName, yesText: L["ยืนยัน", "Confirm"], cancelText: L["ยกเลิก", "Cancel"]) == true
-            && await Api.Delete(Base(m.UserId))) await LoadAsync();
+        var self = m.UserId == Session.User?.Id;
+        var ok = self
+            ? await Dialogs.ShowMessageBoxAsync(L["ออกจากร้าน?", "Leave this shop?"],
+                L["คุณจะไม่ได้รับแจ้งเตือนออเดอร์ และเข้าหน้าจัดการร้านนี้ไม่ได้อีก จนกว่าเจ้าของจะเพิ่มกลับ", "You will stop getting order alerts and lose access to this shop until the owner adds you again."],
+                yesText: L["ออกจากร้าน", "Leave"], cancelText: L["ยกเลิก", "Cancel"])
+            : await Dialogs.ShowMessageBoxAsync(L[$"นำ {m.DisplayName} ออกจากร้าน?", $"Remove {m.DisplayName}?"],
+                L["คนนี้จะเข้าหน้าจัดการร้านและรับแจ้งเตือนออเดอร์ไม่ได้อีก", "They will lose access to this shop and its order alerts."],
+                yesText: L["นำออก", "Remove"], cancelText: L["ยกเลิก", "Cancel"]);
+        if (ok != true || !await Api.Delete(Base(m.UserId))) return;
+        if (self) Nav.NavigateTo("/profile", forceLoad: true);
+        else await LoadAsync();
     }
 
     private async Task TransferAsync(ShopMember m)
