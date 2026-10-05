@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using SmartShop.Modules.Shops.Data;
@@ -12,9 +13,11 @@ using SmartShop.Modules.Shops.Data;
 namespace SmartShop.Modules.Shops.Data.Migrations
 {
     [DbContext(typeof(ShopsDbContext))]
-    partial class ShopsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261005182050_SuspendedShopVisibility")]
+    partial class SuspendedShopVisibility
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

@@ -3,13 +3,24 @@
 @inject Api Api
 @inject AppConfig Config
 @inject ISnackbar Snackbar
+@inject IDialogService Dialogs
 
 <div class="ss-page">
     <MudText Typo="Typo.h5" Class="mb-3" Style="font-weight:700">@L["ตั้งค่าร้าน", "Shop settings"]</MudText>
     @if (_s is null) { <Loading /> }
     else
     {
-        @if (_s.Lifecycle == "Suspended") { <MudAlert Severity="Severity.Error" Class="mb-3">@L["ร้านถูกระงับโดยผู้ดูแลหมู่บ้าน", "Suspended by the village admin"]: @_s.SuspendReason</MudAlert> }
+        @if (_s.Lifecycle == "Suspended")
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-3">
+                @L["ร้านถูกระงับโดยผู้ดูแลหมู่บ้าน", "Suspended by the village admin"]@(string.IsNullOrWhiteSpace(_s.SuspendReason) ? "" : ": " + _s.SuspendReason)
+                <MudText Typo="Typo.caption" Class="d-block">
+                    @(_s.VisibleWhileSuspended
+                        ? L["ลูกค้ายังเห็นร้าน แต่สั่งซื้อไม่ได้", "Customers can still see the shop but cannot order"]
+                        : L["ลูกค้าไม่เห็นร้านจนกว่าจะคืนสถานะ", "Hidden from customers until reinstated"])
+                </MudText>
+            </MudAlert>
+        }
 
         <NotificationHealthView ShopId="ShopId" />
 
@@ -46,7 +57,7 @@
                     <div class="d-flex align-center">
                         <MudText Typo="Typo.body2">@Fmt.DateTime(c.Start) – @Fmt.DateTime(c.End) @c.Reason</MudText>
                         <MudSpacer />
-                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="@(() => RemoveClosureAsync(c))" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="@(() => RemoveClosureAsync(c))" aria-label="@L["ลบวันปิดร้าน", "Delete closure"]" />
                     </div>
                 }
                 <div class="ss-grid-2 mt-2">
@@ -164,7 +175,12 @@
         await Saved(await Api.Post<Closure>(Url("closures"), new { start, end, reason = _closeReason }) is not null);
     }
 
-    private async Task RemoveClosureAsync(Closure c) => await Saved(await Api.Delete(Url($"closures/{c.Id}")));
+    private async Task RemoveClosureAsync(Closure c)
+    {
+        if (await Dialogs.ShowMessageBoxAsync(L["ลบวันปิดร้าน?", "Delete this closure?"], $"{Fmt.DateTime(c.Start)} – {Fmt.DateTime(c.End)}",
+                yesText: L["ลบ", "Delete"], cancelText: L["ยกเลิก", "Cancel"]) == true)
+            await Saved(await Api.Delete(Url($"closures/{c.Id}")));
+    }
 
     private async Task StartVacationAsync()
     {

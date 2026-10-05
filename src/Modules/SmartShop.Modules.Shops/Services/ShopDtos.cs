@@ -33,7 +33,8 @@ public sealed record ShopSettingsDto(
     ShopDetailsDto Shop, Guid? LogoId, Guid? CoverId, ShopLifecycle Lifecycle, string? SuspendReason,
     AcceptMode AcceptMode, int AcceptTimeoutMinutes, int ReminderAfterMinutes, int AutoCompleteHours,
     bool AllowPreorderWhenClosed, int SlotIntervalMinutes, bool RequirePaymentBeforePreparing,
-    OverrideMode OverrideMode, DateTimeOffset? OverrideUntil, DateTimeOffset? BusyUntil, DateTimeOffset? VacationUntil);
+    OverrideMode OverrideMode, DateTimeOffset? OverrideUntil, DateTimeOffset? BusyUntil, DateTimeOffset? VacationUntil,
+    bool VisibleWhileSuspended);
 
 public sealed record MyShopDto(Guid Id, string Name, string Code, string? LogoUrl, ShopRole Role, ShopStatusDto Status, ShopLifecycle Lifecycle, bool ReceiveOrderNotifications);
 
@@ -70,7 +71,7 @@ internal static class ShopMapper
         Details(s, media, now, viewerId, false, includeDisabledPayments: true), s.LogoId, s.CoverId, s.Status, s.SuspendReason,
         s.AcceptMode, s.AcceptTimeoutMinutes, s.ReminderAfterMinutes, s.AutoCompleteHours,
         s.AllowPreorderWhenClosed, s.SlotIntervalMinutes, s.RequirePaymentBeforePreparing,
-        s.OverrideMode, s.OverrideUntil, s.BusyUntil, s.VacationUntil);
+        s.OverrideMode, s.OverrideUntil, s.BusyUntil, s.VacationUntil, s.VisibleWhileSuspended);
 
     /// <summary>A, B, ... Z, AA, AB ... : short, readable prefixes for order numbers.</summary>
     public static string CodeFor(int index)

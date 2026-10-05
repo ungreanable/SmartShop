@@ -18,9 +18,10 @@ namespace SmartShop.Modules.Shops.Endpoints;
 public sealed record WindowDto(DateTimeOffset Start, DateTimeOffset End);
 
 public sealed record AdminShopRow(Guid Id, string Name, string Code, string? LogoUrl, ShopLifecycle Lifecycle, string? SuspendReason,
-    ShopStatusDto Status, Guid OwnerId, int MemberCount, decimal RatingAverage, int RatingCount, DateTimeOffset CreatedAt);
+    bool VisibleWhileSuspended, ShopStatusDto Status, Guid OwnerId, int MemberCount, decimal RatingAverage, int RatingCount, DateTimeOffset CreatedAt);
 
-public sealed record SuspendRequest(string? Reason);
+public sealed record SuspendRequest(string? Reason, bool Visible = false);
+public sealed record SuspensionVisibilityRequest(bool Visible);
 
 internal static class ShopEndpoints
 {
@@ -34,7 +35,7 @@ internal static class ShopEndpoints
             var shop = await db.Shops.AsNoTracking().FirstOrDefaultAsync(s => s.Id == id && s.PlantId == plant.PlantId, ct)
                        ?? throw new NotFoundException("Shop", id);
             var isMember = shop.Member(user.Id) is not null;
-            if (shop.Status == ShopLifecycle.Suspended && !isMember && plant.Membership.Role != Contracts.Plants.PlantRole.PlantAdmin)
+            if (!shop.IsListed && !isMember && plant.Membership.Role != Contracts.Plants.PlantRole.PlantAdmin)
                 throw new NotFoundException("Shop", id);
             var favorite = await db.Favorites.AnyAsync(f => f.UserId == user.Id && f.ShopId == id, ct);
             return ShopMapper.Details(shop, media, clock.GetUtcNow(), user.Id, favorite);
@@ -95,7 +96,7 @@ internal static class ShopEndpoints
             var now = clock.GetUtcNow();
             var all = await db.Shops.AsNoTracking().Where(s => s.PlantId == plant.PlantId).OrderBy(s => s.Name).ToListAsync(ct);
             return all.Select(s => new AdminShopRow(s.Id, s.Name, s.Code, media.For(s.LogoId, MediaVariant.Small), s.Status, s.SuspendReason,
-                ShopMapper.Status(s, now), s.OwnerId, s.Members.Count, s.RatingAverage, s.RatingCount, s.CreatedAt)).ToList();
+                s.VisibleWhileSuspended, ShopMapper.Status(s, now), s.OwnerId, s.Members.Count, s.RatingAverage, s.RatingCount, s.CreatedAt)).ToList();
         });
 
         admin.MapPost("/{id:guid}/suspend", async (Guid id, SuspendRequest req, ICurrentPlant plant, ICurrentUser user,
@@ -103,9 +104,21 @@ internal static class ShopEndpoints
         {
             var shop = await outbox.DbContext.Shops.FirstOrDefaultAsync(s => s.Id == id && s.PlantId == plant.PlantId, ct)
                        ?? throw new NotFoundException("Shop", id);
-            shop.Suspend(req.Reason);
-            await outbox.PublishAsync(new ShopSuspended(shop.PlantId, shop.Id, user.Id, req.Reason));
+            shop.Suspend(req.Reason, req.Visible);
+            await outbox.PublishAsync(new ShopSuspended(shop.PlantId, shop.Id, user.Id, req.Reason, req.Visible));
             await outbox.PublishAsync(new EvaluateShopStatus(shop.Id));
+            await outbox.SaveChangesAndFlushMessagesAsync(ct);
+            return Results.NoContent();
+        });
+
+        // Show or hide a suspended shop from customers without lifting the suspension.
+        admin.MapPut("/{id:guid}/suspension-visibility", async (Guid id, SuspensionVisibilityRequest req, ICurrentPlant plant,
+            IDbContextOutbox<ShopsDbContext> outbox, CancellationToken ct) =>
+        {
+            var shop = await outbox.DbContext.Shops.FirstOrDefaultAsync(s => s.Id == id && s.PlantId == plant.PlantId, ct)
+                       ?? throw new NotFoundException("Shop", id);
+            shop.SetVisibleWhileSuspended(req.Visible);
+            await outbox.PublishAsync(new ShopProfileUpdated(shop.PlantId, shop.Id));
             await outbox.SaveChangesAndFlushMessagesAsync(ct);
             return Results.NoContent();
         });

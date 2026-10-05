@@ -45,6 +45,10 @@
                     @promo.Description@(promo.MinOrder is { } min ? $" · {L["เมื่อสั่งครบ", "on orders from"]} {Fmt.Baht(min)}" : "")
                 </MudAlert>
             }
+            @if (Suspended)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@L["ร้านนี้ถูกระงับชั่วคราวโดยผู้ดูแลหมู่บ้าน ยังสั่งซื้อไม่ได้", "This shop is temporarily suspended by the village admin and cannot take orders"]</MudAlert>
+            }
             @if (_shop.VacationMessage is not null) { <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@_shop.VacationMessage</MudAlert> }
             @if (_shop.Description is not null) { <MudText Typo="Typo.body2" Class="mt-2">@_shop.Description</MudText> }
             <MudExpansionPanels Elevation="0" Class="mt-1">
@@ -102,7 +106,7 @@
                         </div>
                         <div class="@(item.ThumbnailUrl is null ? "ss-item-add-only" : "ss-item-media")">
                             @if (item.ThumbnailUrl is not null) { <img class="ss-item-img" src="@item.ThumbnailUrl" alt="" loading="lazy" /> }
-                            @if (item.IsOrderable)
+                            @if (item.IsOrderable && !Suspended)
                             {
                                 @* MudBlazor buttons stop click propagation, so the button needs its own handler. *@
                                 <MudFab Size="Size.Small" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Class="ss-item-add"
@@ -127,6 +131,8 @@
 }
 
 @code {
+    private bool Suspended => _shop?.Status.Reason == "Suspended";
+
     [Parameter] public Guid ShopId { get; set; }
 
     private ShopDetails? _shop;
@@ -176,7 +182,7 @@
 
     private async Task OpenItemAsync(MenuItem item)
     {
-        if (!item.IsOrderable || _shop is null) return;
+        if (!item.IsOrderable || _shop is null || Suspended) return;
         var parameters = new DialogParameters<ItemDialog> { { x => x.Item, item }, { x => x.ShopId, ShopId } };
         var dialog = await Dialogs.ShowAsync<ItemDialog>(item.Name, parameters, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small, Position = DialogPosition.BottomCenter });
         if (await dialog.Result is { Canceled: false, Data: Cart cart })

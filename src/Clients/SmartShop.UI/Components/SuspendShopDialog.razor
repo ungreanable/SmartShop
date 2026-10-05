@@ -1,0 +1,29 @@
+<MudDialog>
+    <DialogContent>
+        <MudTextField @bind-Value="_reason" Label="@L["เหตุผล (ร้านจะเห็น)", "Reason (shown to the shop)"]" Variant="Variant.Outlined"
+                      Lines="3" AutoFocus="true" Immediate="true" MaxLength="300" />
+        <MudText Typo="Typo.subtitle2" Class="mt-3">@L["ระหว่างระงับ ลูกค้า", "While suspended, customers"]</MudText>
+        <MudRadioGroup T="bool" @bind-Value="_visible">
+            <MudRadio T="bool" Value="false" Color="Color.Primary">
+                <MudText Typo="Typo.body2">@L["ไม่เห็นร้าน", "Do not see the shop"]</MudText>
+                <MudText Typo="Typo.caption" Class="ss-muted">@L["ซ่อนจากรายการร้าน การค้นหา และลิงก์ร้าน", "Hidden from the shop list, search and shop links"]</MudText>
+            </MudRadio>
+            <MudRadio T="bool" Value="true" Color="Color.Primary">
+                <MudText Typo="Typo.body2">@L["ยังเห็นร้าน แต่สั่งซื้อไม่ได้", "Still see the shop, but cannot order"]</MudText>
+                <MudText Typo="Typo.caption" Class="ss-muted">@L["แสดงป้าย \"ถูกระงับ\" ดูเมนูได้", "Marked \"Suspended\", menu stays viewable"]</MudText>
+            </MudRadio>
+        </MudRadioGroup>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["ยกเลิก", "Cancel"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Error" Disabled="@string.IsNullOrWhiteSpace(_reason)"
+                   OnClick="@(() => Dialog.Close(DialogResult.Ok(new SuspendShopResult(_reason!.Trim(), _visible))))">@L["ระงับร้าน", "Suspend"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    private string? _reason;
+    private bool _visible;
+}

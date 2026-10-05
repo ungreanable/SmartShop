@@ -199,6 +199,30 @@ public class ShopTests(SmartShopFactory factory)
     }
 
     [Fact]
+    public async Task Suspended_shop_can_stay_visible_without_taking_orders()
+    {
+        var (plant, admin, owner, shopId) = await factory.CreateShopAsync();
+        var customer = await factory.JoinAsync(plant, admin);
+        await owner.PostOkAsync($"/api/merchant/shops/{shopId}/status", new { action = "open" });
+
+        await admin.PostOkAsync($"/api/plant/admin/shops/{shopId}/suspend", new { reason = "ตรวจสอบ", visible = true });
+
+        (await customer.GetAsync<ShopDetailsDto>($"/api/shops/{shopId}")).Status.Reason.ShouldBe("Suspended");
+        await FactoryExtensions.EventuallyAsync(async () =>
+        {
+            var home = await customer.GetAsync<HomeDto>("/api/home");
+            home.Shops.Single(s => s.Id == shopId).Status.Reason.ShouldBe("Suspended");
+            home.OpenNow.ShouldNotContain(s => s.Id == shopId);
+        });
+
+        await admin.PutOkAsync($"/api/plant/admin/shops/{shopId}/suspension-visibility", new { visible = false });
+
+        (await customer.GetRawAsync($"/api/shops/{shopId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        await FactoryExtensions.EventuallyAsync(async () =>
+            (await customer.GetAsync<HomeDto>("/api/home")).Shops.ShouldNotContain(s => s.Id == shopId));
+    }
+
+    [Fact]
     public async Task Favorites_can_be_toggled()
     {
         var (plant, admin, _, shopId) = await factory.CreateShopAsync();

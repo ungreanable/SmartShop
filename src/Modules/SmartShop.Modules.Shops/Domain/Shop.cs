@@ -28,6 +28,12 @@ public sealed class Shop
     public ShopLifecycle Status { get; private set; }
     public string? SuspendReason { get; private set; }
 
+    /// <summary>While suspended: customers still see the shop (marked suspended, no ordering) instead of it disappearing.</summary>
+    public bool VisibleWhileSuspended { get; private set; }
+
+    /// <summary>Shown in the village shop list, search and the shop page.</summary>
+    public bool IsListed => Status == ShopLifecycle.Active || VisibleWhileSuspended;
+
     // ---- open / closed ----
     public List<OpeningHour> Hours { get; private set; } = [];
     public List<ShopClosure> Closures { get; private set; } = [];
@@ -183,11 +189,18 @@ public sealed class Shop
         DeliveryMinOrder = deliveryMinOrder is { } min && min > 0 ? Guard.Money(min, "Minimum order") : null;
     }
 
-    public void Suspend(string? reason)
+    public void Suspend(string? reason, bool visible = false)
     {
         if (Status == ShopLifecycle.Suspended) throw new ConflictException("shop_state", "The shop is already suspended.");
         Status = ShopLifecycle.Suspended;
         SuspendReason = Guard.Optional(reason, "Reason", 500);
+        VisibleWhileSuspended = visible;
+    }
+
+    public void SetVisibleWhileSuspended(bool visible)
+    {
+        if (Status != ShopLifecycle.Suspended) throw new ConflictException("shop_state", "The shop is not suspended.");
+        VisibleWhileSuspended = visible;
     }
 
     public void Reinstate()
@@ -195,6 +208,7 @@ public sealed class Shop
         if (Status != ShopLifecycle.Suspended) throw new ConflictException("shop_state", "The shop is not suspended.");
         Status = ShopLifecycle.Active;
         SuspendReason = null;
+        VisibleWhileSuspended = false;
     }
 
     public void UpdateRating(decimal average, int count)

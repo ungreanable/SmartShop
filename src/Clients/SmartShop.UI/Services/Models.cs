@@ -39,13 +39,15 @@ public sealed record ShopDetails(Guid Id, string Name, string Code, string? Cate
     string? MyRole, bool IsFavorite);
 public sealed record ShopSettings(ShopDetails Shop, Guid? LogoId, Guid? CoverId, string Lifecycle, string? SuspendReason, string AcceptMode,
     int AcceptTimeoutMinutes, int ReminderAfterMinutes, int AutoCompleteHours, bool AllowPreorderWhenClosed, int SlotIntervalMinutes,
-    bool RequirePaymentBeforePreparing, string OverrideMode, DateTimeOffset? OverrideUntil, DateTimeOffset? BusyUntil, DateTimeOffset? VacationUntil);
+    bool RequirePaymentBeforePreparing, string OverrideMode, DateTimeOffset? OverrideUntil, DateTimeOffset? BusyUntil, DateTimeOffset? VacationUntil,
+    bool VisibleWhileSuspended = false);
 public sealed record MyShop(Guid Id, string Name, string Code, string? LogoUrl, string Role, ShopStatus Status, string Lifecycle, bool ReceiveOrderNotifications);
 public sealed record TimeWindow(DateTimeOffset Start, DateTimeOffset End);
 public sealed record ShopApplication(Guid Id, string Name, string? Category, string? Description, string? HouseNo, string? Phone,
     List<Guid> SampleImageIds, List<string?> SampleImageUrls, string Status, string? ReviewNote, DateTimeOffset SubmittedAt,
     DateTimeOffset? ReviewedAt, Guid? ShopId, Guid ApplicantId, string? ApplicantName, string? ApplicantPictureUrl);
-public sealed record AdminShopRow(Guid Id, string Name, string Code, string? LogoUrl, string Lifecycle, string? SuspendReason, ShopStatus Status,
+public sealed record SuspendShopResult(string Reason, bool Visible);
+public sealed record AdminShopRow(Guid Id, string Name, string Code, string? LogoUrl, string Lifecycle, string? SuspendReason, bool VisibleWhileSuspended, ShopStatus Status,
     Guid OwnerId, int MemberCount, decimal RatingAverage, int RatingCount, DateTimeOffset CreatedAt);
 public sealed record ShopMember(Guid UserId, string DisplayName, string? PictureUrl, string Role, bool ReceiveOrderNotifications, string? DisplayLabel, DateTimeOffset JoinedAt);
 public sealed record Invite(string Code, string Role, DateTimeOffset ExpiresAt, string Url);

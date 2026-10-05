@@ -45,7 +45,7 @@ internal sealed class ShopDirectory(ShopsDbContext db) : IShopDirectory
             ? null
             : new ShopListingSnapshot(s.Id, s.PlantId, s.Name, s.Description, s.Category, s.LogoId, s.CoverId, s.HouseNo,
                 s.PickupEnabled, s.DeliveryEnabled, s.AllowPreorderWhenClosed, s.PrepTimeMinutes,
-                s.RatingAverage, s.RatingCount, s.Status == ShopLifecycle.Active, s.ToSchedule(), s.CreatedAt);
+                s.RatingAverage, s.RatingCount, s.IsListed, s.ToSchedule(), s.CreatedAt);
     }
 
     public async Task<IReadOnlyList<Guid>> GetFavoritersAsync(Guid shopId, CancellationToken ct = default) =>

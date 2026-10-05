@@ -23,17 +23,24 @@
                     </div>
                     <StatusBadge Status="s.Status" />
                 </div>
-                <div class="d-flex justify-end mt-2">
-                    @if (s.Lifecycle == "Suspended")
-                    {
-                        <MudText Typo="Typo.caption" Color="Color.Error" Class="me-auto">@s.SuspendReason</MudText>
-                        <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => ActAsync(s, "reinstate", null))">@L["คืนสถานะ", "Reinstate"]</MudButton>
-                    }
-                    else
-                    {
+                @if (s.Lifecycle == "Suspended")
+                {
+                    <div class="ss-suspended-box mt-2">
+                        @if (!string.IsNullOrWhiteSpace(s.SuspendReason)) { <MudText Typo="Typo.caption" Color="Color.Error" Class="d-block">⛔ @s.SuspendReason</MudText> }
+                        <MudSwitch T="bool" Value="s.VisibleWhileSuspended" ValueChanged="@(v => SetVisibleAsync(s, v))" Color="Color.Primary" Class="ma-0">
+                            <MudText Typo="Typo.body2">@L["ลูกค้ายังเห็นร้าน (สั่งซื้อไม่ได้)", "Customers can still see the shop (no ordering)"]</MudText>
+                        </MudSwitch>
+                        <div class="d-flex justify-end">
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" OnClick="@(() => ReinstateAsync(s))">@L["คืนสถานะร้าน", "Reinstate"]</MudButton>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="d-flex justify-end mt-1">
                         <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => SuspendAsync(s))">@L["ระงับร้าน", "Suspend"]</MudButton>
-                    }
-                </div>
+                    </div>
+                }
             </MudPaper>
         }
     }
@@ -48,13 +55,19 @@
 
     private async Task SuspendAsync(AdminShopRow s)
     {
-        var parameters = new DialogParameters<TextPromptDialog> { { x => x.Label, L["เหตุผล (ร้านจะเห็น)", "Reason (shown to the shop)"] } };
-        var result = await (await Dialogs.ShowAsync<TextPromptDialog>(s.Name, parameters)).Result;
-        if (result is { Canceled: false, Data: string reason }) await ActAsync(s, "suspend", reason);
+        var result = await (await Dialogs.ShowAsync<SuspendShopDialog>(L["ระงับร้าน", "Suspend"] + " " + s.Name)).Result;
+        if (result is { Canceled: false, Data: SuspendShopResult r }
+            && await Api.Post($"api/plant/admin/shops/{s.Id}/suspend", new { reason = r.Reason, visible = r.Visible }))
+            await LoadAsync();
     }
 
-    private async Task ActAsync(AdminShopRow s, string action, string? reason)
+    private async Task SetVisibleAsync(AdminShopRow s, bool visible)
     {
-        if (await Api.Post($"api/plant/admin/shops/{s.Id}/{action}", new { reason })) await LoadAsync();
+        if (await Api.Put($"api/plant/admin/shops/{s.Id}/suspension-visibility", new { visible })) await LoadAsync();
+    }
+
+    private async Task ReinstateAsync(AdminShopRow s)
+    {
+        if (await Api.Post($"api/plant/admin/shops/{s.Id}/reinstate", new { })) await LoadAsync();
     }
 }

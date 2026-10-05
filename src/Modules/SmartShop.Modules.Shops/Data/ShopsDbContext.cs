@@ -60,6 +60,7 @@ public sealed class ShopsDbContext(DbContextOptions<ShopsDbContext> options) : M
             e.Property(x => x.AcceptMode).HasConversion<string>().HasMaxLength(16);
             e.Property(x => x.Version).IsRowVersion();
             e.Ignore(x => x.OwnerId);
+            e.Ignore(x => x.IsListed);
             e.HasIndex(x => new { x.PlantId, x.Code }).IsUnique();
 
             e.OwnsMany(x => x.Hours, h => h.ToJson("hours"));

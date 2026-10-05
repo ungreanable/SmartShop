@@ -56,7 +56,7 @@ public sealed record ShopCreated(Guid PlantId, Guid ShopId, Guid OwnerId, string
 public sealed record ShopProfileUpdated(Guid PlantId, Guid ShopId) : IntegrationEvent(PlantId);
 public sealed record OpeningHoursChanged(Guid PlantId, Guid ShopId) : IntegrationEvent(PlantId);
 public sealed record ShopStatusChanged(Guid PlantId, Guid ShopId, string ShopName, ShopOpenState State, bool BecameOpen) : IntegrationEvent(PlantId);
-public sealed record ShopSuspended(Guid PlantId, Guid ShopId, Guid ActorId, string? Reason) : IntegrationEvent(PlantId);
+public sealed record ShopSuspended(Guid PlantId, Guid ShopId, Guid ActorId, string? Reason, bool Visible = false) : IntegrationEvent(PlantId);
 public sealed record ShopReinstated(Guid PlantId, Guid ShopId, Guid ActorId) : IntegrationEvent(PlantId);
 public sealed record PaymentMethodsUpdated(Guid PlantId, Guid ShopId) : IntegrationEvent(PlantId);
 public sealed record DeliveryOptionsUpdated(Guid PlantId, Guid ShopId) : IntegrationEvent(PlantId);
