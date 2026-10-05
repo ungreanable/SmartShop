@@ -40,52 +40,55 @@
     @L["เรียกใช้", "Usage"]: <code>GET @(Config.ApiBaseUrl)api/public/v1/orders</code> + header <code>X-Api-Key</code>
 </MudText>
 
-<MudDivider Class="my-3" />
-<MudText Typo="Typo.subtitle2" Style="font-weight:600">🔔 Webhooks</MudText>
-@foreach (var w in _hooks)
+@if (Config.WebhooksEnabled)
 {
-    <MudPaper Outlined="true" Class="pa-2 my-1">
-        <div class="d-flex align-center gap-2">
-            <MudIcon Icon="@(w.Active ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.PauseCircle)" Color="@(w.Active ? Color.Success : Color.Warning)" Size="Size.Small" />
-            <MudText Typo="Typo.body2" Style="flex:1; word-break:break-all">@w.Url</MudText>
-            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => TestAsync(w))">@L["ทดสอบ", "Test"]</MudButton>
-            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => ToggleDeliveriesAsync(w))">@L["ประวัติ", "Log"]</MudButton>
-            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => DeleteHookAsync(w))">@L["ลบ", "Delete"]</MudButton>
-        </div>
-        <MudText Typo="Typo.caption" Class="ss-muted">@string.Join(", ", w.Events)</MudText>
-        @if (!w.Active && w.DisabledReason is not null)
-        {
-            <MudAlert Severity="Severity.Warning" Dense="true">
-                @L["ปิดอัตโนมัติเพราะส่งไม่สำเร็จหลายครั้ง", "Disabled after repeated failures"]
-                <MudButton Size="Size.Small" OnClick="@(() => ReactivateAsync(w))">@L["เปิดใหม่", "Re-enable"]</MudButton>
-            </MudAlert>
-        }
-        <MudText Typo="Typo.caption" Class="ss-muted d-block">
-            Signing secret: <code>@(_revealed.Contains(w.Id) ? w.Secret : "whsec_••••••")</code>
-            <MudLink Typo="Typo.caption" OnClick="@(() => _revealed.Add(w.Id))">@L["แสดง", "show"]</MudLink>
-        </MudText>
-        @if (_deliveries.TryGetValue(w.Id, out var log))
-        {
-            @foreach (var d in log)
-            {
-                <MudText Typo="Typo.caption" Class="d-block">
-                    @(d.Status switch { "Delivered" => "✅", "Pending" => "⏳", "Failed" => "❌", _ => "⏭️" }) @Fmt.DateTime(d.CreatedAt) · @d.EventType
-                    @if (d.ResponseStatus is { } httpStatus) { <span> · HTTP @httpStatus</span> } @if (d.Error is not null) { <span class="ss-muted"> · @d.Error</span> }
-                </MudText>
-            }
-        }
-    </MudPaper>
-}
-<MudTextField @bind-Value="_hookUrl" Label="https://..." Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="mt-1" />
-<div class="d-flex flex-wrap">
-    @foreach (var e in AllEvents)
+    <MudDivider Class="my-3" />
+    <MudText Typo="Typo.subtitle2" Style="font-weight:600">🔔 Webhooks</MudText>
+    @foreach (var w in _hooks)
     {
-        <MudCheckBox T="bool" Value="@_events.Contains(e)" ValueChanged="@(v => { if (v) _events.Add(e); else _events.Remove(e); })" Label="@e" Dense="true" Size="Size.Small" />
+        <MudPaper Outlined="true" Class="pa-2 my-1">
+            <div class="d-flex align-center gap-2">
+                <MudIcon Icon="@(w.Active ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.PauseCircle)" Color="@(w.Active ? Color.Success : Color.Warning)" Size="Size.Small" />
+                <MudText Typo="Typo.body2" Style="flex:1; word-break:break-all">@w.Url</MudText>
+                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => TestAsync(w))">@L["ทดสอบ", "Test"]</MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => ToggleDeliveriesAsync(w))">@L["ประวัติ", "Log"]</MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => DeleteHookAsync(w))">@L["ลบ", "Delete"]</MudButton>
+            </div>
+            <MudText Typo="Typo.caption" Class="ss-muted">@string.Join(", ", w.Events)</MudText>
+            @if (!w.Active && w.DisabledReason is not null)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true">
+                    @L["ปิดอัตโนมัติเพราะส่งไม่สำเร็จหลายครั้ง", "Disabled after repeated failures"]
+                    <MudButton Size="Size.Small" OnClick="@(() => ReactivateAsync(w))">@L["เปิดใหม่", "Re-enable"]</MudButton>
+                </MudAlert>
+            }
+            <MudText Typo="Typo.caption" Class="ss-muted d-block">
+                Signing secret: <code>@(_revealed.Contains(w.Id) ? w.Secret : "whsec_••••••")</code>
+                <MudLink Typo="Typo.caption" OnClick="@(() => _revealed.Add(w.Id))">@L["แสดง", "show"]</MudLink>
+            </MudText>
+            @if (_deliveries.TryGetValue(w.Id, out var log))
+            {
+                @foreach (var d in log)
+                {
+                    <MudText Typo="Typo.caption" Class="d-block">
+                        @(d.Status switch { "Delivered" => "✅", "Pending" => "⏳", "Failed" => "❌", _ => "⏭️" }) @Fmt.DateTime(d.CreatedAt) · @d.EventType
+                        @if (d.ResponseStatus is { } httpStatus) { <span> · HTTP @httpStatus</span> } @if (d.Error is not null) { <span class="ss-muted"> · @d.Error</span> }
+                    </MudText>
+                }
+            }
+        </MudPaper>
     }
-</div>
-<MudButton Variant="Variant.Outlined" Size="Size.Small" Disabled="@(string.IsNullOrWhiteSpace(_hookUrl) || _events.Count == 0)" OnClick="CreateHookAsync">
-    @L["เพิ่ม webhook", "Add webhook"]
-</MudButton>
+    <MudTextField @bind-Value="_hookUrl" Label="https://..." Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="mt-1" />
+    <div class="d-flex flex-wrap">
+        @foreach (var e in AllEvents)
+        {
+            <MudCheckBox T="bool" Value="@_events.Contains(e)" ValueChanged="@(v => { if (v) _events.Add(e); else _events.Remove(e); })" Label="@e" Dense="true" Size="Size.Small" />
+        }
+    </div>
+    <MudButton Variant="Variant.Outlined" Size="Size.Small" Disabled="@(string.IsNullOrWhiteSpace(_hookUrl) || _events.Count == 0)" OnClick="CreateHookAsync">
+        @L["เพิ่ม webhook", "Add webhook"]
+    </MudButton>
+}
 
 @code {
     private sealed record ApiKeyRow(Guid Id, string Name, string Prefix, List<string> Scopes, DateTimeOffset CreatedAt, DateTimeOffset? LastUsedAt, bool Revoked);
@@ -111,7 +114,8 @@
     private async Task LoadAsync()
     {
         _keys = await Api.Get<List<ApiKeyRow>>($"api/merchant/shops/{ShopId}/api-keys", silent: true) ?? [];
-        _hooks = await Api.Get<List<WebhookRow>>($"api/merchant/shops/{ShopId}/webhooks", silent: true) ?? [];
+        if (Config.WebhooksEnabled)
+            _hooks = await Api.Get<List<WebhookRow>>($"api/merchant/shops/{ShopId}/webhooks", silent: true) ?? [];
     }
 
     private async Task CreateKeyAsync()

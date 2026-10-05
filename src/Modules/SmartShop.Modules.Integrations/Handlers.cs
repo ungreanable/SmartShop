@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using SmartShop.Contracts;
 using SmartShop.Contracts.Identity;
 using SmartShop.Contracts.Ordering;
@@ -17,9 +18,10 @@ public sealed record WebhookOrderData(OrderExport Order, string? CustomerName);
 internal static class WebhookFanout
 {
     /// <summary>Creates a delivery for every active endpoint of the shop subscribed to the event.</summary>
-    public static async Task QueueAsync(IntegrationsDbContext db, IMessageBus bus, TimeProvider clock, Guid shopId, string eventType,
+    public static async Task QueueAsync(WebhookOptions options, IntegrationsDbContext db, IMessageBus bus, TimeProvider clock, Guid shopId, string eventType,
         Func<Task<object?>> data, CancellationToken ct)
     {
+        if (!options.Enabled) return; // Features:Webhooks
         var endpoints = await db.Webhooks.Where(w => w.ShopId == shopId && w.Active).ToListAsync(ct);
         endpoints = endpoints.Where(w => w.Events.Contains(eventType)).ToList();
         if (endpoints.Count == 0) return;
@@ -48,35 +50,35 @@ internal static class WebhookFanout
 /// <summary>Order and payment events that shops can subscribe to (one method per event: Wolverine dispatches on concrete types).</summary>
 public static class WebhookEventHandler
 {
-    public static Task Handle(OrderPlaced e, IntegrationsDbContext db, IMessageBus bus, IOrderDirectory orders, IUserDirectory users, TimeProvider clock, CancellationToken ct) =>
-        WebhookFanout.QueueAsync(db, bus, clock, e.ShopId, "order.placed", WebhookFanout.Order(orders, users, e.ShopId, e.OrderId, ct), ct);
+    public static Task Handle(OrderPlaced e, IntegrationsDbContext db, IMessageBus bus, IOptions<WebhookOptions> options, IOrderDirectory orders, IUserDirectory users, TimeProvider clock, CancellationToken ct) =>
+        WebhookFanout.QueueAsync(options.Value, db, bus, clock, e.ShopId, "order.placed", WebhookFanout.Order(orders, users, e.ShopId, e.OrderId, ct), ct);
 
-    public static Task Handle(OrderAccepted e, IntegrationsDbContext db, IMessageBus bus, IOrderDirectory orders, IUserDirectory users, TimeProvider clock, CancellationToken ct) =>
-        WebhookFanout.QueueAsync(db, bus, clock, e.ShopId, "order.accepted", WebhookFanout.Order(orders, users, e.ShopId, e.OrderId, ct), ct);
+    public static Task Handle(OrderAccepted e, IntegrationsDbContext db, IMessageBus bus, IOptions<WebhookOptions> options, IOrderDirectory orders, IUserDirectory users, TimeProvider clock, CancellationToken ct) =>
+        WebhookFanout.QueueAsync(options.Value, db, bus, clock, e.ShopId, "order.accepted", WebhookFanout.Order(orders, users, e.ShopId, e.OrderId, ct), ct);
 
-    public static Task Handle(OrderPreparing e, IntegrationsDbContext db, IMessageBus bus, IOrderDirectory orders, IUserDirectory users, TimeProvider clock, CancellationToken ct) =>
-        WebhookFanout.QueueAsync(db, bus, clock, e.ShopId, "order.preparing", WebhookFanout.Order(orders, users, e.ShopId, e.OrderId, ct), ct);
+    public static Task Handle(OrderPreparing e, IntegrationsDbContext db, IMessageBus bus, IOptions<WebhookOptions> options, IOrderDirectory orders, IUserDirectory users, TimeProvider clock, CancellationToken ct) =>
+        WebhookFanout.QueueAsync(options.Value, db, bus, clock, e.ShopId, "order.preparing", WebhookFanout.Order(orders, users, e.ShopId, e.OrderId, ct), ct);
 
-    public static Task Handle(OrderReady e, IntegrationsDbContext db, IMessageBus bus, IOrderDirectory orders, IUserDirectory users, TimeProvider clock, CancellationToken ct) =>
-        WebhookFanout.QueueAsync(db, bus, clock, e.ShopId, "order.ready", WebhookFanout.Order(orders, users, e.ShopId, e.OrderId, ct), ct);
+    public static Task Handle(OrderReady e, IntegrationsDbContext db, IMessageBus bus, IOptions<WebhookOptions> options, IOrderDirectory orders, IUserDirectory users, TimeProvider clock, CancellationToken ct) =>
+        WebhookFanout.QueueAsync(options.Value, db, bus, clock, e.ShopId, "order.ready", WebhookFanout.Order(orders, users, e.ShopId, e.OrderId, ct), ct);
 
-    public static Task Handle(OrderDelivered e, IntegrationsDbContext db, IMessageBus bus, IOrderDirectory orders, IUserDirectory users, TimeProvider clock, CancellationToken ct) =>
-        WebhookFanout.QueueAsync(db, bus, clock, e.ShopId, "order.delivered", WebhookFanout.Order(orders, users, e.ShopId, e.OrderId, ct), ct);
+    public static Task Handle(OrderDelivered e, IntegrationsDbContext db, IMessageBus bus, IOptions<WebhookOptions> options, IOrderDirectory orders, IUserDirectory users, TimeProvider clock, CancellationToken ct) =>
+        WebhookFanout.QueueAsync(options.Value, db, bus, clock, e.ShopId, "order.delivered", WebhookFanout.Order(orders, users, e.ShopId, e.OrderId, ct), ct);
 
-    public static Task Handle(OrderCompleted e, IntegrationsDbContext db, IMessageBus bus, IOrderDirectory orders, IUserDirectory users, TimeProvider clock, CancellationToken ct) =>
-        WebhookFanout.QueueAsync(db, bus, clock, e.ShopId, "order.completed", WebhookFanout.Order(orders, users, e.ShopId, e.OrderId, ct), ct);
+    public static Task Handle(OrderCompleted e, IntegrationsDbContext db, IMessageBus bus, IOptions<WebhookOptions> options, IOrderDirectory orders, IUserDirectory users, TimeProvider clock, CancellationToken ct) =>
+        WebhookFanout.QueueAsync(options.Value, db, bus, clock, e.ShopId, "order.completed", WebhookFanout.Order(orders, users, e.ShopId, e.OrderId, ct), ct);
 
-    public static Task Handle(OrderCancelled e, IntegrationsDbContext db, IMessageBus bus, IOrderDirectory orders, IUserDirectory users, TimeProvider clock, CancellationToken ct) =>
-        WebhookFanout.QueueAsync(db, bus, clock, e.ShopId, "order.cancelled", WebhookFanout.Order(orders, users, e.ShopId, e.OrderId, ct), ct);
+    public static Task Handle(OrderCancelled e, IntegrationsDbContext db, IMessageBus bus, IOptions<WebhookOptions> options, IOrderDirectory orders, IUserDirectory users, TimeProvider clock, CancellationToken ct) =>
+        WebhookFanout.QueueAsync(options.Value, db, bus, clock, e.ShopId, "order.cancelled", WebhookFanout.Order(orders, users, e.ShopId, e.OrderId, ct), ct);
 
-    public static Task Handle(OrderRejected e, IntegrationsDbContext db, IMessageBus bus, IOrderDirectory orders, IUserDirectory users, TimeProvider clock, CancellationToken ct) =>
-        WebhookFanout.QueueAsync(db, bus, clock, e.ShopId, "order.rejected", WebhookFanout.Order(orders, users, e.ShopId, e.OrderId, ct), ct);
+    public static Task Handle(OrderRejected e, IntegrationsDbContext db, IMessageBus bus, IOptions<WebhookOptions> options, IOrderDirectory orders, IUserDirectory users, TimeProvider clock, CancellationToken ct) =>
+        WebhookFanout.QueueAsync(options.Value, db, bus, clock, e.ShopId, "order.rejected", WebhookFanout.Order(orders, users, e.ShopId, e.OrderId, ct), ct);
 
-    public static Task Handle(OrderExpired e, IntegrationsDbContext db, IMessageBus bus, IOrderDirectory orders, IUserDirectory users, TimeProvider clock, CancellationToken ct) =>
-        WebhookFanout.QueueAsync(db, bus, clock, e.ShopId, "order.expired", WebhookFanout.Order(orders, users, e.ShopId, e.OrderId, ct), ct);
+    public static Task Handle(OrderExpired e, IntegrationsDbContext db, IMessageBus bus, IOptions<WebhookOptions> options, IOrderDirectory orders, IUserDirectory users, TimeProvider clock, CancellationToken ct) =>
+        WebhookFanout.QueueAsync(options.Value, db, bus, clock, e.ShopId, "order.expired", WebhookFanout.Order(orders, users, e.ShopId, e.OrderId, ct), ct);
 
-    public static Task Handle(PaymentVerified e, IntegrationsDbContext db, IMessageBus bus, TimeProvider clock, CancellationToken ct) =>
-        WebhookFanout.QueueAsync(db, bus, clock, e.ShopId, "payment.verified",
+    public static Task Handle(PaymentVerified e, IntegrationsDbContext db, IMessageBus bus, IOptions<WebhookOptions> options, TimeProvider clock, CancellationToken ct) =>
+        WebhookFanout.QueueAsync(options.Value, db, bus, clock, e.ShopId, "payment.verified",
             () => Task.FromResult<object?>(new { e.OrderId, e.OrderNo, e.PaymentId, automatic = e.ActorId == Guid.Empty }), ct);
 }
 

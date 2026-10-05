@@ -37,6 +37,7 @@ x-app-env: &app-env
   Storage__SecretKey: "${STORAGE_SECRET_KEY}"
   App__PublicUrl: "https://${DOMAIN}"
   OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
+  Features__Webhooks: "${FEATURES_WEBHOOKS:-false}"
   Database__RowLevelSecurity: "${DATABASE_ROW_LEVEL_SECURITY:-false}"
   Payments__SlipVerifier__Url: "${SLIP_VERIFIER_URL:-}"
   Payments__SlipVerifier__ApiKey: "${SLIP_VERIFIER_API_KEY:-}"
@@ -75,6 +76,7 @@ services:
       Auth__Line__ChannelId: "${LINE_LOGIN_CHANNEL_ID}"
       Auth__Line__LiffId: "${LINE_LIFF_ID}"
       Line__AddFriendUrl: "${LINE_ADD_FRIEND_URL:-}"
+      Features__Webhooks: "${FEATURES_WEBHOOKS:-false}"
       OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
 
   api:

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Hybrid;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
@@ -40,6 +41,7 @@ public sealed class IntegrationsModule : IModule
     {
         builder.Services.AddModuleDbContext<IntegrationsDbContext>(IntegrationsDbContext.SchemaName);
         builder.Services.Configure<WebhookOptions>(builder.Configuration.GetSection(WebhookOptions.Section));
+        builder.Services.PostConfigure<WebhookOptions>(o => o.Enabled = builder.Configuration.GetValue(WebhookOptions.FeatureKey, false));
         builder.Services.AddScoped<WebhookSender>();
         builder.Services.AddHttpClient(WebhookSender.ClientName)
             .ConfigurePrimaryHttpMessageHandler(sp => WebhookUrlPolicy.CreateHandler(sp.GetRequiredService<IOptions<WebhookOptions>>()));
@@ -47,11 +49,12 @@ public sealed class IntegrationsModule : IModule
 
     public void MapEndpoints(IEndpointRouteBuilder app)
     {
-        MapMerchant(app);
+        var webhooks = app.ServiceProvider.GetRequiredService<IOptions<WebhookOptions>>().Value.Enabled;
+        MapMerchant(app, webhooks);
         MapPublicApi(app);
     }
 
-    private static void MapMerchant(IEndpointRouteBuilder app)
+    private static void MapMerchant(IEndpointRouteBuilder app, bool webhooks)
     {
         var merchant = app.MapGroup("/merchant").WithTags("Merchant integrations").RequirePlantMember();
 
@@ -84,6 +87,8 @@ public sealed class IntegrationsModule : IModule
             await cache.RemoveAsync(CacheKey(key.Hash), ct);
             return Results.NoContent();
         });
+
+        if (!webhooks) return; // Features:Webhooks is off for this release
 
         merchant.MapGet("/shops/{shopId:guid}/webhooks", async (Guid shopId, IShopAccess access, IntegrationsDbContext db, CancellationToken ct) =>
         {

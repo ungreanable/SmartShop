@@ -30,6 +30,8 @@ Error: `401 api_key_invalid` (ไม่มี Key / Key ผิด / ถูกย
 
 SmartShop ส่ง `POST` (JSON) ไปยัง URL ของร้านเมื่อเกิดเหตุการณ์ที่เลือกไว้ (สูงสุด 5 URL ต่อร้าน)
 
+> **ปิดไว้เป็นค่าเริ่มต้น** (ยังไม่เปิดให้ใช้ใน Release นี้) เปิดได้ด้วย `FEATURES_WEBHOOKS=true` ใน `deploy/.env` (`Features:Webhooks`) เมื่อปิด หน้าตั้งค่าร้านจะซ่อนส่วน Webhook, API จัดการ Webhook ตอบ `404` และไม่มีการส่ง Event ออกไป
+
 | Event | เมื่อไร |
 |---|---|
 | `order.placed` | ลูกค้าสั่ง |

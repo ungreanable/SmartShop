@@ -12,6 +12,11 @@ public sealed class WebhookOptions
 {
     public const string Section = "Integrations:Webhooks";
 
+    /// <summary>Feature switch (Features:Webhooks). Off: no webhook endpoints and no deliveries; API keys still work.</summary>
+    public const string FeatureKey = "Features:Webhooks";
+
+    public bool Enabled { get; set; }
+
     /// <summary>Allow plain http:// URLs (development only).</summary>
     public bool AllowInsecure { get; set; }
 

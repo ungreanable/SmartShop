@@ -8,6 +8,7 @@ public sealed class AppConfig
     public string LiffId { get; set; } = "";
     public string? LineAddFriendUrl { get; set; }
     public bool DevLoginEnabled { get; set; }
+    public bool WebhooksEnabled { get; set; }
     public string AppName { get; set; } = "SmartShop";
     public string Platform { get; set; } = "web";
 }

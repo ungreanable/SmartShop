@@ -44,6 +44,7 @@ public sealed class SmartShopFactory : WebApplicationFactory<Program>, IAsyncLif
         builder.UseSetting("RateLimiting:UserTokensPer10Seconds", "100000");
         builder.UseSetting("Payments:SlipVerifier:Url", "http://slip-verifier.test/verify");
         builder.UseSetting("Payments:SlipVerifier:AutoConfirm", "true");
+        builder.UseSetting("Features:Webhooks", "true");
         builder.UseSetting("Integrations:Webhooks:AllowInsecure", "true");
         builder.UseSetting("Integrations:Webhooks:AllowPrivateNetworks", "true");
 

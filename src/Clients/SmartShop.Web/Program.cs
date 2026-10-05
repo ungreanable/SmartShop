@@ -30,6 +30,7 @@ app.MapGet("/app-config.json", (IConfiguration config, HttpResponse response) =>
         lineAddFriendUrl = config["Line:AddFriendUrl"],
         devLoginEnabled = config.GetValue("Auth:DevLogin:Enabled", false) && !app.Environment.IsProduction(),
         appName = config["Client:AppName"] ?? "SmartShop",
+        webhooksEnabled = config.GetValue("Features:Webhooks", false),
         platform = "web",
     });
 });
