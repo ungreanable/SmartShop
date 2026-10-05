@@ -14,7 +14,7 @@ services:
     depends_on: !override
       migrator: { condition: service_completed_successfully }
       valkey: { condition: service_healthy }
-    mem_limit: 384m
+    mem_limit: 512m   # headroom for photo uploads (image decoding uses native memory)
 
   web:
     mem_limit: 128m

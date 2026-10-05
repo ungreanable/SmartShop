@@ -35,6 +35,8 @@ internal sealed class MediaService(MediaDbContext db, IObjectStorage storage, Ti
         return (await storage.GetAsync(media.OriginalKey, ct))?.Content;
     }
 
+    private static readonly SemaphoreSlim ProcessingGate = new(2);
+
     public async Task<MediaObject> UploadAsync(Guid ownerId, Guid? plantId, MediaPurpose purpose, Stream content, CancellationToken ct)
     {
         using var buffer = new MemoryStream();
@@ -60,8 +62,11 @@ internal sealed class MediaService(MediaDbContext db, IObjectStorage storage, Ti
         {
             if (bytes.Length > MaxImageBytes) throw new DomainException("media_too_large", "Images must be 15 MB or smaller.");
             ProcessedImage processed;
+            // At most two images in memory at once, so simultaneous uploads cannot push the API past its memory limit.
+            await ProcessingGate.WaitAsync(ct);
             try { processed = ImageProcessor.Process(bytes); }
             catch (InvalidDataException) { throw new DomainException("media_corrupt", "The image could not be read."); }
+            finally { ProcessingGate.Release(); }
 
             media = MediaObject.Create(ownerId, plantId, purpose, processed.OriginalContentType, processed.Original.Length, hash,
                 processed.Width, processed.Height, true, now);

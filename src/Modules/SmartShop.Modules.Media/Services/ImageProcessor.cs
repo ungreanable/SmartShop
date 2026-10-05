@@ -14,22 +14,49 @@ internal static class ImageProcessor
     private const int MediumMax = 1200;
     private const int SmallMax = 400;
 
+    /// <summary>Refuse decompression bombs: a 100 MP bitmap alone is 400 MB of native memory.</summary>
+    private const long MaxPixels = 100_000_000;
+
     public static ProcessedImage Process(byte[] data)
     {
         using var codec = SKCodec.Create(new SKMemoryStream(data))
                           ?? throw new InvalidDataException("The file is not a supported image.");
-        using var decoded = SKBitmap.Decode(codec) ?? throw new InvalidDataException("The image could not be decoded.");
-        using var oriented = ApplyOrientation(decoded, codec.EncodedOrigin);
+        if ((long)codec.Info.Width * codec.Info.Height > MaxPixels)
+            throw new InvalidDataException("The image is too large.");
 
-        using var original = ResizeToFit(oriented, OriginalMax);
-        using var medium = ResizeToFit(oriented, MediumMax);
-        using var small = ResizeToFit(oriented, SmallMax);
+        // Bitmaps live in native memory the GC limits do not cover; a 48 MP phone photo is ~190 MB fully decoded.
+        // Decode only as large as the biggest variant needs (JPEG decodes at 1/2, 1/4, 1/8 for free).
+        using var decoded = SKBitmap.Decode(codec, DecodeInfo(codec)) ?? throw new InvalidDataException("The image could not be decoded.");
+        var oriented = ApplyOrientation(decoded, codec.EncodedOrigin);
+        try
+        {
+            using var original = ResizeToFit(oriented, OriginalMax);
+            using var medium = ResizeToFit(original, MediumMax);
+            using var small = ResizeToFit(medium, SmallMax);
 
-        return new ProcessedImage(
-            Encode(original, SKEncodedImageFormat.Jpeg, 90), "image/jpeg",
-            Encode(medium, SKEncodedImageFormat.Webp, 80),
-            Encode(small, SKEncodedImageFormat.Webp, 75),
-            original.Width, original.Height);
+            return new ProcessedImage(
+                Encode(original, SKEncodedImageFormat.Jpeg, 90), "image/jpeg",
+                Encode(medium, SKEncodedImageFormat.Webp, 80),
+                Encode(small, SKEncodedImageFormat.Webp, 75),
+                original.Width, original.Height);
+        }
+        finally
+        {
+            if (!ReferenceEquals(oriented, decoded)) oriented.Dispose();
+        }
+    }
+
+    /// <summary>The smallest size the codec can decode directly that still covers <see cref="OriginalMax"/>.</summary>
+    private static SKImageInfo DecodeInfo(SKCodec codec)
+    {
+        var full = codec.Info;
+        foreach (var scale in new[] { 0.125f, 0.25f, 0.5f })
+        {
+            var size = codec.GetScaledDimensions(scale);
+            if (Math.Max(size.Width, size.Height) >= OriginalMax && size.Width < full.Width)
+                return full.WithSize(size.Width, size.Height);
+        }
+        return full;
     }
 
     private static SKBitmap ResizeToFit(SKBitmap source, int max)
@@ -49,24 +76,33 @@ internal static class ImageProcessor
         return data.ToArray();
     }
 
+    /// <summary>Applies all eight EXIF orientations (rotations and the mirrored variants some front cameras write).</summary>
     private static SKBitmap ApplyOrientation(SKBitmap bitmap, SKEncodedOrigin origin)
     {
-        var (rotate, swap) = origin switch
-        {
-            SKEncodedOrigin.BottomRight => (180f, false),
-            SKEncodedOrigin.RightTop => (90f, true),
-            SKEncodedOrigin.LeftBottom => (270f, true),
-            _ => (0f, false),
-        };
-        if (rotate == 0f) return bitmap.Copy();
+        if (origin is SKEncodedOrigin.TopLeft or SKEncodedOrigin.Default) return bitmap;
 
-        var rotated = new SKBitmap(swap ? bitmap.Height : bitmap.Width, swap ? bitmap.Width : bitmap.Height);
-        using var canvas = new SKCanvas(rotated);
-        canvas.Translate(rotated.Width / 2f, rotated.Height / 2f);
-        canvas.RotateDegrees(rotate);
-        canvas.Translate(-bitmap.Width / 2f, -bitmap.Height / 2f);
-        canvas.DrawBitmap(bitmap, 0, 0);
-        return rotated;
+        var swap = origin is SKEncodedOrigin.LeftTop or SKEncodedOrigin.RightTop or SKEncodedOrigin.RightBottom or SKEncodedOrigin.LeftBottom;
+        float w = bitmap.Width, h = bitmap.Height;
+        // Maps stored pixels to display pixels (same matrices as Skia's SkEncodedOriginToMatrix).
+        var matrix = origin switch
+        {
+            SKEncodedOrigin.TopRight => new SKMatrix(-1, 0, w, 0, 1, 0, 0, 0, 1),
+            SKEncodedOrigin.BottomRight => new SKMatrix(-1, 0, w, 0, -1, h, 0, 0, 1),
+            SKEncodedOrigin.BottomLeft => new SKMatrix(1, 0, 0, 0, -1, h, 0, 0, 1),
+            SKEncodedOrigin.LeftTop => new SKMatrix(0, 1, 0, 1, 0, 0, 0, 0, 1),
+            SKEncodedOrigin.RightTop => new SKMatrix(0, -1, h, 1, 0, 0, 0, 0, 1),
+            SKEncodedOrigin.RightBottom => new SKMatrix(0, -1, h, -1, 0, w, 0, 0, 1),
+            SKEncodedOrigin.LeftBottom => new SKMatrix(0, 1, 0, -1, 0, w, 0, 0, 1),
+            _ => SKMatrix.Identity,
+        };
+
+        var oriented = new SKBitmap(new SKImageInfo(swap ? bitmap.Height : bitmap.Width, swap ? bitmap.Width : bitmap.Height,
+            bitmap.ColorType, bitmap.AlphaType));
+        using var canvas = new SKCanvas(oriented);
+        canvas.SetMatrix(matrix);
+        using var image = SKImage.FromBitmap(bitmap);
+        canvas.DrawImage(image, 0, 0, new SKSamplingOptions(SKFilterMode.Linear));
+        return oriented;
     }
 }
 
