@@ -4,6 +4,7 @@ using Amazon.S3.Model;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using SmartShop.SharedKernel;
 
 namespace SmartShop.Infrastructure.Storage;
 
@@ -40,15 +41,23 @@ internal sealed class S3ObjectStorage(IAmazonS3 s3, StorageOptions options, ILog
 
     public async Task PutAsync(string key, Stream content, string contentType, CancellationToken ct = default)
     {
-        await EnsureBucketAsync(ct);
-        await s3.PutObjectAsync(new PutObjectRequest
+        try
         {
-            BucketName = options.Bucket,
-            Key = key,
-            InputStream = content,
-            ContentType = contentType,
-            AutoCloseStream = false,
-        }, ct);
+            await EnsureBucketAsync(ct);
+            await s3.PutObjectAsync(new PutObjectRequest
+            {
+                BucketName = options.Bucket,
+                Key = key,
+                InputStream = content,
+                ContentType = contentType,
+                AutoCloseStream = false,
+            }, ct);
+        }
+        // Storage down or still starting (e.g. SeaweedFS after a restart): tell the client to retry instead of a bare 500.
+        catch (Exception e) when (e is HttpRequestException or Amazon.Runtime.AmazonServiceException or IOException && !ct.IsCancellationRequested)
+        {
+            throw new UnavailableException("storage_unavailable", "File storage is not reachable right now. Please try again in a moment.");
+        }
     }
 
     public async Task<StoredObject?> GetAsync(string key, CancellationToken ct = default)

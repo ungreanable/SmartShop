@@ -86,7 +86,10 @@
         Snackbar.Add(message, Severity.Warning);
     }
 
-    private string Explain(ApiProblem p) => (p.Code, p.Status) switch
+    // The status code is shown so a failure reported by a user can be traced (nginx, Cloudflare or the app).
+    private string Explain(ApiProblem p) => $"{Reason(p)} ({L["รหัส", "code"]} {(p.Status == 0 ? "network" : p.Status.ToString())})";
+
+    private string Reason(ApiProblem p) => (p.Code, p.Status) switch
     {
         ("media_too_large", _) or (_, 413) => L["ไฟล์ใหญ่เกินไป (รูปไม่เกิน 15 MB, PDF ไม่เกิน 5 MB)", "The file is too large (pictures up to 15 MB, PDF up to 5 MB)"],
         ("media_type", _) => AllowPdf
@@ -94,9 +97,12 @@
             : L["รองรับเฉพาะรูป JPEG, PNG, WebP, GIF (รูป HEIC ให้ตั้งกล้องเป็น JPEG หรือแคปหน้าจอแทน)", "Only JPEG, PNG, WebP or GIF pictures (for HEIC, switch the camera to JPEG or send a screenshot)"],
         ("media_corrupt", _) => L["อ่านรูปนี้ไม่ได้ ไฟล์อาจเสีย ลองเลือกรูปอื่น", "This picture could not be read; it may be damaged. Try another one."],
         ("media_empty", _) or ("media_incomplete", _) => L["อัปโหลดไม่ครบ ลองใหม่อีกครั้ง", "The upload did not complete. Please try again."],
-        ("media_busy", _) or (_, 503) => L["ระบบกำลังประมวลผลรูปอื่นอยู่ ลองใหม่อีกครั้งในไม่กี่วินาที", "Busy processing other pictures. Please try again in a few seconds."],
+        ("media_busy", _) => L["ระบบกำลังประมวลผลรูปอื่นอยู่ ลองใหม่อีกครั้งในไม่กี่วินาที", "Busy processing other pictures. Please try again in a few seconds."],
+        ("storage_unavailable", _) => L["ที่เก็บไฟล์ของระบบยังไม่พร้อม ลองใหม่อีกครั้ง (ถ้ายังไม่ได้ แจ้งผู้ดูแลระบบ)", "File storage is not ready. Please try again (tell the administrator if it keeps failing)."],
+        ("server_unavailable", _) or (_, 503) => L["ระบบกำลังรีสตาร์ตหรือไม่ว่าง ลองใหม่อีกครั้งในไม่กี่วินาที", "The server is restarting or busy. Please try again in a few seconds."],
         ("rate_limited", _) or (_, 429) => L["อัปโหลดถี่เกินไป รอสักครู่แล้วลองใหม่", "Too many uploads. Wait a moment and try again."],
-        ("network", _) or (_, 0) or (_, 502) or (_, 504) => L["เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ชั่วคราว ลองใหม่อีกครั้ง", "Could not reach the server. Please try again."],
+        (_, >= 500) => L["ระบบขัดข้องระหว่างบันทึกรูป ลองใหม่อีกครั้ง (ถ้ายังไม่ได้ แจ้งผู้ดูแลระบบ)", "The server failed while saving the picture. Please try again (tell the administrator if it keeps failing)."],
+        ("network", _) or (_, 0) => L["เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่", "Could not reach the server. Check your connection and try again."],
         _ => p.Message,
     };
 }

@@ -95,6 +95,7 @@ services:
       migrator: { condition: service_completed_successfully }
       valkey: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
+      seaweedfs: { condition: service_healthy }
 
   worker:
     image: ${IMAGE_PREFIX:-ghcr.io/ungreanable}/smartshop-worker:${TAG:-edge}
@@ -171,6 +172,13 @@ services:
         printf '{"identities":[{"name":"smartshop","credentials":[{"accessKey":"%s","secretKey":"%s"}],"actions":["Admin","Read","Write","List","Tagging"]}]}' "$$S3_ACCESS_KEY" "$$S3_SECRET_KEY" > /tmp/s3.json
         exec /usr/bin/weed -logtostderr=true server -dir=/data -volume.max=0 -master.volumeSizeLimitMB=1024 -s3 -s3.config=/tmp/s3.json
     volumes: [seaweedfs-data:/data]
+    # The S3 gateway starts a few seconds after the container; the API waits for it so uploads never hit a closed port.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8333/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
 
 volumes:
   caddy-data:
