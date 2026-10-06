@@ -47,6 +47,8 @@ public sealed class SmartShopFactory : WebApplicationFactory<Program>, IAsyncLif
         builder.UseSetting("Features:Webhooks", "true");
         builder.UseSetting("Integrations:Webhooks:AllowInsecure", "true");
         builder.UseSetting("Integrations:Webhooks:AllowPrivateNetworks", "true");
+        // CI runners have 2 cores shared with image tests; a 10 s limit turned the fake receiver's 500 into "timeout".
+        builder.UseSetting("Integrations:Webhooks:TimeoutSeconds", "60");
 
         builder.ConfigureServices(services =>
         {

@@ -36,8 +36,9 @@ internal sealed class MediaService(MediaDbContext db, IObjectStorage storage, Ti
         return (await storage.GetAsync(media.OriginalKey, ct))?.Content;
     }
 
-    // At most two images decoded at once, so simultaneous uploads cannot push the API past its memory limit.
-    private static readonly SemaphoreSlim ProcessingGate = new(2);
+    // Image decoding is CPU-bound and synchronous: keep at least one core free for every other request
+    // (1 at a time on a 2 vCPU server, at most 4), which also bounds the native memory of simultaneous uploads.
+    private static readonly SemaphoreSlim ProcessingGate = new(Math.Clamp(Environment.ProcessorCount / 2, 1, 4));
     private static readonly TimeSpan GateTimeout = TimeSpan.FromSeconds(30);
 
     public async Task<MediaObject> UploadAsync(Guid ownerId, Guid? plantId, MediaPurpose purpose, Stream content, long length, CancellationToken ct)
