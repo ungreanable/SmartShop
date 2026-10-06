@@ -13,6 +13,7 @@ public sealed record AddressDto(string? HouseNo, string? Soi, string? Note);
 public sealed record OrderDto(Guid Id, string OrderNo, string Status, Guid ShopId, string FulfillmentType, AddressDto? DeliveryAddress,
     List<OrderLineDto> Lines, decimal Subtotal, decimal Total, string PaymentMethodType, string PaymentStatus, string? AcceptedByName,
     string? CancelReason, List<TimelineDto> Timeline, DateTimeOffset? ScheduledFrom);
+public sealed record SalesReportDto(DateOnly From, DateOnly To, int Orders, decimal Revenue, decimal AverageOrder, int Cancelled);
 public sealed record OrderViewDto(Guid Id, string Status, string ViewerRole);
 public sealed record OrderSummaryDto(Guid Id, string OrderNo, string Status, string CustomerName, decimal Total, bool CancelRequested);
 
@@ -151,6 +152,32 @@ public class OrderingTests(SmartShopFactory factory)
         (await s.Owner.PostRawAsync($"/api/merchant/orders/{broken.Id}/force-close", new { outcome = "completed", reason = "x" })).StatusCode.ShouldBe(HttpStatusCode.Conflict);
         var third = await PlaceAsync();
         (await s.Owner.PostRawAsync($"/api/merchant/orders/{third.Id}/force-close", new { outcome = "cancelled", reason = "" })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Sales_report_counts_delivered_and_completed_orders_of_today()
+    {
+        var s = await OpenShopAsync();
+        var noodles = await AddItemAsync(s, "ก๋วยเตี๋ยว", 50);
+        var customer = await factory.JoinAsync(s.Plant, s.Admin);
+
+        async Task<OrderDto> DeliverAsync()
+        {
+            await customer.PostAsync<CartDto>("/api/cart/items", new { shopId = s.ShopId, itemId = noodles.Item.Id, quantity = 1 });
+            var order = await CheckoutAsync(customer, s.CashId);
+            foreach (var step in new[] { "accept", "start", "ready" }) await s.Owner.PostOkAsync($"/api/merchant/orders/{order.Id}/{step}");
+            await s.Owner.PostOkAsync($"/api/merchant/orders/{order.Id}/deliver", new { });
+            return order;
+        }
+
+        var completed = await DeliverAsync();
+        await customer.PostOkAsync($"/api/orders/{completed.Id}/confirm-received");
+        await DeliverAsync(); // delivered, the customer has not confirmed yet
+
+        var today = DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7)).DateTime).ToString("yyyy-MM-dd");
+        var report = await s.Owner.GetAsync<SalesReportDto>($"/api/merchant/shops/{s.ShopId}/orders/report?from={today}&to={today}");
+        report.Orders.ShouldBe(2);
+        report.Revenue.ShouldBe(100);
     }
 
     [Fact]

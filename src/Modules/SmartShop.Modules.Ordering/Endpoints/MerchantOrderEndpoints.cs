@@ -86,7 +86,9 @@ internal static class MerchantOrderEndpoints
             await access.RequireAsync(shopId, ShopRole.Manager, ct);
             var (start, end, f, t) = Range(from, to, clock);
             var orders = await db.Orders.AsNoTracking().Where(o => o.ShopId == shopId && o.PlacedAt >= start && o.PlacedAt < end).ToListAsync(ct);
-            var completed = orders.Where(o => o.Status == OrderStatus.Completed).ToList();
+            // Delivered orders are sales already (they auto-complete after AutoCompleteHours); counting only Completed
+            // left the report empty while customers had not pressed "received" yet.
+            var completed = orders.Where(o => o.Status is OrderStatus.Completed or OrderStatus.Delivered).ToList();
             var revenue = completed.Sum(o => o.Total);
             var bangkok = TimeSpan.FromHours(7);
             var days = completed.GroupBy(o => DateOnly.FromDateTime(o.PlacedAt.ToOffset(bangkok).DateTime))

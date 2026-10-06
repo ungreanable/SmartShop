@@ -1,5 +1,6 @@
 @page "/merchant/{ShopId:guid}/sales"
 @layout MerchantLayout
+@using System.Globalization
 @inject Api Api
 @inject Browser Browser
 
@@ -71,13 +72,14 @@
 
     protected override async Task OnParametersSetAsync() => await LoadAsync();
 
-    private string Range => $"from={_from:yyyy-MM-dd}&to={_to:yyyy-MM-dd}";
+    // Invariant culture: the Thai UI culture uses the Buddhist calendar, which would send 2569-10-06 to the API.
+    private string Range => string.Create(CultureInfo.InvariantCulture, $"from={_from:yyyy-MM-dd}&to={_to:yyyy-MM-dd}");
 
     private async Task LoadAsync() => _report = await Api.Get<SalesReport>($"api/merchant/shops/{ShopId}/orders/report?{Range}");
 
     private async Task ExportAsync()
     {
         var bytes = await Api.DownloadAsync($"api/merchant/shops/{ShopId}/orders/export.csv?{Range}");
-        if (bytes is not null) await Browser.DownloadAsync($"orders-{_from:yyyyMMdd}-{_to:yyyyMMdd}.csv", bytes, "text/csv");
+        if (bytes is not null) await Browser.DownloadAsync(string.Create(CultureInfo.InvariantCulture, $"orders-{_from:yyyyMMdd}-{_to:yyyyMMdd}.csv"), bytes, "text/csv");
     }
 }

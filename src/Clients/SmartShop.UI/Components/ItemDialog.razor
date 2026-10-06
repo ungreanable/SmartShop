@@ -117,7 +117,7 @@
     private async Task LoadSlotsAsync()
     {
         _slots = null;
-        _slots = await Api.Get<List<Slot>>($"api/items/{Item.Id}/slots?date={_date:yyyy-MM-dd}") ?? [];
+        _slots = await Api.Get<List<Slot>>(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"api/items/{Item.Id}/slots?date={_date:yyyy-MM-dd}")) ?? [];
     }
 
     private async Task AddAsync()
