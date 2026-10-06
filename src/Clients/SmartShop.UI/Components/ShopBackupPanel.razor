@@ -1,4 +1,4 @@
-@* Backup and restore of the shop settings and the menu as one JSON file.
+@* Backup and restore of the shop settings and the menu as one JSON file, optionally with the pictures inside.
    Saving goes through the phone's share sheet (Google Drive, Files, LINE...) or a plain download. *@
 @using System.Text.Json
 @using System.Text.Json.Nodes
@@ -14,7 +14,13 @@
 
 @if (_file is null)
 {
-    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Backup" Disabled="_busy" OnClick="PrepareAsync">
+    <MudCheckBox T="bool" @bind-Value="_withImages" Color="Color.Primary" Disabled="_busy" Class="ml-n2">
+        <MudText Typo="Typo.body2">@L["รวมรูปในไฟล์", "Include pictures"]</MudText>
+        <MudText Typo="Typo.caption" Class="ss-muted">
+            @L["กู้คืนได้แม้ Server หรือร้านเปลี่ยนไป ไฟล์ใหญ่ขึ้น (ราว 100 KB ต่อรูป)", "Restorable even on another server or shop; larger file (about 100 KB per picture)"]
+        </MudText>
+    </MudCheckBox>
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Backup" Disabled="_busy" OnClick="PrepareAsync" Class="mt-1">
         @(_busy ? L["กำลังเตรียมไฟล์...", "Preparing..."] : L["สร้างไฟล์สำรอง", "Create backup file"])
     </MudButton>
 }
@@ -22,14 +28,21 @@ else
 {
     <MudPaper Outlined="true" Class="pa-3 mb-2">
         <MudText Typo="Typo.body2" Class="ss-upload-name d-block" Style="max-width:100%">📄 @_fileName</MudText>
-        <MudText Typo="Typo.caption" Class="ss-muted d-block mb-2">@L[$"{_itemCount} เมนู · {_file.Length / 1024 + 1} KB", $"{_itemCount} items · {_file.Length / 1024 + 1} KB"]</MudText>
+        <MudText Typo="Typo.caption" Class="ss-muted d-block mb-2">
+            @L[$"{_itemCount} เมนู · รูป {_imageCount} · {FileSize(_file.Length)}", $"{_itemCount} items · {_imageCount} pictures · {FileSize(_file.Length)}"]
+        </MudText>
         <div class="d-flex flex-wrap gap-2">
             <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Share" OnClick="ShareAsync">
                 @L["บันทึก / แชร์ (เช่น Google Drive)", "Save / share (e.g. Google Drive)"]
             </MudButton>
             <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="DownloadAsync">@L["ดาวน์โหลดลงเครื่อง", "Download"]</MudButton>
+            <MudButton Variant="Variant.Text" OnClick="@(() => _file = null)">@L["สร้างใหม่", "Start over"]</MudButton>
         </div>
     </MudPaper>
+}
+@if (_progress is not null)
+{
+    <div class="ss-upload-status"><MudProgressCircular Size="Size.Small" Indeterminate="true" Style="width:16px;height:16px" /> @_progress</div>
 }
 
 <MudDivider Class="my-3" />
@@ -48,15 +61,19 @@ else
 
 @code {
     private const string Format = "smartshop-shop-backup";
+    private const long MaxFileBytes = 60 * 1024 * 1024;
 
     [Parameter, EditorRequired] public Guid ShopId { get; set; }
     [Parameter] public string ShopName { get; set; } = "";
     [Parameter] public EventCallback Restored { get; set; }
 
-    private bool _busy;
+    private bool _busy, _withImages = true;
     private byte[]? _file;
     private string _fileName = "";
-    private int _itemCount;
+    private string? _progress;
+    private int _itemCount, _imageCount;
+
+    private static string FileSize(long bytes) => bytes < 1024 * 1024 ? $"{bytes / 1024 + 1} KB" : $"{bytes / 1024d / 1024:0.0} MB";
 
     // Step 1: fetch and build the file. Step 2 (separate tap) shares it: browsers only open the share sheet right after a tap.
     private async Task PrepareAsync()
@@ -64,10 +81,12 @@ else
         _busy = true;
         try
         {
-            var shop = await Api.Get<JsonObject>($"api/merchant/shops/{ShopId}/backup");
-            var catalog = await Api.Get<JsonObject>($"api/merchant/shops/{ShopId}/catalog/backup");
+            var query = _withImages ? "?images=true" : "";
+            var shop = await Api.Get<JsonObject>($"api/merchant/shops/{ShopId}/backup{query}");
+            var catalog = await Api.Get<JsonObject>($"api/merchant/shops/{ShopId}/catalog/backup{query}");
             if (shop is null || catalog is null) return;
             _itemCount = catalog["items"]?.AsArray().Count ?? 0;
+
             var backup = new JsonObject
             {
                 ["format"] = Format,
@@ -75,14 +94,55 @@ else
                 ["createdAt"] = DateTimeOffset.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
                 ["shopId"] = ShopId.ToString(),
                 ["shopName"] = ShopName,
-                ["shop"] = shop,
-                ["catalog"] = catalog,
             };
-            _file = JsonSerializer.SerializeToUtf8Bytes(backup, new JsonSerializerOptions { WriteIndented = true });
+            backup["images"] = _withImages ? await EmbedImagesAsync(shop, catalog) : null;
+            _imageCount = backup["images"]?.AsObject().Count ?? 0;
+            shop.Remove("images");      // the signed links expire; the pictures themselves are in "images"
+            catalog.Remove("images");
+            backup["shop"] = shop;
+            backup["catalog"] = catalog;
+
+            _file = JsonSerializer.SerializeToUtf8Bytes(backup);
             var safeName = new string(ShopName.Where(char.IsLetterOrDigit).Take(30).ToArray());
             _fileName = $"smartshop-{(safeName.Length > 0 ? safeName : "shop")}-{DateTime.Now.ToString("yyyyMMdd-HHmm", System.Globalization.CultureInfo.InvariantCulture)}.json";
         }
-        finally { _busy = false; }
+        finally
+        {
+            _busy = false;
+            _progress = null;
+        }
+    }
+
+    /// <summary>Downloads every picture (medium size, WebP) and stores it in the file with the purpose it is re-uploaded with.</summary>
+    private async Task<JsonObject> EmbedImagesAsync(JsonObject shop, JsonObject catalog)
+    {
+        var wanted = new List<(string Id, string Url, string Purpose)>();
+        void Add(JsonObject section, string? id, string purpose)
+        {
+            if (id is null || wanted.Any(w => w.Id == id) || section["images"]?[id]?.GetValue<string>() is not { } url) return;
+            wanted.Add((id, url, purpose));
+        }
+        var profile = shop["profile"];
+        Add(shop, profile?["logoId"]?.GetValue<string>(), "ShopLogo");
+        Add(shop, profile?["coverId"]?.GetValue<string>(), "ShopCover");
+        foreach (var method in shop["paymentMethods"]?.AsArray() ?? [])
+        {
+            Add(shop, method?["qrImageId"]?.GetValue<string>(), "PaymentQr");
+            Add(shop, method?["imageId"]?.GetValue<string>(), "PaymentQr");
+        }
+        foreach (var item in catalog["items"]?.AsArray() ?? [])
+            foreach (var id in item?["item"]?["imageIds"]?.AsArray() ?? [])
+                Add(catalog, id?.GetValue<string>(), "ItemImage");
+
+        var images = new JsonObject();
+        for (var i = 0; i < wanted.Count; i++)
+        {
+            _progress = L[$"กำลังรวมรูป {i + 1}/{wanted.Count}", $"Adding pictures {i + 1}/{wanted.Count}"];
+            StateHasChanged();
+            if (await Api.DownloadAsync(wanted[i].Url) is not { Length: > 0 } bytes) continue; // a missing picture is skipped, not fatal
+            images[wanted[i].Id] = new JsonObject { ["purpose"] = wanted[i].Purpose, ["type"] = "image/webp", ["data"] = Convert.ToBase64String(bytes) };
+        }
+        return images;
     }
 
     private async Task ShareAsync()
@@ -106,7 +166,7 @@ else
     private async Task RestoreAsync(IBrowserFile? file)
     {
         if (file is null) return;
-        if (file.Size > 5 * 1024 * 1024)
+        if (file.Size > MaxFileBytes)
         {
             Snackbar.Add(L["ไฟล์ใหญ่เกินไปสำหรับไฟล์สำรอง", "This file is too large to be a backup"], Severity.Warning);
             return;
@@ -115,7 +175,7 @@ else
         JsonObject? backup;
         try
         {
-            await using var stream = file.OpenReadStream(5 * 1024 * 1024);
+            await using var stream = file.OpenReadStream(MaxFileBytes);
             backup = await JsonSerializer.DeserializeAsync<JsonObject>(stream);
         }
         catch (Exception e) when (e is JsonException or IOException)
@@ -128,12 +188,14 @@ else
             return;
         }
 
+        var images = backup["images"] as JsonObject;
         var from = backup["shopName"]?.GetValue<string>() ?? "?";
         var created = DateTimeOffset.TryParse(backup["createdAt"]?.GetValue<string>(), System.Globalization.CultureInfo.InvariantCulture,
             System.Globalization.DateTimeStyles.None, out var at) ? Fmt.DateTime(at) : "?";
         var items = catalog["items"]?.AsArray().Count ?? 0;
         var otherShop = backup["shopId"]?.GetValue<string>() != ShopId.ToString();
-        var message = L[$"ไฟล์ของร้าน \"{from}\" สร้างเมื่อ {created} มี {items} เมนู", $"Backup of \"{from}\" from {created} with {items} items"]
+        var message = L[$"ไฟล์ของร้าน \"{from}\" สร้างเมื่อ {created} มี {items} เมนู รูป {images?.Count ?? 0} รูป",
+                        $"Backup of \"{from}\" from {created} with {items} items and {images?.Count ?? 0} pictures"]
                       + (otherShop ? L[" (เป็นของร้านอื่น ระบบจะนำเมนูและการตั้งค่ามาใส่ร้านนี้)", " (from another shop: its menu and settings will be applied to this shop)"] : "");
         if (await Dialogs.ShowMessageBoxAsync(L["กู้คืนจากไฟล์สำรอง?", "Restore from backup?"], message,
                 yesText: L["กู้คืน", "Restore"], cancelText: L["ยกเลิก", "Cancel"]) != true)
@@ -142,6 +204,10 @@ else
         _busy = true;
         try
         {
+            if (images is { Count: > 0 }) await UploadImagesAsync(images, shop, catalog);
+            _progress = L["กำลังกู้คืนข้อมูล...", "Restoring..."];
+            StateHasChanged();
+
             var shopResult = await Api.Post<JsonObject>($"api/merchant/shops/{ShopId}/backup/restore", shop);
             if (shopResult is null) return;
             var catalogResult = await Api.Post<JsonObject>($"api/merchant/shops/{ShopId}/catalog/backup/restore", catalog);
@@ -157,6 +223,42 @@ else
             Snackbar.Add(summary, Severity.Success);
             await Restored.InvokeAsync();
         }
-        finally { _busy = false; }
+        finally
+        {
+            _busy = false;
+            _progress = null;
+        }
+    }
+
+    /// <summary>Uploads the embedded pictures again and points the settings and items at the new copies.</summary>
+    private async Task UploadImagesAsync(JsonObject images, JsonObject shop, JsonObject catalog)
+    {
+        var replaced = new Dictionary<string, string>();
+        var entries = images.ToList();
+        for (var i = 0; i < entries.Count; i++)
+        {
+            _progress = L[$"กำลังอัปโหลดรูป {i + 1}/{entries.Count}", $"Uploading pictures {i + 1}/{entries.Count}"];
+            StateHasChanged();
+            var (oldId, node) = (entries[i].Key, entries[i].Value);
+            if (node?["data"]?.GetValue<string>() is not { } data) continue;
+            var (result, _) = await Api.UploadAsync(Convert.FromBase64String(data), $"{oldId}.webp",
+                node["type"]?.GetValue<string>() ?? "image/webp", node["purpose"]?.GetValue<string>() ?? "ItemImage");
+            if (result is not null) replaced[oldId] = result.Id.ToString(); // a failed picture keeps its old id (reused if still there)
+        }
+
+        JsonNode? Swap(JsonNode? id) => id?.GetValue<string>() is { } s && replaced.TryGetValue(s, out var n) ? JsonValue.Create(n) : id?.DeepClone();
+        if (shop["profile"] is JsonObject profile)
+        {
+            profile["logoId"] = Swap(profile["logoId"]);
+            profile["coverId"] = Swap(profile["coverId"]);
+        }
+        foreach (var method in shop["paymentMethods"]?.AsArray().OfType<JsonObject>() ?? [])
+        {
+            method["qrImageId"] = Swap(method["qrImageId"]);
+            method["imageId"] = Swap(method["imageId"]);
+        }
+        foreach (var item in catalog["items"]?.AsArray().OfType<JsonObject>() ?? [])
+            if (item["item"] is JsonObject request && request["imageIds"] is JsonArray ids)
+                request["imageIds"] = new JsonArray(ids.Select(Swap).ToArray());
     }
 }

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using SmartShop.Contracts.Catalog;
 using SmartShop.Contracts.Shops;
+using SmartShop.Infrastructure.Media;
 using SmartShop.Infrastructure.Tenancy;
 using SmartShop.Modules.Catalog.Domain;
 using SmartShop.Modules.Catalog.Services;
@@ -12,7 +13,8 @@ using SmartShop.SharedKernel;
 namespace SmartShop.Modules.Catalog.Endpoints;
 
 /// <summary>Menu section of a shop backup file. Categories are matched by name, items by id, then by name.</summary>
-public sealed record CatalogBackup(int Version, List<CategoryBackup> Categories, List<ItemBackup> Items);
+/// <summary><paramref name="Images"/>: signed links (id → URL) so the app can embed the pictures in the file; ignored on restore.</summary>
+public sealed record CatalogBackup(int Version, List<CategoryBackup> Categories, List<ItemBackup> Items, Dictionary<Guid, string>? Images = null);
 public sealed record CategoryBackup(string Name, int SortOrder);
 /// <summary><paramref name="OnHand"/> is only used as the starting stock when the item has to be created again.</summary>
 public sealed record ItemBackup(Guid Id, string? Category, int SortOrder, bool IsAvailable, int? OnHand, ItemRequest Item);
@@ -26,7 +28,7 @@ internal static class CatalogBackupEndpoints
     {
         var m = api.MapGroup("/merchant/shops/{shopId:guid}/catalog/backup").WithTags("Merchant catalog").RequirePlantMember();
 
-        m.MapGet("/", async (Guid shopId, MerchantCatalogEndpoints.CatalogCtx ctx, CancellationToken ct) =>
+        m.MapGet("/", async (Guid shopId, bool? images, MerchantCatalogEndpoints.CatalogCtx ctx, IMediaUrls media, CancellationToken ct) =>
         {
             await ctx.RequireAsync(shopId, ShopRole.Manager, ct);
             var categories = await ctx.Db.Categories.AsNoTracking().Where(c => c.ShopId == shopId).OrderBy(c => c.SortOrder).ToListAsync(ct);
@@ -46,7 +48,8 @@ internal static class CatalogBackupEndpoints
                         MenuService.ToGroups(i.ModifierGroups), null, i.IsRecommended,
                         null, s?.DailyQuota, s?.DailyResetTime, s?.LowStockThreshold);
                     return new ItemBackup(i.Id, i.CategoryId is { } c ? names.GetValueOrDefault(c) : null, i.SortOrder, i.IsAvailable, s?.OnHand, request);
-                }).ToList());
+                }).ToList(),
+                images == true ? items.SelectMany(i => i.ImageIds).Distinct().ToDictionary(id => id, id => media.For(id)!) : null);
         });
 
         // Merges the backup into the shop: creates what is missing and updates what exists. Never deletes anything.

@@ -53,6 +53,31 @@ public class BackupTests(SmartShopFactory factory)
     }
 
     [Fact]
+    public async Task Backup_with_pictures_links_them_and_restore_accepts_reuploaded_copies()
+    {
+        var (_, _, owner, shopId) = await factory.CreateShopAsync("ร้านมีรูป");
+        var photo = await owner.UploadAsync("ItemImage", Scenario.Png(800, 600));
+        var item = await owner.PostAsync<MerchantItemDto>($"/api/merchant/shops/{shopId}/catalog/items",
+            new { kind = "Product", stockMode = "Untracked", name = "ชาไทย", price = 35, imageIds = new[] { photo.Id } });
+
+        var plain = await owner.GetAsync<JsonObject>($"/api/merchant/shops/{shopId}/catalog/backup");
+        plain["images"].ShouldBeNull();
+        var withPictures = await owner.GetAsync<JsonObject>($"/api/merchant/shops/{shopId}/catalog/backup?images=true");
+        var url = withPictures["images"]![photo.Id.ToString()]!.GetValue<string>();
+
+        // What the app does with an embedded picture: download it, upload it again, point the item at the new copy.
+        var bytes = await factory.CreateClient().GetByteArrayAsync(url);
+        var copy = await owner.UploadAsync("ItemImage", bytes, "copy.webp");
+        await owner.DeleteOkAsync($"/api/merchant/shops/{shopId}/catalog/items/{item.Item.Id}");
+        withPictures["items"]![0]!["item"]!["imageIds"] = new JsonArray(JsonValue.Create(copy.Id.ToString()));
+
+        var result = await owner.PostAsync<CatalogRestoreDto>($"/api/merchant/shops/{shopId}/catalog/backup/restore", withPictures);
+        result.ShouldBe(new CatalogRestoreDto(0, 1, 0, 0));
+        var restored = (await owner.GetAsync<List<MerchantItemDto>>($"/api/merchant/shops/{shopId}/catalog/items")).Single();
+        restored.Item.ThumbnailUrl.ShouldNotBeNull();
+    }
+
+    [Fact]
     public async Task Staff_cannot_read_the_backup()
     {
         var (plant, admin, owner, shopId) = await factory.CreateShopAsync();

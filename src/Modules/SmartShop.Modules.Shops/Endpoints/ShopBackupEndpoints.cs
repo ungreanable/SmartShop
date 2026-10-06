@@ -12,8 +12,9 @@ using SmartShop.SharedKernel;
 namespace SmartShop.Modules.Shops.Endpoints;
 
 /// <summary>Shop-settings section of a shop backup file (the menu is in the catalog section).</summary>
+/// <summary><paramref name="Images"/>: signed links (id → URL) so the app can embed the pictures in the file; ignored on restore.</summary>
 public sealed record ShopBackup(int Version, ProfileRequest Profile, List<OpeningHourDto> Hours, OrderSettingsRequest Order,
-    DeliveryOptionsRequest Delivery, List<PaymentMethodRequest> PaymentMethods);
+    DeliveryOptionsRequest Delivery, List<PaymentMethodRequest> PaymentMethods, Dictionary<Guid, string>? Images = null);
 public sealed record ShopRestoreResult(int PaymentMethodsCreated, int PaymentMethodsUpdated, bool HoursRestored, bool PicturesKept);
 
 internal static class ShopBackupEndpoints
@@ -24,9 +25,10 @@ internal static class ShopBackupEndpoints
     {
         var m = api.MapGroup("/merchant/shops/{shopId:guid}/backup").WithTags("Merchant").RequirePlantMember();
 
-        m.MapGet("/", async (Guid shopId, MerchantContext ctx, CancellationToken ct) =>
+        m.MapGet("/", async (Guid shopId, bool? images, MerchantContext ctx, IMediaUrls media, CancellationToken ct) =>
         {
             var s = await ctx.LoadAsync(shopId, ShopRole.Manager, ct);
+            Guid?[] pictures = [s.LogoId, s.CoverId, .. s.PaymentMethods.SelectMany(p => new[] { p.QrImageId, p.ImageId })];
             return new ShopBackup(CurrentVersion,
                 new ProfileRequest(s.Name, s.Category, s.Description, s.LogoId, s.CoverId, s.HouseNo, s.Phone, s.LineContact),
                 s.Hours.Select(h => new OpeningHourDto(h.Day, h.OpenAt, h.CloseAt)).ToList(),
@@ -34,7 +36,8 @@ internal static class ShopBackupEndpoints
                     s.AllowPreorderWhenClosed, s.PrepTimeMinutes, s.SlotIntervalMinutes, s.RequirePaymentBeforePreparing),
                 new DeliveryOptionsRequest(s.PickupEnabled, s.PickupInstruction, s.DeliveryEnabled, s.DeliveryZoneNote, s.DeliveryMinOrder),
                 s.PaymentMethods.OrderBy(p => p.SortOrder).Select(p => new PaymentMethodRequest(p.Type, p.DisplayName, p.PromptPayId, p.QrImageId,
-                    p.BankName, p.AccountNumber, p.AccountName, p.Instructions, p.ImageId, p.RequiresProof, p.Enabled)).ToList());
+                    p.BankName, p.AccountNumber, p.AccountName, p.Instructions, p.ImageId, p.RequiresProof, p.Enabled)).ToList(),
+                images == true ? pictures.OfType<Guid>().Distinct().ToDictionary(id => id, id => media.For(id)!) : null);
         });
 
         // Applies the saved settings. Payment methods are matched by type and name and never deleted.
