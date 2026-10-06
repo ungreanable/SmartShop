@@ -133,6 +133,7 @@ public class PlantTests(SmartShopFactory factory)
         var (plant, admin) = await factory.CreatePlantAsync();
         var uncle = await factory.JoinAsync(plant, admin, "ลุงมีสุข", houseNo: "12/3");
         await factory.JoinAsync(plant, admin, "ป้าแดง", houseNo: "45");
+        var nuch = await factory.JoinAsync(plant, admin, "NuCh:)", houseNo: "7");
 
         async Task<List<string>> SearchAsync(string q) =>
             (await admin.GetAsync<PagedDto<MemberRowDto>>($"/api/plant/admin/members?status=Active&q={Uri.EscapeDataString(q)}")).Items.Select(m => m.DisplayName).ToList();
@@ -140,5 +141,7 @@ public class PlantTests(SmartShopFactory factory)
         (await SearchAsync("มีสุข")).ShouldBe([uncle.DisplayName]);   // LINE display name
         (await SearchAsync("12/3")).ShouldBe([uncle.DisplayName]);    // house number
         (await SearchAsync("%")).ShouldBeEmpty();                     // not a wildcard
+        foreach (var q in new[] { "Nu", "nu", "NU", "ch:)" })         // case-insensitive, punctuation kept
+            (await SearchAsync(q)).ShouldBe([nuch.DisplayName]);
     }
 }
