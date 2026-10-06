@@ -11,8 +11,9 @@
         <MudTabPanel Text="@L["สมาชิก", "Active"]" OnClick="@(() => LoadAsync(1))" />
         <MudTabPanel Text="@L["ระงับ", "Suspended"]" OnClick="@(() => LoadAsync(2))" />
     </MudTabs>
-    <MudTextField T="string" @bind-Value="_q" Placeholder="@L["ค้นหาบ้านเลขที่ / ชื่อเล่น", "Search house no. / nickname"]" Variant="Variant.Outlined" Margin="Margin.Dense"
-                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" OnKeyUp="@(async e => { if (e.Key == "Enter") await LoadAsync(_tab); })" Class="mb-2" />
+    <MudTextField T="string" @bind-Value="_q" Placeholder="@L["ค้นหาชื่อ / ชื่อเล่น / บ้านเลขที่ / ซอย", "Search name / nickname / house no. / soi"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Clearable="true" Immediate="true"
+                  DebounceInterval="400" OnDebounceIntervalElapsed="@(_ => LoadAsync(_tab))" OnClearButtonClick="@(_ => LoadAsync(_tab))" Class="mb-2" />
 
     @if (_rows is null) { <Loading /> }
     else if (_rows.Count == 0) { <EmptyState Title="@L["ไม่มีรายการ", "Nothing here"]" Icon="@Icons.Material.Outlined.People" /> }

@@ -126,4 +126,19 @@ public class PlantTests(SmartShopFactory factory)
         var response = await user.GetRawAsync("/api/plant");
         (await TestClient.ProblemCodeAsync(response)).ShouldBe("plant_required");
     }
+
+    [Fact]
+    public async Task Member_search_finds_line_names_and_treats_wildcards_literally()
+    {
+        var (plant, admin) = await factory.CreatePlantAsync();
+        var uncle = await factory.JoinAsync(plant, admin, "ลุงมีสุข", houseNo: "12/3");
+        await factory.JoinAsync(plant, admin, "ป้าแดง", houseNo: "45");
+
+        async Task<List<string>> SearchAsync(string q) =>
+            (await admin.GetAsync<PagedDto<MemberRowDto>>($"/api/plant/admin/members?status=Active&q={Uri.EscapeDataString(q)}")).Items.Select(m => m.DisplayName).ToList();
+
+        (await SearchAsync("มีสุข")).ShouldBe([uncle.DisplayName]);   // LINE display name
+        (await SearchAsync("12/3")).ShouldBe([uncle.DisplayName]);    // house number
+        (await SearchAsync("%")).ShouldBeEmpty();                     // not a wildcard
+    }
 }

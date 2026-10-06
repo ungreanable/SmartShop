@@ -8,6 +8,9 @@ public interface IUserDirectory
     Task<IReadOnlyDictionary<Guid, UserProfile>> GetProfilesAsync(IEnumerable<Guid> userIds, CancellationToken ct = default);
     Task<IReadOnlyDictionary<Guid, string>> GetLineUserIdsAsync(IEnumerable<Guid> userIds, CancellationToken ct = default);
     Task<Guid?> FindByLineUserIdAsync(string lineUserId, CancellationToken ct = default);
+
+    /// <summary>Users among <paramref name="withinUserIds"/> whose display name contains <paramref name="text"/> (case-insensitive).</summary>
+    Task<IReadOnlyList<Guid>> SearchByNameAsync(string text, IEnumerable<Guid> withinUserIds, CancellationToken ct = default);
 }
 
 public sealed record UserRegistered(Guid UserId, string DisplayName, string Provider) : IntegrationEvent(Guid.Empty);

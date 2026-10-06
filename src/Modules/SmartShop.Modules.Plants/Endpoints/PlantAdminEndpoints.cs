@@ -8,6 +8,7 @@ using SmartShop.Contracts.Identity;
 using SmartShop.Contracts.Media;
 using SmartShop.Contracts.Plants;
 using SmartShop.Infrastructure.Auth;
+using SmartShop.Infrastructure.Persistence;
 using SmartShop.Infrastructure.Tenancy;
 using SmartShop.Modules.Plants.Data;
 using SmartShop.Modules.Plants.Domain;
@@ -41,7 +42,13 @@ internal static class PlantAdminEndpoints
             var query = db.Memberships.AsNoTracking().Where(m => m.PlantId == plant.PlantId);
             query = status is { } s ? query.Where(m => m.Status == s) : query.Where(m => m.Status != MembershipStatus.Left);
             if (!string.IsNullOrWhiteSpace(q))
-                query = query.Where(m => EF.Functions.ILike(m.HouseNo!, $"%{q}%") || EF.Functions.ILike(m.Nickname!, $"%{q}%"));
+            {
+                // LINE display names live in the Identity module: find the matching members there, then OR them in.
+                var pattern = $"%{Like.Escape(q.Trim())}%";
+                var named = await users.SearchByNameAsync(q, await query.Select(m => m.UserId).ToListAsync(ct), ct);
+                query = query.Where(m => named.Contains(m.UserId)
+                    || EF.Functions.ILike(m.HouseNo!, pattern) || EF.Functions.ILike(m.Nickname!, pattern) || EF.Functions.ILike(m.Soi!, pattern));
+            }
 
             var total = await query.CountAsync(ct);
             var rows = await query.OrderBy(m => m.Status == MembershipStatus.Pending ? 0 : 1).ThenByDescending(m => m.RequestedAt)

@@ -27,6 +27,17 @@ internal sealed class UserDirectory(IdentityDbContext db) : IUserDirectory
             .ToDictionaryAsync(l => l.UserId, l => l.ProviderKey, ct);
     }
 
+    public async Task<IReadOnlyList<Guid>> SearchByNameAsync(string text, IEnumerable<Guid> withinUserIds, CancellationToken ct = default)
+    {
+        var ids = withinUserIds.Distinct().ToList();
+        if (ids.Count == 0 || string.IsNullOrWhiteSpace(text)) return [];
+        var pattern = $"%{SmartShop.Infrastructure.Persistence.Like.Escape(text.Trim())}%";
+        return await db.Users.AsNoTracking()
+            .Where(u => ids.Contains(u.Id) && EF.Functions.ILike(u.DisplayName, pattern))
+            .Select(u => u.Id)
+            .ToListAsync(ct);
+    }
+
     public async Task<Guid?> FindByLineUserIdAsync(string lineUserId, CancellationToken ct = default) =>
         await db.ExternalLogins.AsNoTracking()
             .Where(l => l.Provider == LoginProviders.Line && l.ProviderKey == lineUserId)
