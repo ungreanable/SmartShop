@@ -32,7 +32,11 @@ public sealed class Loc(IAppStorage storage)
 
     private void Apply()
     {
-        var culture = CultureInfo.GetCultureInfo(IsThai ? "th-TH" : "en-GB");
+        // Thai names for months and days, but Gregorian years (ค.ศ.) everywhere: th-TH defaults to the Buddhist
+        // calendar, which leaked 2569 into API dates (empty sales report) and differs from the server and exports.
+        var culture = (CultureInfo)CultureInfo.GetCultureInfo(IsThai ? "th-TH" : "en-GB").Clone();
+        if (culture.DateTimeFormat.Calendar is not GregorianCalendar)
+            culture.DateTimeFormat.Calendar = new GregorianCalendar();
         CultureInfo.DefaultThreadCurrentCulture = culture;
         CultureInfo.DefaultThreadCurrentUICulture = culture;
         CultureInfo.CurrentCulture = culture;

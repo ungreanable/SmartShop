@@ -11,8 +11,8 @@
         <MudButton Href="@($"/merchant/{ShopId}/reviews")" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Star" FullWidth="true">@L["รีวิว", "Reviews"]</MudButton>
     </div>
     <div class="ss-grid-2 mb-3">
-        <MudDatePicker Date="_from" DateChanged="@(d => DateAsync(d, true))" Label="@L["ตั้งแต่", "From"]" Variant="Variant.Outlined" Margin="Margin.Dense" DateFormat="d MMM yy" />
-        <MudDatePicker Date="_to" DateChanged="@(d => DateAsync(d, false))" Label="@L["ถึง", "To"]" Variant="Variant.Outlined" Margin="Margin.Dense" DateFormat="d MMM yy" />
+        <MudDatePicker Date="_from" DateChanged="@(d => DateAsync(d, true))" Label="@L["ตั้งแต่", "From"]" Variant="Variant.Outlined" Margin="Margin.Dense" DateFormat="d MMM yyyy" />
+        <MudDatePicker Date="_to" DateChanged="@(d => DateAsync(d, false))" Label="@L["ถึง", "To"]" Variant="Variant.Outlined" Margin="Margin.Dense" DateFormat="d MMM yyyy" />
     </div>
 
     @if (_report is null) { <Loading Rows="2" /> }
