@@ -108,6 +108,7 @@
 
 @code {
     [Parameter] public Guid OrderId { get; set; }
+    [Parameter] public bool AsShop { get; set; }
 
     private Payment? _payment;
     private int _attempts;
@@ -124,12 +125,12 @@
 
     public async Task ReloadAsync()
     {
-        _payment = await Api.Get<Payment>($"api/orders/{OrderId}/payment", silent: true);
+        _payment = await Api.Get<Payment>($"api/orders/{OrderId}/payment{(AsShop ? "?as=shop" : "")}", silent: true);
         // The payment is created asynchronously right after the order (event-driven); retry briefly.
         while (_payment is null && _attempts++ < 5)
         {
             await Task.Delay(800);
-            _payment = await Api.Get<Payment>($"api/orders/{OrderId}/payment", silent: true);
+            _payment = await Api.Get<Payment>($"api/orders/{OrderId}/payment{(AsShop ? "?as=shop" : "")}", silent: true);
         }
         StateHasChanged();
     }

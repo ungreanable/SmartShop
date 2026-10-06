@@ -232,6 +232,30 @@ public sealed class Order
         Log("Received", customerId, null, null, now);
     }
 
+    /// <summary>
+    /// Owner/manager escape hatch for an order stuck in the flow (e.g. the customer never confirms): the goods were
+    /// handed over, so it counts as a sale. Recorded in the timeline with the reason.
+    /// </summary>
+    public void ForceComplete(Guid actorId, string reason, DateTimeOffset now)
+    {
+        if (IsTerminal || Status == OrderStatus.PendingAcceptance)
+            throw new ConflictException("cannot_force_complete", Status == OrderStatus.PendingAcceptance
+                ? "Accept or reject the order instead." : "This order is already closed.");
+        var note = Guard.NotEmpty(reason, "Reason", 300);
+        Complete(now);
+        Log("ForceCompleted", actorId, note, null, now);
+    }
+
+    /// <summary>Owner/manager escape hatch: closes a broken order as cancelled from any open state except delivered.</summary>
+    public void ForceCancel(Guid actorId, string reason, DateTimeOffset now)
+    {
+        if (IsTerminal || Status == OrderStatus.Delivered)
+            throw new ConflictException("cannot_force_cancel", Status == OrderStatus.Delivered
+                ? "The order was delivered; close it as completed instead." : "This order is already closed.");
+        Close(OrderStatus.Cancelled, Guard.NotEmpty(reason, "Reason", 300), now);
+        Log("ForceCancelled", actorId, CancelReason, null, now);
+    }
+
     public bool AutoComplete(DateTimeOffset now)
     {
         if (Status != OrderStatus.Delivered) return false;

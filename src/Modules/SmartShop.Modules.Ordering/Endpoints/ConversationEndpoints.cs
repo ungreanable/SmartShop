@@ -38,9 +38,10 @@ internal static class ConversationEndpoints
                 m.Body, media.For(m.ImageId), m.SentAt)).ToList();
         });
 
-        chat.MapPost("/", async (Guid id, MessageRequest req, OrderActions a, IMediaService mediaService, IUserDirectory users, IMediaUrls media, CancellationToken ct) =>
+        chat.MapPost("/", async (Guid id, [Microsoft.AspNetCore.Mvc.FromQuery(Name = "as")] string? viewAs, MessageRequest req, OrderActions a, IMediaService mediaService,
+            IUserDirectory users, IMediaUrls media, CancellationToken ct) =>
         {
-            var (order, role) = await a.ForViewerAsync(id, ct);
+            var (order, role) = await a.ForViewerAsync(id, ct, viewAs == "shop");
             if (role == "admin") throw new ForbiddenException("Administrators can read but not write in order chats.");
             if (order.ClosedAt is { } closed && a.Now - closed > TimeSpan.FromDays(7))
                 throw new DomainException("chat_closed", "Chat closes 7 days after the order ended.");

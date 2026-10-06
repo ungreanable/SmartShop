@@ -55,9 +55,10 @@ public sealed class PaymentsModule : IModule
     {
         var customer = app.MapGroup("/orders/{orderId:guid}/payment").WithTags("Payments").RequirePlantMember();
 
-        customer.MapGet("/", async (Guid orderId, Access access, IMediaUrls media, IMediaService mediaService, CancellationToken ct) =>
+        customer.MapGet("/", async (Guid orderId, [Microsoft.AspNetCore.Mvc.FromQuery(Name = "as")] string? viewAs, Access access, IMediaUrls media,
+            IMediaService mediaService, CancellationToken ct) =>
         {
-            var (payment, role) = await access.LoadAsync(orderId, ct);
+            var (payment, role) = await access.LoadAsync(orderId, ct, asShop: viewAs == "shop");
             return await ToDtoAsync(payment, role, access.Db, media, mediaService, ct);
         });
 
@@ -162,12 +163,15 @@ public sealed class PaymentsModule : IModule
     {
         public PaymentsDbContext Db => db;
 
-        public async Task<(Payment Payment, string Role)> LoadAsync(Guid orderId, CancellationToken ct, bool tracked = false)
+        public async Task<(Payment Payment, string Role)> LoadAsync(Guid orderId, CancellationToken ct, bool tracked = false, bool asShop = false)
         {
             var order = await orders.GetAsync(orderId, ct);
             if (order is null || order.PlantId != plant.PlantId) throw new NotFoundException("Order", orderId);
-            var role = order.CustomerId == user.Id ? "customer"
-                : await shopAccess.GetRoleAsync(order.ShopId, ct) is not null ? "shop"
+            // A shop member who ordered from their own shop sees the customer side unless the merchant screen asks for the shop side.
+            var isShopMember = await shopAccess.GetRoleAsync(order.ShopId, ct) is not null;
+            var role = asShop && isShopMember ? "shop"
+                : order.CustomerId == user.Id ? "customer"
+                : isShopMember ? "shop"
                 : plant.Membership.Role == PlantRole.PlantAdmin ? "admin"
                 : throw new NotFoundException("Order", orderId);
             var query = tracked ? db.Payments : db.Payments.AsNoTracking();

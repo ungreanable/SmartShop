@@ -32,6 +32,7 @@
 @code {
     [Parameter] public Guid OrderId { get; set; }
     [Parameter] public bool IsShop { get; set; }
+    [Parameter] public bool AsShop { get; set; }
 
     private List<ChatMessage> _messages = [];
     private string? _text;
@@ -48,7 +49,7 @@
     private async Task SendAsync()
     {
         if (string.IsNullOrWhiteSpace(_text)) return;
-        var sent = await Api.Post<ChatMessage>($"api/orders/{OrderId}/messages", new { body = _text.Trim() });
+        var sent = await Api.Post<ChatMessage>($"api/orders/{OrderId}/messages{(AsShop ? "?as=shop" : "")}", new { body = _text.Trim() });
         if (sent is not null)
         {
             _messages.Add(sent);
@@ -59,7 +60,7 @@
     private async Task SendImageAsync(UploadResult? file)
     {
         if (file is null) return;
-        var sent = await Api.Post<ChatMessage>($"api/orders/{OrderId}/messages", new { imageId = file.Id });
+        var sent = await Api.Post<ChatMessage>($"api/orders/{OrderId}/messages{(AsShop ? "?as=shop" : "")}", new { imageId = file.Id });
         if (sent is not null) _messages.Add(sent);
     }
 

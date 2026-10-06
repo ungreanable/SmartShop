@@ -1,0 +1,41 @@
+@* Owner/manager: close an order that is stuck in the flow. *@
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="ss-muted mb-2">
+            @L["ใช้เมื่อออเดอร์ค้างและทำขั้นตอนต่อไม่ได้ ระบบจะบันทึกเหตุผลไว้ในประวัติออเดอร์", "For orders stuck in the flow. The reason is kept in the order history."]
+        </MudText>
+        <MudRadioGroup T="string" @bind-Value="_outcome">
+            @if (CanComplete)
+            {
+                <MudRadio T="string" Value="@("completed")" Color="Color.Primary">
+                    <MudText Typo="Typo.body2">@L["ปิดเป็นสำเร็จ (ส่งของแล้ว)", "Close as completed (goods handed over)"]</MudText>
+                    <MudText Typo="Typo.caption" Class="ss-muted">@L["นับเป็นยอดขาย และตัดสต็อก", "Counts as a sale and uses the stock"]</MudText>
+                </MudRadio>
+            }
+            @if (CanCancel)
+            {
+                <MudRadio T="string" Value="@("cancelled")" Color="Color.Error">
+                    <MudText Typo="Typo.body2">@L["ยกเลิกออเดอร์", "Cancel the order"]</MudText>
+                    <MudText Typo="Typo.caption" Class="ss-muted">@L["คืนสต็อก และแจ้งคืนเงินถ้าชำระแล้ว", "Returns the stock and flags a refund if paid"]</MudText>
+                </MudRadio>
+            }
+        </MudRadioGroup>
+        <MudTextField @bind-Value="_reason" Label="@L["เหตุผล", "Reason"]" Variant="Variant.Outlined" Lines="2" Immediate="true" MaxLength="300" Class="mt-2" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["ยกเลิก", "Cancel"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="@(_outcome == "cancelled" ? Color.Error : Color.Primary)"
+                   Disabled="@(_outcome is null || string.IsNullOrWhiteSpace(_reason))"
+                   OnClick="@(() => Dialog.Close(DialogResult.Ok(new ForceCloseResult(_outcome!, _reason!.Trim()))))">@L["ยืนยันปิดออเดอร์", "Close order"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public bool CanComplete { get; set; }
+    [Parameter] public bool CanCancel { get; set; }
+
+    private string? _outcome, _reason;
+
+    protected override void OnInitialized() => _outcome = CanComplete ? "completed" : CanCancel ? "cancelled" : null;
+}

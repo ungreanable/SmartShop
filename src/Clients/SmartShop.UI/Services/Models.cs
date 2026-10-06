@@ -41,6 +41,7 @@ public sealed record ShopSettings(ShopDetails Shop, Guid? LogoId, Guid? CoverId,
     int AcceptTimeoutMinutes, int ReminderAfterMinutes, int AutoCompleteHours, bool AllowPreorderWhenClosed, int SlotIntervalMinutes,
     bool RequirePaymentBeforePreparing, string OverrideMode, DateTimeOffset? OverrideUntil, DateTimeOffset? BusyUntil, DateTimeOffset? VacationUntil,
     bool VisibleWhileSuspended = false);
+public sealed record ForceCloseResult(string Outcome, string Reason);
 public sealed record MyShop(Guid Id, string Name, string Code, string? LogoUrl, string Role, ShopStatus Status, string Lifecycle, bool ReceiveOrderNotifications);
 public sealed record TimeWindow(DateTimeOffset Start, DateTimeOffset End);
 public sealed record ShopApplication(Guid Id, string Name, string? Category, string? Description, string? HouseNo, string? Phone,

@@ -13,6 +13,7 @@ public sealed record AddressDto(string? HouseNo, string? Soi, string? Note);
 public sealed record OrderDto(Guid Id, string OrderNo, string Status, Guid ShopId, string FulfillmentType, AddressDto? DeliveryAddress,
     List<OrderLineDto> Lines, decimal Subtotal, decimal Total, string PaymentMethodType, string PaymentStatus, string? AcceptedByName,
     string? CancelReason, List<TimelineDto> Timeline, DateTimeOffset? ScheduledFrom);
+public sealed record OrderViewDto(Guid Id, string Status, string ViewerRole);
 public sealed record OrderSummaryDto(Guid Id, string OrderNo, string Status, string CustomerName, decimal Total, bool CancelRequested);
 
 public class OrderingTests(SmartShopFactory factory)
@@ -89,6 +90,67 @@ public class OrderingTests(SmartShopFactory factory)
         completed.AcceptedByName.ShouldBe(s.Owner.DisplayName);
 
         await FactoryExtensions.EventuallyAsync(async () => (await StockAsync(s, rice.Item.Id)).ShouldBe(new StockResultDto(8, 0, 8)));
+    }
+
+    [Fact]
+    public async Task Owner_ordering_from_own_shop_can_run_it_as_the_shop()
+    {
+        var s = await OpenShopAsync();
+        var rice = await AddItemAsync(s, "ข้าวผัด", 45);
+        await s.Owner.PostAsync<CartDto>("/api/cart/items", new { shopId = s.ShopId, itemId = rice.Item.Id, quantity = 1 });
+        var order = await CheckoutAsync(s.Owner, s.CashId);
+
+        // The customer screen shows the customer side; the merchant screen asks for the shop side.
+        (await s.Owner.GetAsync<OrderViewDto>($"/api/orders/{order.Id}")).ViewerRole.ShouldBe("customer");
+        (await s.Owner.GetAsync<OrderViewDto>($"/api/orders/{order.Id}?as=shop")).ViewerRole.ShouldBe("shop");
+        (await s.Owner.GetAsync<PaymentDto>($"/api/orders/{order.Id}/payment")).CanVerify.ShouldBeFalse();
+        (await s.Owner.GetAsync<PaymentDto>($"/api/orders/{order.Id}/payment?as=shop")).CanVerify.ShouldBeTrue();
+
+        await s.Owner.PostOkAsync($"/api/merchant/orders/{order.Id}/accept");
+        await s.Owner.PostOkAsync($"/api/merchant/orders/{order.Id}/start");
+        await s.Owner.PostOkAsync($"/api/merchant/orders/{order.Id}/ready");
+        await s.Owner.PostOkAsync($"/api/merchant/orders/{order.Id}/deliver", new { });
+        var completed = await s.Owner.PostAsync<OrderDto>($"/api/orders/{order.Id}/confirm-received");
+        completed.Status.ShouldBe("Completed");
+
+        // Someone who is not in the shop cannot get the shop side by asking for it.
+        var neighbour = await factory.JoinAsync(s.Plant, s.Admin);
+        (await neighbour.GetRawAsync($"/api/orders/{order.Id}?as=shop")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Owner_can_force_close_a_stuck_order_as_completed_or_cancelled()
+    {
+        var s = await OpenShopAsync();
+        var rice = await AddItemAsync(s, "ข้าวต้ม", 40, stock: 10);
+        var customer = await factory.JoinAsync(s.Plant, s.Admin);
+
+        async Task<OrderDto> PlaceAsync()
+        {
+            await customer.PostAsync<CartDto>("/api/cart/items", new { shopId = s.ShopId, itemId = rice.Item.Id, quantity = 1 });
+            var order = await CheckoutAsync(customer, s.CashId);
+            await s.Owner.PostOkAsync($"/api/merchant/orders/{order.Id}/accept");
+            return order;
+        }
+
+        // Stuck at "Ready": the food was handed over but nobody pressed the button.
+        var handed = await PlaceAsync();
+        await s.Owner.PostOkAsync($"/api/merchant/orders/{handed.Id}/start");
+        await s.Owner.PostOkAsync($"/api/merchant/orders/{handed.Id}/ready");
+        var completed = await s.Owner.PostAsync<OrderDto>($"/api/merchant/orders/{handed.Id}/force-close", new { outcome = "completed", reason = "ลูกค้ารับไปแล้ว" });
+        completed.Status.ShouldBe("Completed");
+        completed.Timeline.Last().Type.ShouldBe("ForceCompleted");
+
+        // A broken order closed as cancelled releases its stock.
+        var broken = await PlaceAsync();
+        var cancelled = await s.Owner.PostAsync<OrderDto>($"/api/merchant/orders/{broken.Id}/force-close", new { outcome = "cancelled", reason = "สั่งผิด" });
+        cancelled.Status.ShouldBe("Cancelled");
+        await FactoryExtensions.EventuallyAsync(async () => (await StockAsync(s, rice.Item.Id)).ShouldBe(new StockResultDto(9, 0, 9)));
+
+        // Closed orders stay closed; a reason is required.
+        (await s.Owner.PostRawAsync($"/api/merchant/orders/{broken.Id}/force-close", new { outcome = "completed", reason = "x" })).StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var third = await PlaceAsync();
+        (await s.Owner.PostRawAsync($"/api/merchant/orders/{third.Id}/force-close", new { outcome = "cancelled", reason = "" })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
     [Fact]

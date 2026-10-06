@@ -38,13 +38,18 @@ internal sealed class OrderActions(
         await Db.Orders.FirstOrDefaultAsync(o => o.Id == orderId && o.PlantId == plant.PlantId && o.CustomerId == user.Id, ct)
         ?? throw new NotFoundException("Order", orderId);
 
-    /// <summary>Customer, any shop member, or a plant admin may view an order.</summary>
-    public async Task<(Order Order, string Role)> ForViewerAsync(Guid orderId, CancellationToken ct)
+    /// <summary>
+    /// Customer, any shop member, or a plant admin may view an order. A shop member who ordered from their own
+    /// shop is the customer by default; <paramref name="asShop"/> (the merchant screens) gives them the shop view.
+    /// </summary>
+    public async Task<(Order Order, string Role)> ForViewerAsync(Guid orderId, CancellationToken ct, bool asShop = false)
     {
         var order = await Db.Orders.AsNoTracking().FirstOrDefaultAsync(o => o.Id == orderId && o.PlantId == plant.PlantId, ct)
                     ?? throw new NotFoundException("Order", orderId);
+        var isShopMember = await access.GetRoleAsync(order.ShopId, ct) is not null;
+        if (asShop && isShopMember) return (order, "shop");
         if (order.CustomerId == user.Id) return (order, "customer");
-        if (await access.GetRoleAsync(order.ShopId, ct) is not null) return (order, "shop");
+        if (isShopMember) return (order, "shop");
         if (plant.Membership.Role == PlantRole.PlantAdmin) return (order, "admin");
         throw new NotFoundException("Order", orderId);
     }

@@ -6,6 +6,8 @@
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
 @inject OrderAlarm Alarm
+@inject PlantContext Plant
+@inject Session Session
 
 <div class="ss-page">
     @if (_order is null) { <Loading Rows="4" /> }
@@ -78,11 +80,20 @@
                         break;
                     case "Delivered":
                         <MudText Typo="Typo.body2" Class="ss-muted">@L["รอลูกค้ากดยืนยันรับ หรือระบบยืนยันอัตโนมัติ", "Waiting for the customer to confirm (or auto-confirm)"] @(_order.AutoCompleteAt is { } ac ? Fmt.DateTime(ac) : "")</MudText>
+                        @if (_order.Customer.Id == Session.User?.Id)
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Primary" Href="@($"/orders/{OrderId}")">@L["ยืนยันรับในฐานะลูกค้า", "Confirm as the customer"]</MudButton>
+                        }
                         break;
                 }
                 @if (_order.Status is "Accepted" or "Preparing" or "Ready" or "OutForDelivery")
                 {
                     <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" Class="mt-1" OnClick="ShopCancelAsync">@L["ยกเลิกออเดอร์", "Cancel order"]</MudButton>
+                }
+                @if (CanForceClose)
+                {
+                    <MudButton Variant="Variant.Text" Color="Color.Default" Size="Size.Small" Class="mt-1" StartIcon="@Icons.Material.Filled.Block"
+                               OnClick="ForceCloseAsync">@L["บังคับปิดออเดอร์", "Force close"]</MudButton>
                 }
             </MudPaper>
         }
@@ -122,7 +133,14 @@
             <div class="d-flex"><MudText Typo="Typo.subtitle1" Style="font-weight:700">@L["รวม", "Total"]</MudText><MudSpacer /><MudText Typo="Typo.subtitle1" Style="font-weight:700">@Fmt.Baht(_order.Total)</MudText></div>
         </MudPaper>
 
-        <PaymentPanel OrderId="OrderId" @ref="_payment" />
+        @if (!IsShop && ShopId is null && Plant.MyShops.Any(s => s.Id == _order.ShopId))
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                @L["นี่คือออเดอร์ของร้านคุณเอง", "This order is from your own shop"]
+                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" Href="@($"/merchant/{_order.ShopId}/orders/{OrderId}")">@L["จัดการในฐานะร้าน", "Manage as shop"]</MudButton>
+            </MudAlert>
+        }
+        <PaymentPanel OrderId="OrderId" AsShop="@(ShopId is not null)" @ref="_payment" />
 
         @if (_order.DeliveryPhotoUrl is not null)
         {
@@ -155,7 +173,7 @@
             </div>
         }
 
-        <ChatPanel OrderId="OrderId" IsShop="IsShop" />
+        <ChatPanel OrderId="OrderId" IsShop="IsShop" AsShop="@(ShopId is not null)" />
 
         <MudExpansionPanels Elevation="0" Class="mt-3">
             <MudExpansionPanel Text="@L["ประวัติออเดอร์", "Order history"]">
@@ -218,10 +236,29 @@
         await LoadAsync();
     }
 
-    private async Task LoadAsync() => _order = await Api.Get<Order>($"api/orders/{OrderId}");
+    // Opened from the merchant screens (ShopId set): ask for the shop view, even if I placed this order myself.
+    private string AsShop => ShopId is null ? "" : "?as=shop";
+
+    private async Task LoadAsync() => _order = await Api.Get<Order>($"api/orders/{OrderId}{AsShop}");
 
     // Guards every order action against double taps on slow connections.
     private bool _busy;
+
+    // Owner/manager only, for orders that cannot move on (e.g. waiting for a customer who never confirms).
+    private bool CanForceClose => IsShop && !Terminal && _order is not null
+        && Plant.MyShops.FirstOrDefault(s => s.Id == _order.ShopId)?.Role is "Owner" or "Manager";
+
+    private async Task ForceCloseAsync()
+    {
+        var parameters = new DialogParameters<ForceCloseDialog>
+        {
+            { x => x.CanComplete, _order!.Status != "PendingAcceptance" },
+            { x => x.CanCancel, _order.Status != "Delivered" },
+        };
+        var result = await (await Dialogs.ShowAsync<ForceCloseDialog>(L["บังคับปิดออเดอร์", "Force close order"] + " #" + _order.OrderNo, parameters)).Result;
+        if (result is { Canceled: false, Data: ForceCloseResult r })
+            await ShopActionAsync("force-close", new { outcome = r.Outcome, reason = r.Reason });
+    }
 
     private async Task ShopActionAsync(string action, object? body)
     {
@@ -320,6 +357,8 @@
         "Expired" => L["หมดเวลา", "Expired"],
         "CancelledByCustomer" => L["ลูกค้ายกเลิก", "Cancelled by customer"],
         "CancelledByShop" => L["ร้านยกเลิก", "Cancelled by shop"],
+        "ForceCompleted" => L["ร้านบังคับปิดเป็นสำเร็จ", "Force-closed as completed"],
+        "ForceCancelled" => L["ร้านบังคับยกเลิก", "Force-cancelled by shop"],
         "CancelledBySystem" => L["ระบบยกเลิก", "Cancelled by system"],
         "CancelRequested" => L["ลูกค้าขอยกเลิก", "Cancellation requested"],
         "CancelRequestDeclined" => L["ร้านไม่อนุมัติการยกเลิก", "Cancellation declined"],

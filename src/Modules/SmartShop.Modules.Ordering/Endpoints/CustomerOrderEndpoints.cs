@@ -52,9 +52,9 @@ internal static class CustomerOrderEndpoints
             return new PagedResult<OrderSummaryDto>(await actions.SummariesAsync(rows, ct), total, number, size);
         });
 
-        orders.MapGet("/{id:guid}", async (Guid id, OrderActions actions, CancellationToken ct) =>
+        orders.MapGet("/{id:guid}", async (Guid id, [Microsoft.AspNetCore.Mvc.FromQuery(Name = "as")] string? viewAs, OrderActions actions, CancellationToken ct) =>
         {
-            var (order, role) = await actions.ForViewerAsync(id, ct);
+            var (order, role) = await actions.ForViewerAsync(id, ct, viewAs == "shop");
             return await actions.ToDtoAsync(order, role, ct);
         });
 

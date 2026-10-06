@@ -22,6 +22,8 @@ public sealed record TopItemDto(string Name, int Quantity, decimal Revenue);
 public sealed record SalesReportDto(DateOnly From, DateOnly To, int Orders, decimal Revenue, decimal AverageOrder, int Cancelled,
     List<SalesDayDto> Days, List<TopItemDto> TopItems);
 
+public sealed record ForceCloseRequest(string Outcome, string? Reason);
+
 internal static class MerchantOrderEndpoints
 {
     public static void Map(IEndpointRouteBuilder api)
@@ -164,6 +166,25 @@ internal static class MerchantOrderEndpoints
             order.MarkDelivered(a.UserId, photo, hours, a.Now);
             await a.Bus.ScheduleAsync(new AutoCompleteOrder(order.Id), order.AutoCompleteAt!.Value);
             await a.SaveAsync(ct, new OrderDelivered(order.PlantId, order.Id, order.OrderNo, order.ShopId, order.ShopName, order.CustomerId, photo, hours));
+            return await a.ToDtoAsync(order, "shop", ct);
+        });
+
+        // Owner/manager: close an order that is stuck in the flow, as completed (goods handed over) or cancelled.
+        o.MapPost("/force-close", async (Guid id, ForceCloseRequest req, OrderActions a, CancellationToken ct) =>
+        {
+            var order = await a.ForShopAsync(id, ShopRole.Manager, ct);
+            if (req.Outcome == "completed")
+            {
+                order.ForceComplete(a.UserId, req.Reason ?? "", a.Now);
+                await a.SaveAsync(ct, new OrderCompleted(order.PlantId, order.Id, order.OrderNo, order.ShopId, order.ShopName, order.CustomerId, true,
+                    order.Total, order.LineInfos()));
+            }
+            else
+            {
+                order.ForceCancel(a.UserId, req.Reason ?? "", a.Now);
+                await a.SaveAsync(ct, new OrderCancelled(order.PlantId, order.Id, order.OrderNo, order.ShopId, order.ShopName, order.CustomerId, a.UserId, false,
+                    order.CancelReason, order.PromotionId, order.LineInfos()));
+            }
             return await a.ToDtoAsync(order, "shop", ct);
         });
 
