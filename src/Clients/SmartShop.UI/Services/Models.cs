@@ -120,7 +120,7 @@ public sealed record Payment(Guid Id, Guid OrderId, string OrderNo, decimal Amou
 
 // ---- notifications ----
 public sealed record NotificationItem(Guid Id, Guid? PlantId, string Type, string Priority, string Title, string Body, string? Link, DateTimeOffset CreatedAt, bool Read);
-public sealed record Device(Guid Id, string Kind, string? Label, DateTimeOffset LastSeenAt);
+public sealed record Device(Guid Id, string Kind, string? Label, DateTimeOffset LastSeenAt, string? Key = null);
 public sealed record Channels(bool LineConfigured, bool LineFriend, string? LineAddFriendUrl, bool WebPushConfigured, string? VapidPublicKey,
     bool FcmConfigured, List<Device> Devices, bool HasPush);
 public sealed record NotificationSettings(string PushMode, List<string> LineMuted, List<string> PushMuted, string? QuietFrom, string? QuietTo);

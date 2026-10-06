@@ -22,7 +22,12 @@ namespace SmartShop.Modules.Notifications.Endpoints;
 public sealed record NotificationDto(Guid Id, Guid? PlantId, string Type, NotificationPriority Priority, string Title, string Body, string? Link,
     DateTimeOffset CreatedAt, bool Read);
 public sealed record DeviceRequest(DeviceKind Kind, string Endpoint, string? P256dh, string? Auth, string? Label);
-public sealed record DeviceDto(Guid Id, DeviceKind Kind, string? Label, DateTimeOffset LastSeenAt);
+/// <summary><paramref name="Key"/>: short hash of the push endpoint, so a browser can tell which listed device it is.</summary>
+public sealed record DeviceDto(Guid Id, DeviceKind Kind, string? Label, DateTimeOffset LastSeenAt, string Key)
+{
+    public static string KeyOf(string endpoint) =>
+        Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(endpoint)))[..16];
+}
 public sealed record ChannelsDto(bool LineConfigured, bool LineFriend, string? LineAddFriendUrl, bool WebPushConfigured, string? VapidPublicKey,
     bool FcmConfigured, List<DeviceDto> Devices, bool HasPush);
 public sealed record SettingsDto(PushMode PushMode, List<string> LineMuted, List<string> PushMuted, TimeOnly? QuietFrom, TimeOnly? QuietTo);
@@ -117,7 +122,7 @@ internal static class NotificationEndpoints
             else device.Refresh(user.Id, req.P256dh, req.Auth, Guard.Optional(req.Label, "Label", 100), now);
             await db.SaveChangesAsync(ct);
             await cache.RemoveAsync(CacheKeys.UserChannels(user.Id), ct);
-            return new DeviceDto(device.Id, device.Kind, device.Label, device.LastSeenAt);
+            return new DeviceDto(device.Id, device.Kind, device.Label, device.LastSeenAt, DeviceDto.KeyOf(device.Endpoint));
         });
 
         n.MapDelete("/devices/{id:guid}", async (Guid id, ICurrentUser user, NotificationsDbContext db, HybridCache cache, CancellationToken ct) =>
@@ -166,8 +171,8 @@ internal static class NotificationEndpoints
     private static async Task<ChannelsDto> ChannelsAsync(Guid userId, NotificationsDbContext db, NotificationOptions o, CancellationToken ct)
     {
         var friend = await db.LineFriendships.AsNoTracking().AnyAsync(f => f.UserId == userId && f.IsFriend, ct);
-        var devices = await db.Devices.AsNoTracking().Where(d => d.UserId == userId).OrderByDescending(d => d.LastSeenAt)
-            .Select(d => new DeviceDto(d.Id, d.Kind, d.Label, d.LastSeenAt)).ToListAsync(ct);
+        var devices = (await db.Devices.AsNoTracking().Where(d => d.UserId == userId).OrderByDescending(d => d.LastSeenAt).ToListAsync(ct))
+            .Select(d => new DeviceDto(d.Id, d.Kind, d.Label, d.LastSeenAt, DeviceDto.KeyOf(d.Endpoint))).ToList();
         var hasPush = (o.LineConfigured && friend) || (o.WebPushConfigured && devices.Any(d => d.Kind == DeviceKind.WebPush))
                       || (o.FcmConfigured && devices.Any(d => d.Kind == DeviceKind.Fcm));
         return new ChannelsDto(o.LineConfigured, friend, o.LineAddFriendUrl, o.WebPushConfigured, o.VapidPublicKey, o.FcmConfigured, devices, hasPush);

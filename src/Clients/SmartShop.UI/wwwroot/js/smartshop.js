@@ -84,6 +84,24 @@ window.smartshop = (() => {
       const json = subscription.toJSON();
       return { endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth };
     },
+    unsubscribe: async () => {
+      try {
+        const registration = await navigator.serviceWorker.getRegistration();
+        const subscription = registration && await registration.pushManager.getSubscription();
+        if (subscription) await subscription.unsubscribe();
+      } catch { }
+    },
+    // Same key the server lists for each device (first 16 hex of SHA-256 of the endpoint), or null when not subscribed.
+    currentKey: async () => {
+      try {
+        if (!('serviceWorker' in navigator)) return null;
+        const registration = await navigator.serviceWorker.getRegistration();
+        const subscription = registration && await registration.pushManager.getSubscription();
+        if (!subscription) return null;
+        const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(subscription.endpoint));
+        return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
+      } catch { return null; }
+    },
   };
 
   // ---------- misc ----------

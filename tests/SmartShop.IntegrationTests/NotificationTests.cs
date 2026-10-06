@@ -7,7 +7,7 @@ using SmartShop.IntegrationTests.Infrastructure;
 namespace SmartShop.IntegrationTests;
 
 public sealed record NotificationDto(Guid Id, Guid? PlantId, string Type, string Priority, string Title, string Body, string? Link, bool Read);
-public sealed record DeviceDto(Guid Id, string Kind, string? Label);
+public sealed record DeviceDto(Guid Id, string Kind, string? Label, string? Key = null);
 public sealed record ChannelsDto(bool LineConfigured, bool LineFriend, bool WebPushConfigured, List<DeviceDto> Devices, bool HasPush);
 public sealed record MemberChannelDto(Guid UserId, string DisplayName, bool ReceiveOrderNotifications, bool LineFriend, int WebPushDevices, bool HasPush);
 public sealed record NotificationHealthDto(string Requirement, bool AnyRecipientHasPush, List<MemberChannelDto> Members);
@@ -87,16 +87,20 @@ public class NotificationTests(SmartShopFactory factory)
     public async Task Devices_are_registered_per_user_and_listed_in_channels()
     {
         var user = await factory.LoginAsync();
+        var endpoint = $"https://push.example.com/{Guid.NewGuid()}";
         await user.PostOkAsync("/api/notifications/devices", new
         {
             kind = "WebPush",
-            endpoint = $"https://push.example.com/{Guid.NewGuid()}",
+            endpoint,
             p256dh = "BElz6",
             auth = "abc",
             label = "มือถือแม่",
         });
         var channels = await user.GetAsync<ChannelsDto>("/api/notifications/channels");
         channels.Devices.Single().Label.ShouldBe("มือถือแม่");
+        // The browser computes the same key to show "this device" (smartshop.push.currentKey).
+        channels.Devices.Single().Key.ShouldBe(Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(endpoint)))[..16]);
 
         var invalid = await user.PostRawAsync("/api/notifications/devices", new { kind = "WebPush", endpoint = "http://insecure", p256dh = "x", auth = "y" });
         invalid.StatusCode.ShouldBe(HttpStatusCode.BadRequest);

@@ -65,6 +65,18 @@ internal sealed class WebPushRegistrar(IJSRuntime js) : IPushRegistrar
 
     public async Task<bool> IsSupportedAsync() => await js.InvokeAsync<bool>("smartshop.push.supported");
 
+    public async Task UnsubscribeAsync()
+    {
+        try { await js.InvokeVoidAsync("smartshop.push.unsubscribe"); }
+        catch (JSException) { }
+    }
+
+    public async Task<string?> CurrentKeyAsync()
+    {
+        try { return await js.InvokeAsync<string?>("smartshop.push.currentKey"); }
+        catch (JSException) { return null; }
+    }
+
     public async Task<string> PermissionAsync() => await js.InvokeAsync<string>("smartshop.push.permission");
 
     public async Task<PushSubscriptionInfo?> SubscribeAsync(string? vapidPublicKey)

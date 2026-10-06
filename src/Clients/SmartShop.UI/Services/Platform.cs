@@ -44,6 +44,12 @@ public interface IPushRegistrar
     Task<bool> IsSupportedAsync();
     Task<string> PermissionAsync();
     Task<PushSubscriptionInfo?> SubscribeAsync(string? vapidPublicKey);
+
+    /// <summary>Key of this device's current subscription (matches <c>Device.Key</c>), or null when not subscribed.</summary>
+    Task<string?> CurrentKeyAsync() => Task.FromResult<string?>(null);
+
+    /// <summary>Drops this device's subscription, so turning push off is not undone by the automatic re-registration.</summary>
+    Task UnsubscribeAsync() => Task.CompletedTask;
 }
 
 public sealed record PushSubscriptionInfo(string Endpoint, string? P256dh, string? Auth, string Label);

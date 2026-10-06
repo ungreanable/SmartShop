@@ -69,12 +69,17 @@
                     <MudText>@L["แจ้งเตือนบนอุปกรณ์นี้ (Web Push)", "Push on this device"]</MudText>
                     @if (!_channels.WebPushConfigured && Push.Kind == "WebPush") { <MudText Typo="Typo.caption" Class="ss-muted">@L["ยังไม่ได้ตั้งค่าบนเซิร์ฟเวอร์", "not configured"]</MudText> }
                     else if (!_pushSupported) { <MudText Typo="Typo.caption" Class="ss-muted">@(PushHint)</MudText> }
+                    else if (ThisDevice is { } current)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Success" Icon="@Icons.Material.Filled.Check">@L["เปิดอยู่", "On"]</MudChip>
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => RemoveDeviceAsync(current))">@L["ปิด", "Turn off"]</MudButton>
+                    }
                     else { <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" OnClick="EnablePushAsync">@L["เปิด", "Enable"]</MudButton> }
                 </div>
                 @foreach (var d in _channels.Devices)
                 {
                     <div class="d-flex align-center ps-4">
-                        <MudText Typo="Typo.caption">📱 @(d.Label ?? d.Kind) · @Fmt.Ago(d.LastSeenAt, L)</MudText>
+                        <MudText Typo="Typo.caption">📱 @(d.Label ?? d.Kind) · @Fmt.Ago(d.LastSeenAt, L)@(d == ThisDevice ? " · " + L["เครื่องนี้", "this device"] : "")</MudText>
                         <MudSpacer />
                         <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="@(() => RemoveDeviceAsync(d))" aria-label="@L["เลิกแจ้งเตือนอุปกรณ์นี้", "Remove device"]" />
                     </div>
@@ -157,8 +162,13 @@
         await LoadChannelsAsync();
     }
 
+    // The listed device that belongs to this browser, if it is subscribed.
+    private string? _currentKey;
+    private Device? ThisDevice => _currentKey is null ? null : _channels?.Devices.FirstOrDefault(d => d.Key == _currentKey);
+
     private async Task LoadChannelsAsync()
     {
+        _currentKey = await Push.CurrentKeyAsync();
         _channels = await Api.Get<Channels>("api/notifications/channels", silent: true);
         _settings = await Api.Get<NotificationSettings>("api/notifications/settings", silent: true);
         _quietFrom = _settings?.QuietFrom is { } f ? TimeSpan.Parse(f, System.Globalization.CultureInfo.InvariantCulture) : null;
@@ -191,7 +201,9 @@
         if (await Dialogs.ShowMessageBoxAsync(L["เลิกแจ้งเตือนบนอุปกรณ์นี้?", "Stop notifications on this device?"],
                 L["อุปกรณ์นี้จะไม่ได้รับแจ้งเตือนออเดอร์อีก", "This device will no longer receive order alerts."],
                 yesText: L["เลิกแจ้งเตือน", "Remove"], cancelText: L["ยกเลิก", "Cancel"]) != true) return;
-        if (await Api.Delete($"api/notifications/devices/{d.Id}")) await LoadChannelsAsync();
+        if (!await Api.Delete($"api/notifications/devices/{d.Id}")) return;
+        if (d == ThisDevice) await Push.UnsubscribeAsync();
+        await LoadChannelsAsync();
     }
 
     private async Task TestAsync()
