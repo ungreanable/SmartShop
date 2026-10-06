@@ -16,12 +16,15 @@ internal sealed class SmartShopExceptionHandler(IProblemDetailsService problemDe
         var (status, code, title) = exception switch
         {
             ConflictException e => (StatusCodes.Status409Conflict, e.Code, e.Message),
+            TooLargeException e => (StatusCodes.Status413PayloadTooLarge, e.Code, e.Message),
+            UnavailableException e => (StatusCodes.Status503ServiceUnavailable, e.Code, e.Message),
             DomainException e => (StatusCodes.Status400BadRequest, e.Code, e.Message),
             NotFoundException e => (StatusCodes.Status404NotFound, "not_found", e.Message),
             ForbiddenException e => (StatusCodes.Status403Forbidden, "forbidden", e.Message),
             UnauthorizedAccessException e => (StatusCodes.Status401Unauthorized, "unauthorized", e.Message),
             DbUpdateConcurrencyException => (StatusCodes.Status409Conflict, "concurrency",
                 "The data was changed by someone else. Please refresh and try again."),
+            BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge } e => (e.StatusCode, "media_too_large", e.Message),
             BadHttpRequestException e => (e.StatusCode, "bad_request", e.Message),
             _ => (0, "", ""),
         };

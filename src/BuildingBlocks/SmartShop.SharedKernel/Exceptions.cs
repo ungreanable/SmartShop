@@ -9,6 +9,12 @@ public class DomainException(string code, string message) : Exception(message)
 /// <summary>The current state does not allow the operation (e.g. order already accepted). HTTP 409.</summary>
 public sealed class ConflictException(string code, string message) : DomainException(code, message);
 
+/// <summary>The request body is larger than allowed. HTTP 413.</summary>
+public sealed class TooLargeException(string code, string message) : DomainException(code, message);
+
+/// <summary>Temporarily unable to serve the request (e.g. all image workers busy); the client may retry. HTTP 503.</summary>
+public sealed class UnavailableException(string code, string message) : DomainException(code, message);
+
 public sealed class NotFoundException(string resource, object id)
     : Exception($"{resource} '{id}' was not found.")
 {

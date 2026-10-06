@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using SmartShop.Contracts.Media;
@@ -35,36 +36,57 @@ internal sealed class MediaService(MediaDbContext db, IObjectStorage storage, Ti
         return (await storage.GetAsync(media.OriginalKey, ct))?.Content;
     }
 
+    // At most two images decoded at once, so simultaneous uploads cannot push the API past its memory limit.
     private static readonly SemaphoreSlim ProcessingGate = new(2);
+    private static readonly TimeSpan GateTimeout = TimeSpan.FromSeconds(30);
 
-    public async Task<MediaObject> UploadAsync(Guid ownerId, Guid? plantId, MediaPurpose purpose, Stream content, CancellationToken ct)
+    public async Task<MediaObject> UploadAsync(Guid ownerId, Guid? plantId, MediaPurpose purpose, Stream content, long length, CancellationToken ct)
     {
-        using var buffer = new MemoryStream();
-        await content.CopyToAsync(buffer, ct);
-        var bytes = buffer.ToArray();
-        if (bytes.Length == 0) throw new DomainException("media_empty", "The file is empty.");
+        // Reject before reading a byte: the declared size is enough to know.
+        if (length <= 0) throw new DomainException("media_empty", "The file is empty.");
+        if (length > MaxImageBytes) throw new TooLargeException("media_too_large", "Images must be 15 MB or smaller (PDF 5 MB).");
 
-        var type = FileSignature.Detect(bytes.AsSpan(0, Math.Min(bytes.Length, 16)))
+        // Pooled buffer instead of MemoryStream + ToArray (two full copies per upload, all on the large object heap).
+        var size = (int)length;
+        var buffer = ArrayPool<byte>.Shared.Rent(size);
+        try
+        {
+            await content.ReadExactlyAsync(buffer.AsMemory(0, size), ct);
+            return await StoreAsync(ownerId, plantId, purpose, buffer, size, ct);
+        }
+        catch (EndOfStreamException)
+        {
+            throw new DomainException("media_incomplete", "The upload was interrupted. Please try again.");
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    private async Task<MediaObject> StoreAsync(Guid ownerId, Guid? plantId, MediaPurpose purpose, byte[] buffer, int size, CancellationToken ct)
+    {
+        var bytes = buffer.AsMemory(0, size);
+        var type = FileSignature.Detect(bytes.Span[..Math.Min(size, 16)])
                    ?? throw new DomainException("media_type", "Only JPEG, PNG, WebP, GIF images (and PDF for slips) are allowed.");
 
         var now = clock.GetUtcNow();
-        var hash = Convert.ToHexStringLower(SHA256.HashData(bytes));
+        var hash = Convert.ToHexStringLower(SHA256.HashData(bytes.Span));
 
         MediaObject media;
         if (type == "application/pdf")
         {
             if (!PdfAllowed.Contains(purpose)) throw new DomainException("media_type", "PDF files are only allowed for payment slips.");
-            if (bytes.Length > MaxPdfBytes) throw new DomainException("media_too_large", "PDF files must be 5 MB or smaller.");
-            media = MediaObject.Create(ownerId, plantId, purpose, type, bytes.Length, hash, null, null, false, now);
-            await storage.PutAsync(media.OriginalKey, new MemoryStream(bytes), type, ct);
+            if (size > MaxPdfBytes) throw new TooLargeException("media_too_large", "PDF files must be 5 MB or smaller.");
+            media = MediaObject.Create(ownerId, plantId, purpose, type, size, hash, null, null, false, now);
+            await storage.PutAsync(media.OriginalKey, new MemoryStream(buffer, 0, size, writable: false), type, ct);
         }
         else
         {
-            if (bytes.Length > MaxImageBytes) throw new DomainException("media_too_large", "Images must be 15 MB or smaller.");
+            if (!await ProcessingGate.WaitAsync(GateTimeout, ct))
+                throw new UnavailableException("media_busy", "Many pictures are being processed right now. Please try again in a moment.");
             ProcessedImage processed;
-            // At most two images in memory at once, so simultaneous uploads cannot push the API past its memory limit.
-            await ProcessingGate.WaitAsync(ct);
-            try { processed = ImageProcessor.Process(bytes); }
+            try { processed = ImageProcessor.Process(buffer, size); }
             catch (InvalidDataException) { throw new DomainException("media_corrupt", "The image could not be read."); }
             finally { ProcessingGate.Release(); }
 

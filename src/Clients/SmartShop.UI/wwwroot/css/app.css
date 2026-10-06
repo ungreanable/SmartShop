@@ -154,3 +154,7 @@ body { overscroll-behavior-y: contain; }
 /* Long unbroken text (file names, URLs, error messages) wraps instead of widening the page */
 .mud-typography, .mud-snackbar-content-message, .mud-alert-message, .mud-dialog-content, .mud-chip-content, .mud-link { overflow-wrap: anywhere; }
 .mud-chip { max-width: 100%; }
+/* Upload status: spinner or error icon next to the chosen file name */
+.ss-uploader { display: inline-flex; flex-direction: column; align-items: flex-start; max-width: 100%; min-width: 0; }
+.ss-upload-status { display: flex; align-items: center; gap: 6px; margin-top: 4px; max-width: 100%; font-size: .8rem; color: var(--mud-palette-text-secondary); }
+.ss-upload-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; max-width: 220px; }

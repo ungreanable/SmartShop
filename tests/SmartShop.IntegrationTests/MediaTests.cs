@@ -55,6 +55,22 @@ public class MediaTests(SmartShopFactory factory)
     }
 
     [Fact]
+    public async Task Oversized_upload_is_refused_with_413_and_a_code()
+    {
+        var (_, admin) = await factory.CreatePlantAsync();
+        using var form = new MultipartFormDataContent
+        {
+            { new ByteArrayContent(new byte[16 * 1024 * 1024]), "file", "huge.jpg" },
+            { new StringContent("PlantPicture"), "purpose" },
+        };
+
+        var response = await admin.Http.PostAsync("/api/media", form);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.RequestEntityTooLarge);
+        (await TestClient.ProblemCodeAsync(response)).ShouldBe("media_too_large");
+    }
+
+    [Fact]
     public async Task Tampered_signature_is_rejected()
     {
         var (_, admin) = await factory.CreatePlantAsync();

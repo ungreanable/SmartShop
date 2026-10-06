@@ -17,9 +17,12 @@ internal static class ImageProcessor
     /// <summary>Refuse decompression bombs: a 100 MP bitmap alone is 400 MB of native memory.</summary>
     private const long MaxPixels = 100_000_000;
 
-    public static ProcessedImage Process(byte[] data)
+    public static ProcessedImage Process(byte[] data) => Process(data, data.Length);
+
+    /// <summary>Processes the first <paramref name="length"/> bytes of a (pooled) buffer without copying it.</summary>
+    public static ProcessedImage Process(byte[] data, int length)
     {
-        using var codec = SKCodec.Create(new SKMemoryStream(data))
+        using var codec = SKCodec.Create(new MemoryStream(data, 0, length, writable: false))
                           ?? throw new InvalidDataException("The file is not a supported image.");
         if ((long)codec.Info.Width * codec.Info.Height > MaxPixels)
             throw new InvalidDataException("The image is too large.");

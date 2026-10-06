@@ -1,23 +1,39 @@
-@* Uploads one image (or PDF for slips) to /api/media and returns the media id. *@
+@* Uploads one image (or PDF for slips) to /api/media and returns the media id.
+   Shows the chosen file with a spinner while it uploads, and the reason when it fails. *@
 @inject Api Api
+@inject ISnackbar Snackbar
 
-<MudFileUpload T="IBrowserFile" FilesChanged="UploadAsync" Accept="@Accept" Disabled="_busy">
-    <CustomContent Context="upload">
-        @if (ChildContent is not null)
-        {
-            <span style="display:inline-block; cursor:pointer" @onclick="upload.OpenFilePickerAsync">@ChildContent</span>
-        }
-        else
-        {
-            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.AddAPhoto" Disabled="_busy"
-                       OnClick="upload.OpenFilePickerAsync">
-                @(_busy ? L["กำลังอัปโหลด...", "Uploading..."] : (Label ?? L["เลือกรูป", "Choose picture"]))
-            </MudButton>
-        }
-    </CustomContent>
-</MudFileUpload>
+<div class="ss-uploader">
+    <MudFileUpload T="IBrowserFile" FilesChanged="UploadAsync" Accept="@Accept" Disabled="_busy">
+        <CustomContent Context="upload">
+            @if (ChildContent is not null)
+            {
+                <span style="display:inline-block; cursor:pointer" @onclick="upload.OpenFilePickerAsync">@ChildContent</span>
+            }
+            else
+            {
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.AddAPhoto" Disabled="_busy"
+                           OnClick="upload.OpenFilePickerAsync">
+                    @(_busy ? L["กำลังอัปโหลด...", "Uploading..."] : (Label ?? L["เลือกรูป", "Choose picture"]))
+                </MudButton>
+            }
+        </CustomContent>
+    </MudFileUpload>
+    @if (_fileName is not null && (_busy || _error is not null))
+    {
+        <div class="ss-upload-status">
+            @if (_busy) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Primary" Style="width:16px;height:16px" /> }
+            else { <MudIcon Icon="@Icons.Material.Filled.ErrorOutline" Color="Color.Error" Size="Size.Small" /> }
+            <span class="ss-upload-name">@_fileName</span>
+        </div>
+        @if (_error is not null) { <MudText Typo="Typo.caption" Color="Color.Error" Class="d-block">@_error</MudText> }
+    }
+</div>
 
 @code {
+    private const long MaxImageBytes = 15 * 1024 * 1024;
+    private const long MaxPdfBytes = 5 * 1024 * 1024;
+
     [Parameter, EditorRequired] public string Purpose { get; set; } = "";
     [Parameter] public string? Label { get; set; }
     [Parameter] public bool AllowPdf { get; set; }
@@ -25,28 +41,62 @@
     [Parameter] public EventCallback<UploadResult> Uploaded { get; set; }
 
     private bool _busy;
+    private string? _fileName, _error;
     private string Accept => AllowPdf ? "image/*,application/pdf" : "image/*";
 
     private async Task UploadAsync(IBrowserFile? file)
     {
         if (file is null) return;
+        (_fileName, _error) = (file.Name, null);
+
+        // Check on the device first: no point sending 30 MB just to be told it is too big.
+        var isPdf = file.ContentType == "application/pdf";
+        if (file.Size > (isPdf ? MaxPdfBytes : MaxImageBytes))
+        {
+            Fail(isPdf ? L["ไฟล์ PDF ต้องไม่เกิน 5 MB", "PDF files must be 5 MB or smaller"] : L["รูปต้องไม่เกิน 15 MB", "Pictures must be 15 MB or smaller"]);
+            return;
+        }
+
         _busy = true;
         try
         {
-            await using var stream = file.OpenReadStream(15 * 1024 * 1024);
-            using var buffer = new MemoryStream();
-            await stream.CopyToAsync(buffer);
-            buffer.Position = 0;
-            var result = await Api.UploadAsync(buffer, file.Name, file.ContentType, Purpose);
-            if (result is not null) await Uploaded.InvokeAsync(result);
+            var content = new byte[file.Size];
+            await using (var stream = file.OpenReadStream(MaxImageBytes)) await stream.ReadExactlyAsync(content);
+            var (result, problem) = await Api.UploadAsync(content, file.Name, file.ContentType, Purpose);
+            if (result is not null)
+            {
+                _fileName = null;
+                await Uploaded.InvokeAsync(result);
+            }
+            else if (problem is not null && problem.Status != 401) Fail(Explain(problem));
         }
         catch (IOException)
         {
-            await Uploaded.InvokeAsync(null!);
+            Fail(L["อ่านไฟล์จากเครื่องไม่ได้ ลองเลือกใหม่อีกครั้ง", "Could not read the file from your device. Please choose it again."]);
         }
         finally
         {
             _busy = false;
         }
     }
+
+    private void Fail(string message)
+    {
+        _error = message;
+        Snackbar.Add(message, Severity.Warning);
+    }
+
+    private string Explain(ApiProblem p) => (p.Code, p.Status) switch
+    {
+        ("media_too_large", _) or (_, 413) => L["ไฟล์ใหญ่เกินไป (รูปไม่เกิน 15 MB, PDF ไม่เกิน 5 MB)", "The file is too large (pictures up to 15 MB, PDF up to 5 MB)"],
+        ("media_type", _) => AllowPdf
+            ? L["รองรับเฉพาะรูป JPEG, PNG, WebP, GIF หรือไฟล์ PDF", "Only JPEG, PNG, WebP, GIF pictures or PDF files"]
+            : L["รองรับเฉพาะรูป JPEG, PNG, WebP, GIF (รูป HEIC ให้ตั้งกล้องเป็น JPEG หรือแคปหน้าจอแทน)", "Only JPEG, PNG, WebP or GIF pictures (for HEIC, switch the camera to JPEG or send a screenshot)"],
+        ("media_corrupt", _) => L["อ่านรูปนี้ไม่ได้ ไฟล์อาจเสีย ลองเลือกรูปอื่น", "This picture could not be read; it may be damaged. Try another one."],
+        ("media_empty", _) or ("media_incomplete", _) => L["อัปโหลดไม่ครบ ลองใหม่อีกครั้ง", "The upload did not complete. Please try again."],
+        ("media_busy", _) or (_, 503) => L["ระบบกำลังประมวลผลรูปอื่นอยู่ ลองใหม่อีกครั้งในไม่กี่วินาที", "Busy processing other pictures. Please try again in a few seconds."],
+        ("rate_limited", _) or (_, 429) => L["อัปโหลดถี่เกินไป รอสักครู่แล้วลองใหม่", "Too many uploads. Wait a moment and try again."],
+        ("network", _) or (_, 0) or (_, 502) or (_, 504) => L["เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ชั่วคราว ลองใหม่อีกครั้ง", "Could not reach the server. Please try again."],
+        _ => p.Message,
+    };
 }

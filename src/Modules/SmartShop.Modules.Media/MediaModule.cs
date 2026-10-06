@@ -48,7 +48,7 @@ public sealed class MediaModule : IModule
                 throw new DomainException("plant_required", $"Header {ICurrentPlant.Header} is required for this upload.");
 
             await using var stream = file.OpenReadStream();
-            var stored = await service.UploadAsync(user.Id, plantId, purpose, stream, ct);
+            var stored = await service.UploadAsync(user.Id, plantId, purpose, stream, file.Length, ct);
             return Results.Ok(new UploadResult(stored.Id, stored.ContentType, stored.Width, stored.Height,
                 urls.For(stored.Id), stored.HasVariants ? urls.For(stored.Id, MediaVariant.Small) : null));
         })

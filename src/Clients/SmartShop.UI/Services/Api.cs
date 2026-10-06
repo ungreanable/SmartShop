@@ -66,18 +66,38 @@ public sealed class Api(HttpClient http, Session session, PlantContextAccessor p
         return string.IsNullOrWhiteSpace(json) ? default : System.Text.Json.JsonSerializer.Deserialize<T>(json, ApiJson.Options);
     }
 
-    public async Task<UploadResult?> UploadAsync(Stream content, string fileName, string contentType, string purpose)
+    /// <summary>
+    /// Uploads a file and returns either the result or the reason it failed, so the caller can show it next to the file.
+    /// The content is rebuilt for the token-refresh retry (a consumed stream would otherwise be sent empty).
+    /// </summary>
+    public async Task<(UploadResult? Result, ApiProblem? Problem)> UploadAsync(byte[] content, string fileName, string contentType, string purpose)
     {
-        using var form = new MultipartFormDataContent();
-        var file = new StreamContent(content);
-        file.Headers.ContentType = new MediaTypeHeaderValue(string.IsNullOrEmpty(contentType) ? "application/octet-stream" : contentType);
-        form.Add(file, "file", fileName);
-        form.Add(new StringContent(purpose), "purpose");
-        using var request = new HttpRequestMessage(HttpMethod.Post, "api/media") { Content = form };
-        using var response = await ExecuteAsync(request, () => new HttpRequestMessage(HttpMethod.Post, "api/media") { Content = form });
-        if (response.IsSuccessStatusCode) return await response.Content.ReadFromJsonAsync<UploadResult>(ApiJson.Options);
-        await HandleErrorAsync(response, false);
-        return null;
+        HttpRequestMessage Build()
+        {
+            var form = new MultipartFormDataContent();
+            var file = new ByteArrayContent(content);
+            file.Headers.ContentType = new MediaTypeHeaderValue(string.IsNullOrEmpty(contentType) ? "application/octet-stream" : contentType);
+            form.Add(file, "file", fileName);
+            form.Add(new StringContent(purpose), "purpose");
+            return new HttpRequestMessage(HttpMethod.Post, "api/media") { Content = form };
+        }
+
+        try
+        {
+            using var response = await ExecuteAsync(Build(), Build);
+            if (response.IsSuccessStatusCode) return (await response.Content.ReadFromJsonAsync<UploadResult>(ApiJson.Options), null);
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                await HandleErrorAsync(response, true);
+                return (null, LastProblem);
+            }
+            LastProblem = await ApiProblem.ReadAsync(response);
+            return (null, LastProblem);
+        }
+        catch (HttpRequestException)
+        {
+            return (null, LastProblem = new ApiProblem(0, "network", "Network error"));
+        }
     }
 
     public async Task<byte[]?> DownloadAsync(string url)
