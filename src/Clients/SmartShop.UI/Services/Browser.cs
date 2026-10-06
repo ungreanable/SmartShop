@@ -24,6 +24,19 @@ public sealed class Browser(IJSRuntime js)
             return "unsupported"; // e.g. an older smartshop.js still cached right after an update: fall back to download
         }
     }
+    /// <summary>Saves a picture as PNG (share sheet on iPhone, download elsewhere); null when it could not be saved.</summary>
+    public async ValueTask<string?> SaveImageAsync(string url, string fileName)
+    {
+        try
+        {
+            return await js.InvokeAsync<string>("smartshop.saveImage", url, fileName);
+        }
+        catch (JSException)
+        {
+            return null;
+        }
+    }
+
     public ValueTask ScrollToAsync(string elementId) => js.InvokeVoidAsync("smartshop.scrollTo", elementId);
     public ValueTask SetBadgeAsync(int count) => js.InvokeVoidAsync("smartshop.setBadge", count);
     public ValueTask<string> UserAgentLabelAsync() => js.InvokeAsync<string>("smartshop.deviceLabel");

@@ -25,6 +25,8 @@
             {
                 <div class="d-flex flex-column align-center mt-2">
                     <img class="ss-qr" src="@_payment.PromptPayQrDataUrl" alt="PromptPay QR" />
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Download" Class="my-1"
+                               OnClick="@(() => SaveQrAsync(_payment.PromptPayQrDataUrl))">@L["บันทึกรูป QR", "Save QR image"]</MudButton>
                     <MudText Typo="Typo.caption" Class="ss-muted">@L["สแกนด้วยแอปธนาคาร ยอดเงินกรอกให้แล้ว", "Scan with your banking app, amount is pre-filled"] · @Fmt.Baht(_payment.Amount)</MudText>
                 </div>
             }
@@ -32,6 +34,8 @@
             {
                 <div class="d-flex flex-column align-center mt-2">
                     <img class="ss-qr" src="@_payment.QrImageUrl" alt="QR" style="object-fit:contain" />
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Download" Class="my-1"
+                               OnClick="@(() => SaveQrAsync(_payment.QrImageUrl))">@L["บันทึกรูป QR", "Save QR image"]</MudButton>
                     <MudText Typo="Typo.body2" Style="font-weight:600">@L["ยอดที่ต้องโอน", "Amount"] @Fmt.Baht(_payment.Amount)</MudText>
                 </div>
             }
@@ -107,6 +111,17 @@
 </MudPaper>
 
 @code {
+    // The customer saves the QR and opens it from the gallery in their banking app (paying from the same phone).
+    private async Task SaveQrAsync(string url)
+    {
+        var name = $"QR-{_payment!.OrderNo}-{_payment.Amount:0.##}.png".Replace('#', '-');
+        var result = await Browser.SaveImageAsync(url, name);
+        if (result is null)
+            Snackbar.Add(L["บันทึกรูปไม่สำเร็จ ลองรีโหลดหน้าแล้วกดใหม่ หรือกดค้างที่รูปเพื่อบันทึก", "Could not save the picture. Reload and try again, or long-press the QR to save it."], Severity.Warning);
+        else if (result == "downloaded")
+            Snackbar.Add(L["บันทึกรูป QR แล้ว เปิดแอปธนาคาร แล้วเลือกสแกนจากรูปในเครื่อง", "QR saved. In your banking app, scan it from your photos."], Severity.Success);
+    }
+
     [Parameter] public Guid OrderId { get; set; }
     [Parameter] public bool AsShop { get; set; }
 

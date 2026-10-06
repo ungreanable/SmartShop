@@ -105,6 +105,30 @@ window.smartshop = (() => {
       return e && e.name === 'AbortError' ? 'cancelled' : 'unsupported';
     }
   };
+  // Saves a picture (e.g. a payment QR) as PNG with a white border so banking apps can read it from the gallery.
+  // iPhone: share sheet ("Save Image" puts it in Photos). Elsewhere: download. Returns 'shared', 'cancelled' or 'downloaded'.
+  const saveImage = async (url, name) => {
+    const img = await new Promise((ok, fail) => { const i = new Image(); i.onload = () => ok(i); i.onerror = fail; i.src = url; });
+    const pad = Math.round(Math.max(img.naturalWidth, img.naturalHeight) * 0.06);
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth + pad * 2; canvas.height = img.naturalHeight + pad * 2;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.imageSmoothingEnabled = false; // keep QR modules sharp
+    ctx.drawImage(img, pad, pad);
+    const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+    const file = new File([blob], name, { type: 'image/png' });
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (ios && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file] }); return 'shared'; }
+      catch (e) { if (e && e.name === 'AbortError') return 'cancelled'; }
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    return 'downloaded';
+  };
   const download = (name, base64, type) => {
     const a = document.createElement('a'); a.href = `data:${type};base64,${base64}`; a.download = name; a.click();
   };
@@ -117,5 +141,5 @@ window.smartshop = (() => {
     return `${browser} · ${os}`;
   };
 
-  return { storage, alarm, liff, lineLogin, takeLoginState, push, copy, share, shareFile, download, scrollTo, setBadge, deviceLabel };
+  return { storage, alarm, liff, lineLogin, takeLoginState, push, copy, share, shareFile, saveImage, download, scrollTo, setBadge, deviceLabel };
 })();
