@@ -1,0 +1,162 @@
+@* Backup and restore of the shop settings and the menu as one JSON file.
+   Saving goes through the phone's share sheet (Google Drive, Files, LINE...) or a plain download. *@
+@using System.Text.Json
+@using System.Text.Json.Nodes
+@inject Api Api
+@inject Browser Browser
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+
+<MudText Typo="Typo.body2" Class="ss-muted mb-2">
+    @L["สำรองข้อมูลร้าน เวลาเปิด-ปิด การรับออเดอร์ วิธีชำระเงิน หมวดหมู่ และเมนูทั้งหมด (รวมการตั้งค่าสต็อก) เป็นไฟล์เดียว",
+       "Backs up the shop profile, hours, order settings, payment methods, categories and the whole menu (with stock settings) into one file."]
+</MudText>
+
+@if (_file is null)
+{
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Backup" Disabled="_busy" OnClick="PrepareAsync">
+        @(_busy ? L["กำลังเตรียมไฟล์...", "Preparing..."] : L["สร้างไฟล์สำรอง", "Create backup file"])
+    </MudButton>
+}
+else
+{
+    <MudPaper Outlined="true" Class="pa-3 mb-2">
+        <MudText Typo="Typo.body2" Class="ss-upload-name d-block" Style="max-width:100%">📄 @_fileName</MudText>
+        <MudText Typo="Typo.caption" Class="ss-muted d-block mb-2">@L[$"{_itemCount} เมนู · {_file.Length / 1024 + 1} KB", $"{_itemCount} items · {_file.Length / 1024 + 1} KB"]</MudText>
+        <div class="d-flex flex-wrap gap-2">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Share" OnClick="ShareAsync">
+                @L["บันทึก / แชร์ (เช่น Google Drive)", "Save / share (e.g. Google Drive)"]
+            </MudButton>
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="DownloadAsync">@L["ดาวน์โหลดลงเครื่อง", "Download"]</MudButton>
+        </div>
+    </MudPaper>
+}
+
+<MudDivider Class="my-3" />
+<MudText Typo="Typo.subtitle2">@L["กู้คืนจากไฟล์สำรอง", "Restore from a backup file"]</MudText>
+<MudText Typo="Typo.caption" Class="ss-muted d-block mb-2">
+    @L["อัปเดตการตั้งค่าและเมนูตามไฟล์ เพิ่มเมนูที่หายไปกลับมา ไม่ลบเมนูที่มีอยู่ และไม่เปลี่ยนจำนวนสต็อกของเมนูที่ยังอยู่",
+       "Updates settings and items from the file and adds missing items back. Nothing is deleted and stock counts of existing items are kept."]
+</MudText>
+<MudFileUpload T="IBrowserFile" FilesChanged="RestoreAsync" Accept=".json,application/json" Disabled="_busy">
+    <CustomContent Context="upload">
+        <MudButton Variant="Variant.Outlined" Color="Color.Warning" StartIcon="@Icons.Material.Filled.Restore" Disabled="_busy" OnClick="upload.OpenFilePickerAsync">
+            @L["เลือกไฟล์สำรอง", "Choose backup file"]
+        </MudButton>
+    </CustomContent>
+</MudFileUpload>
+
+@code {
+    private const string Format = "smartshop-shop-backup";
+
+    [Parameter, EditorRequired] public Guid ShopId { get; set; }
+    [Parameter] public string ShopName { get; set; } = "";
+    [Parameter] public EventCallback Restored { get; set; }
+
+    private bool _busy;
+    private byte[]? _file;
+    private string _fileName = "";
+    private int _itemCount;
+
+    // Step 1: fetch and build the file. Step 2 (separate tap) shares it: browsers only open the share sheet right after a tap.
+    private async Task PrepareAsync()
+    {
+        _busy = true;
+        try
+        {
+            var shop = await Api.Get<JsonObject>($"api/merchant/shops/{ShopId}/backup");
+            var catalog = await Api.Get<JsonObject>($"api/merchant/shops/{ShopId}/catalog/backup");
+            if (shop is null || catalog is null) return;
+            _itemCount = catalog["items"]?.AsArray().Count ?? 0;
+            var backup = new JsonObject
+            {
+                ["format"] = Format,
+                ["version"] = 1,
+                ["createdAt"] = DateTimeOffset.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
+                ["shopId"] = ShopId.ToString(),
+                ["shopName"] = ShopName,
+                ["shop"] = shop,
+                ["catalog"] = catalog,
+            };
+            _file = JsonSerializer.SerializeToUtf8Bytes(backup, new JsonSerializerOptions { WriteIndented = true });
+            var safeName = new string(ShopName.Where(char.IsLetterOrDigit).Take(30).ToArray());
+            _fileName = $"smartshop-{(safeName.Length > 0 ? safeName : "shop")}-{DateTime.Now.ToString("yyyyMMdd-HHmm", System.Globalization.CultureInfo.InvariantCulture)}.json";
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task ShareAsync()
+    {
+        if (_file is null) return;
+        var result = await Browser.ShareFileAsync(_fileName, _file, "application/json", L["ไฟล์สำรองร้าน", "Shop backup"] + " " + ShopName);
+        if (result == "unsupported")
+        {
+            await DownloadAsync();
+            Snackbar.Add(L["เครื่องนี้แชร์ไฟล์ไม่ได้ จึงดาวน์โหลดลงเครื่องแทน", "Sharing files is not supported here, so the file was downloaded"], Severity.Info);
+        }
+        else if (result == "shared") Snackbar.Add(L["ส่งไฟล์สำรองแล้ว", "Backup shared"], Severity.Success);
+    }
+
+    private async Task DownloadAsync()
+    {
+        if (_file is null) return;
+        await Browser.DownloadAsync(_fileName, _file, "application/json");
+    }
+
+    private async Task RestoreAsync(IBrowserFile? file)
+    {
+        if (file is null) return;
+        if (file.Size > 5 * 1024 * 1024)
+        {
+            Snackbar.Add(L["ไฟล์ใหญ่เกินไปสำหรับไฟล์สำรอง", "This file is too large to be a backup"], Severity.Warning);
+            return;
+        }
+
+        JsonObject? backup;
+        try
+        {
+            await using var stream = file.OpenReadStream(5 * 1024 * 1024);
+            backup = await JsonSerializer.DeserializeAsync<JsonObject>(stream);
+        }
+        catch (Exception e) when (e is JsonException or IOException)
+        {
+            backup = null;
+        }
+        if (backup?["format"]?.GetValue<string>() != Format || backup["shop"] is not JsonObject shop || backup["catalog"] is not JsonObject catalog)
+        {
+            Snackbar.Add(L["ไฟล์นี้ไม่ใช่ไฟล์สำรองของ SmartShop", "This is not a SmartShop backup file"], Severity.Warning);
+            return;
+        }
+
+        var from = backup["shopName"]?.GetValue<string>() ?? "?";
+        var created = DateTimeOffset.TryParse(backup["createdAt"]?.GetValue<string>(), System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None, out var at) ? Fmt.DateTime(at) : "?";
+        var items = catalog["items"]?.AsArray().Count ?? 0;
+        var otherShop = backup["shopId"]?.GetValue<string>() != ShopId.ToString();
+        var message = L[$"ไฟล์ของร้าน \"{from}\" สร้างเมื่อ {created} มี {items} เมนู", $"Backup of \"{from}\" from {created} with {items} items"]
+                      + (otherShop ? L[" (เป็นของร้านอื่น ระบบจะนำเมนูและการตั้งค่ามาใส่ร้านนี้)", " (from another shop: its menu and settings will be applied to this shop)"] : "");
+        if (await Dialogs.ShowMessageBoxAsync(L["กู้คืนจากไฟล์สำรอง?", "Restore from backup?"], message,
+                yesText: L["กู้คืน", "Restore"], cancelText: L["ยกเลิก", "Cancel"]) != true)
+            return;
+
+        _busy = true;
+        try
+        {
+            var shopResult = await Api.Post<JsonObject>($"api/merchant/shops/{ShopId}/backup/restore", shop);
+            if (shopResult is null) return;
+            var catalogResult = await Api.Post<JsonObject>($"api/merchant/shops/{ShopId}/catalog/backup/restore", catalog);
+            if (catalogResult is null) return;
+
+            int Num(JsonObject o, string key) => o[key]?.GetValue<int>() ?? 0;
+            var summary = L[$"กู้คืนแล้ว: เมนูใหม่ {Num(catalogResult, "itemsCreated")} · อัปเดต {Num(catalogResult, "itemsUpdated")}",
+                            $"Restored: {Num(catalogResult, "itemsCreated")} new · {Num(catalogResult, "itemsUpdated")} updated"];
+            if (Num(catalogResult, "itemsWithoutImages") > 0 || shopResult["picturesKept"]?.GetValue<bool>() == false)
+                summary += L[" (บางรูปใช้ซ้ำไม่ได้ ต้องอัปโหลดใหม่)", " (some pictures could not be reused; upload them again)"];
+            if (shopResult["hoursRestored"]?.GetValue<bool>() == false)
+                summary += L[" · เวลาเปิด-ปิดไม่ได้เปลี่ยน", " · opening hours were not changed"];
+            Snackbar.Add(summary, Severity.Success);
+            await Restored.InvokeAsync();
+        }
+        finally { _busy = false; }
+    }
+}

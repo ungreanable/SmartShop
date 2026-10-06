@@ -30,6 +30,7 @@ public sealed class ShopsModule : IModule
         ApplicationEndpoints.Map(app);
         ShopEndpoints.Map(app);
         MerchantEndpoints.Map(app);
+        ShopBackupEndpoints.Map(app);
         MerchantMemberEndpoints.Map(app);
     }
 }

@@ -92,6 +92,19 @@ window.smartshop = (() => {
     if (navigator.share) { try { await navigator.share({ title, text, url }); return true; } catch { return false; } }
     return copy(url);
   };
+  // Share a file through the phone's share sheet (Save to Drive, Files, LINE, ...).
+  // Returns 'shared', 'cancelled' or 'unsupported' (the caller then downloads instead).
+  const shareFile = async (name, base64, type, title) => {
+    try {
+      const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+      const file = new File([bytes], name, { type });
+      if (!navigator.canShare || !navigator.canShare({ files: [file] })) return 'unsupported';
+      await navigator.share({ files: [file], title });
+      return 'shared';
+    } catch (e) {
+      return e && e.name === 'AbortError' ? 'cancelled' : 'unsupported';
+    }
+  };
   const download = (name, base64, type) => {
     const a = document.createElement('a'); a.href = `data:${type};base64,${base64}`; a.download = name; a.click();
   };
@@ -104,5 +117,5 @@ window.smartshop = (() => {
     return `${browser} · ${os}`;
   };
 
-  return { storage, alarm, liff, lineLogin, takeLoginState, push, copy, share, download, scrollTo, setBadge, deviceLabel };
+  return { storage, alarm, liff, lineLogin, takeLoginState, push, copy, share, shareFile, download, scrollTo, setBadge, deviceLabel };
 })();

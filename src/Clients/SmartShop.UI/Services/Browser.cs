@@ -12,6 +12,9 @@ public sealed class Browser(IJSRuntime js)
     public ValueTask<bool> ShareAsync(string title, string text, string url) => js.InvokeAsync<bool>("smartshop.share", title, text, url);
     public ValueTask DownloadAsync(string fileName, byte[] content, string contentType) =>
         js.InvokeVoidAsync("smartshop.download", fileName, Convert.ToBase64String(content), contentType);
+    /// <summary>Opens the share sheet with a file; returns "shared", "cancelled" or "unsupported".</summary>
+    public ValueTask<string> ShareFileAsync(string fileName, byte[] content, string contentType, string title) =>
+        js.InvokeAsync<string>("smartshop.shareFile", fileName, Convert.ToBase64String(content), contentType, title);
     public ValueTask ScrollToAsync(string elementId) => js.InvokeVoidAsync("smartshop.scrollTo", elementId);
     public ValueTask SetBadgeAsync(int count) => js.InvokeVoidAsync("smartshop.setBadge", count);
     public ValueTask<string> UserAgentLabelAsync() => js.InvokeAsync<string>("smartshop.deviceLabel");

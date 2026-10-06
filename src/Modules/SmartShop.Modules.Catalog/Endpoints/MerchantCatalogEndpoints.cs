@@ -238,7 +238,7 @@ internal static class MerchantCatalogEndpoints
         });
     }
 
-    private static ItemDetails Details(ItemRequest r) => new(
+    internal static ItemDetails Details(ItemRequest r) => new(
         r.Kind, r.StockMode, r.Name, r.Description, r.Price, r.CategoryId, r.ImageIds ?? [],
         (r.Windows ?? []).Select(w => new AvailabilityWindow(w.Days, w.From, w.To)).ToList(),
         r.SaleFrom, r.SaleTo, r.MaxPerOrder, r.DurationMinutes, r.SlotCapacity, r.AllowedFulfillment,

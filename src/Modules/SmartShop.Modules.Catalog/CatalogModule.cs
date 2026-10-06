@@ -34,5 +34,6 @@ public sealed class CatalogModule : IModule
     {
         CatalogEndpoints.Map(app);
         MerchantCatalogEndpoints.Map(app);
+        CatalogBackupEndpoints.Map(app);
     }
 }

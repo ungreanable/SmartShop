@@ -116,6 +116,12 @@
             <MudExpansionPanel Text="@L["👥 สมาชิกร้าน", "👥 Shop team"]">
                 <MembersEditor ShopId="ShopId" MyRole="@(_s.Shop.MyRole ?? "Staff")" />
             </MudExpansionPanel>
+            @if (_s.Shop.MyRole is "Owner" or "Manager")
+            {
+                <MudExpansionPanel Text="@L["💾 สำรอง / กู้คืนข้อมูลร้าน", "💾 Backup & restore"]">
+                    <ShopBackupPanel ShopId="ShopId" ShopName="@_s.Shop.Name" Restored="ReloadAsync" />
+                </MudExpansionPanel>
+            }
             @if (_s.Shop.MyRole == "Owner")
             {
                 <MudExpansionPanel Text="@(Config.WebhooksEnabled ? L["🔌 เชื่อมต่อระบบอื่น (API / Webhook)", "🔌 Integrations (API / webhooks)"] : L["🔌 เชื่อมต่อระบบอื่น (API)", "🔌 Integrations (API)"])">

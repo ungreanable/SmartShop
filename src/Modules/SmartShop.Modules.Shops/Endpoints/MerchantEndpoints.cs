@@ -180,16 +180,16 @@ internal static class MerchantEndpoints
         });
     }
 
-    private static PaymentMethodDetails Details(PaymentMethodRequest r) =>
+    internal static PaymentMethodDetails Details(PaymentMethodRequest r) =>
         new(r.PromptPayId, r.QrImageId, r.BankName, r.AccountNumber, r.AccountName, r.Instructions, r.ImageId);
 
-    private static async Task ValidateImagesAsync(PaymentMethodRequest r, PaymentMethod? existing, Guid userId, IMediaService media, CancellationToken ct)
+    internal static async Task ValidateImagesAsync(PaymentMethodRequest r, PaymentMethod? existing, Guid userId, IMediaService media, CancellationToken ct)
     {
         if (r.QrImageId is { } qr && qr != existing?.QrImageId) await media.RequireOwnedAsync(qr, userId, MediaPurpose.PaymentQr, ct);
         if (r.ImageId is { } image && image != existing?.ImageId) await media.RequireOwnedAsync(image, userId, MediaPurpose.PaymentQr, ct);
     }
 
-    private static void EnsureOneEnabled(Shop shop)
+    internal static void EnsureOneEnabled(Shop shop)
     {
         if (!shop.PaymentMethods.Any(p => p.Enabled))
             throw new DomainException("payment_method_required", "Keep at least one payment method enabled.");
