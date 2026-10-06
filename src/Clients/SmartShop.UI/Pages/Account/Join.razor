@@ -4,6 +4,7 @@
 @inject PlantContext Plant
 @inject NavigationManager Nav
 @inject Session Session
+@inject PendingJoin PendingJoin
 
 <AppGuard RequirePlant="false">
     @if (_preview is null)
@@ -49,8 +50,13 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        // Not signed in yet: AppGuard sends the user to login and back here; loading now would lose the link.
-        if (!Session.IsAuthenticated) return;
+        // Not signed in yet: remember the code (LINE may come back to another page), AppGuard then sends the user to login.
+        if (!Session.IsAuthenticated)
+        {
+            await PendingJoin.SaveAsync(Code);
+            return;
+        }
+        await PendingJoin.ClearAsync();
         _preview = await Api.Get<JoinPreview>($"api/plants/join/{Uri.EscapeDataString(Code.Trim())}");
         if (_preview is null) { Nav.NavigateTo("/villages"); return; }
         await Plant.LoadAsync(force: true);

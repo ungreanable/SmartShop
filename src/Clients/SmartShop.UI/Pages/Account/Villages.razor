@@ -2,6 +2,7 @@
 @layout BareLayout
 @inject PlantContext Plant
 @inject Session Session
+@inject PendingJoin PendingJoin
 @inject Realtime Realtime
 @inject NavigationManager Nav
 
@@ -65,7 +66,13 @@
 
     protected override async Task OnInitializedAsync()
     {
-        if (Session.IsAuthenticated) await Plant.LoadAsync(force: true);
+        if (!Session.IsAuthenticated) return;
+        if (await PendingJoin.GetAsync() is { } code)
+        {
+            Nav.NavigateTo($"/join/{Uri.EscapeDataString(code)}", replace: true);
+            return;
+        }
+        await Plant.LoadAsync(force: true);
     }
 
     private void Join()

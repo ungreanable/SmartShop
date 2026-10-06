@@ -62,6 +62,7 @@ public static class UiSetup
         services.AddScoped<PlantContextAccessor>();
         services.AddScoped<Api>();
         services.AddScoped<PlantContext>();
+        services.AddScoped<PendingJoin>();
         services.AddScoped<Realtime>();
         services.AddScoped<Browser>();
         services.AddScoped<AppState>();

@@ -8,6 +8,7 @@
 @inject Browser Browser
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
+@inject PendingJoin PendingJoin
 
 <MudThemeProvider Theme="UiSetup.Theme" @bind-IsDarkMode="_dark" ObserveSystemDarkModeChange="true" />
 <MudPopoverProvider />
@@ -79,6 +80,16 @@ else
         // Join every shop I work for, so new-order alarms ring anywhere in the app.
         foreach (var shop in Plant.MyShops) await Realtime.JoinShopAsync(shop.Id);
         await State.RefreshUnreadAsync();
+        await ResumeJoinAsync();
+    }
+
+    /// <summary>Back to the join form when login started from a join link but LINE returned somewhere else.</summary>
+    private async Task ResumeJoinAsync()
+    {
+        if (await PendingJoin.GetAsync() is not { } code) return;
+        var here = Nav.ToBaseRelativePath(Nav.Uri);
+        if (here.StartsWith("join/", StringComparison.OrdinalIgnoreCase) || here.StartsWith("consent", StringComparison.OrdinalIgnoreCase)) return;
+        Nav.NavigateTo($"/join/{Uri.EscapeDataString(code)}", replace: true);
     }
 
     private async void OnSessionChanged()

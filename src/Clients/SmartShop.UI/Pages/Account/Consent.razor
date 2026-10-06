@@ -1,5 +1,6 @@
 @page "/consent"
 @layout BareLayout
+@inject PendingJoin PendingJoin
 @inject Api Api
 @inject Session Session
 @inject NavigationManager Nav
@@ -41,7 +42,10 @@
         if (await Api.Post("api/me/consent", new { version }))
         {
             await Session.UpdateUserAsync(u => u with { HasConsent = true });
-            Nav.NavigateTo(Login.Safe(ReturnUrl), replace: true);
+            // Signed up from a join link that LINE did not return to: go to that join form.
+            var target = Login.Safe(ReturnUrl);
+            if (target == "/" && await PendingJoin.GetAsync() is { } code) target = $"/join/{Uri.EscapeDataString(code)}";
+            Nav.NavigateTo(target, replace: true);
         }
         _busy = false;
     }
