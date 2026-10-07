@@ -166,6 +166,7 @@ window.smartshop = (() => {
     const a = document.createElement('a'); a.href = `data:${type};base64,${base64}`; a.download = name; a.click();
   };
   const scrollTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const hasFocus = () => document.hasFocus();
   const setBadge = (count) => { try { count > 0 ? navigator.setAppBadge?.(count) : navigator.clearAppBadge?.(); } catch { } };
   const deviceLabel = () => {
     const ua = navigator.userAgent;
@@ -174,5 +175,5 @@ window.smartshop = (() => {
     return `${browser} · ${os}`;
   };
 
-  return { storage, alarm, liff, lineLogin, takeLoginState, push, copy, share, shareFile, saveImage, download, scrollTo, setBadge, deviceLabel };
+  return { storage, alarm, liff, lineLogin, takeLoginState, push, copy, share, shareFile, saveImage, download, scrollTo, setBadge, deviceLabel, hasFocus };
 })();

@@ -8,6 +8,12 @@ public sealed class Browser(IJSRuntime js)
     public ValueTask StartAlarmAsync() => js.InvokeVoidAsync("smartshop.alarm.start");
     public ValueTask StopAlarmAsync() => js.InvokeVoidAsync("smartshop.alarm.stop");
     public ValueTask BeepAsync() => js.InvokeVoidAsync("smartshop.alarm.beep");
+    /// <summary>Whether the user is looking at the app right now (tab in front and focused).</summary>
+    public async ValueTask<bool> HasFocusAsync()
+    {
+        try { return await js.InvokeAsync<bool>("smartshop.hasFocus"); }
+        catch (JSException) { return false; } // an older smartshop.js right after an update
+    }
     public ValueTask<bool> CopyAsync(string text) => js.InvokeAsync<bool>("smartshop.copy", text);
     public ValueTask<bool> ShareAsync(string title, string text, string url) => js.InvokeAsync<bool>("smartshop.share", title, text, url);
     public ValueTask DownloadAsync(string fileName, byte[] content, string contentType) =>

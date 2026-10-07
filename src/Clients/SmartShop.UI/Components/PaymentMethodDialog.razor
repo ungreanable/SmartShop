@@ -10,7 +10,7 @@
                               HelperText="@L["ระบบจะสร้าง QR พร้อมยอดเงินของแต่ละออเดอร์ให้อัตโนมัติ", "We generate a QR with the exact order amount"]" />
                 <MudText Typo="Typo.caption" Class="d-block mt-2">@L["หรืออัปโหลดรูป QR ของร้าน", "or upload your own QR image"]</MudText>
                 @if (_qrUrl is not null) { <img src="@_qrUrl" alt="" style="width:120px; border-radius:8px" /> }
-                <ImageUploader Purpose="PaymentQr" Label="@L["อัปโหลด QR", "Upload QR"]" Uploaded="@(f => { if (f is not null) { _qrImageId = f.Id; _qrUrl = f.ThumbnailUrl; } })" />
+                <ImageUploader Purpose="PaymentQr" @bind-Busy="_uploading" Label="@L["อัปโหลด QR", "Upload QR"]" Uploaded="@(f => { if (f is not null) { _qrImageId = f.Id; _qrUrl = f.ThumbnailUrl; } })" />
                 break;
             case "BankTransfer":
                 <MudSelect T="string" @bind-Value="_bank" Label="@L["ธนาคาร", "Bank"]" Variant="Variant.Outlined" Margin="Margin.Dense">
@@ -21,7 +21,7 @@
                 break;
             case "Custom":
                 @if (_imageUrl is not null) { <img src="@_imageUrl" alt="" style="width:120px; border-radius:8px" /> }
-                <ImageUploader Purpose="PaymentQr" Label="@L["รูปประกอบ (ไม่บังคับ)", "Picture (optional)"]" Uploaded="@(f => { if (f is not null) { _imageId = f.Id; _imageUrl = f.ThumbnailUrl; } })" />
+                <ImageUploader Purpose="PaymentQr" @bind-Busy="_uploading" Label="@L["รูปประกอบ (ไม่บังคับ)", "Picture (optional)"]" Uploaded="@(f => { if (f is not null) { _imageId = f.Id; _imageUrl = f.ThumbnailUrl; } })" />
                 break;
         }
         <MudTextField @bind-Value="_instructions" Label="@L["คำแนะนำ", "Instructions"]" Lines="2" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
@@ -30,11 +30,13 @@
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="@(() => Dialog.Cancel())">@L["ยกเลิก", "Cancel"]</MudButton>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="SaveAsync">@L["บันทึก", "Save"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_busy || _uploading)" OnClick="SaveAsync">@L["บันทึก", "Save"]</MudButton>
     </DialogActions>
 </MudDialog>
 
 @code {
+    private bool _uploading; // a picture is still uploading: saving now would leave it out
+
     [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
     [Parameter] public Guid ShopId { get; set; }
     [Parameter] public PaymentMethod? Method { get; set; }

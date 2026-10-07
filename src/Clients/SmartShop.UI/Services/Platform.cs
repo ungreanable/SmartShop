@@ -9,6 +9,8 @@ public sealed class AppConfig
     public string? LineAddFriendUrl { get; set; }
     public bool DevLoginEnabled { get; set; }
     public bool WebhooksEnabled { get; set; }
+    /// <summary>Shows the shop's "Integrations (API)" settings; hidden until the feature is ready.</summary>
+    public bool IntegrationsEnabled { get; set; }
     public string AppName { get; set; } = "SmartShop";
     public string Platform { get; set; } = "web";
 }
@@ -56,6 +58,13 @@ public interface IPushRegistrar
 public sealed class PushSetupException(string reason) : InvalidOperationException(reason)
 {
     public string Reason { get; } = reason;
+}
+
+/// <summary>Raised when the app registered this device for push in the background (at start-up), so an open page can refresh its status.</summary>
+public sealed class PushEvents
+{
+    public event Action? DeviceRegistered;
+    public void OnDeviceRegistered() => DeviceRegistered?.Invoke();
 }
 
 public sealed record PushSubscriptionInfo(string Endpoint, string? P256dh, string? Auth, string Label);

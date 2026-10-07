@@ -8,6 +8,8 @@
 @inject IDialogService Dialogs
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
+@inject PushEvents PushEvents
+@implements IDisposable
 
 <div class="ss-page">
     @if (_me is null) { <Loading Rows="2" /> }
@@ -159,8 +161,18 @@
         _houseNo = Plant.Current?.HouseNo;
         _soi = Plant.Current?.Soi;
         _pushSupported = await Push.IsSupportedAsync();
+        PushEvents.DeviceRegistered += OnDeviceRegistered;
         await LoadChannelsAsync();
     }
+
+    // The app registered this device in the background after the page loaded: show it as on.
+    private void OnDeviceRegistered() => _ = InvokeAsync(async () =>
+    {
+        await LoadChannelsAsync();
+        StateHasChanged();
+    });
+
+    public void Dispose() => PushEvents.DeviceRegistered -= OnDeviceRegistered;
 
     // The listed device that belongs to this browser, if it is subscribed.
     private string? _currentKey;

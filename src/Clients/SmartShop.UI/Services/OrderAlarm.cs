@@ -62,9 +62,13 @@ public sealed class OrderAlarm(Realtime realtime, Browser browser, ISnackbar sna
 
         _pending[orderId] = orderNo;
         await browser.StartAlarmAsync();
+        // Seen right away when the app is in front, so the message goes after 10 s (the alarm keeps ringing until
+        // someone accepts); otherwise it waits on screen for the user to come back.
+        var focused = await browser.HasFocusAsync();
         _toasts[orderId] = snackbar.Add(l[$"🛎️ ออเดอร์ใหม่ #{orderNo}", $"🛎️ New order #{orderNo}"], Severity.Warning, o =>
         {
-            o.RequireInteraction = true;
+            o.RequireInteraction = !focused;
+            if (focused) o.VisibleStateDuration = 10_000;
             o.Action = l["ดู", "View"];
             o.OnClick = _ =>
             {

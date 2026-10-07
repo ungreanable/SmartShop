@@ -31,6 +31,7 @@ app.MapGet("/app-config.json", (IConfiguration config, HttpResponse response) =>
         devLoginEnabled = config.GetValue("Auth:DevLogin:Enabled", false) && !app.Environment.IsProduction(),
         appName = config["Client:AppName"] ?? "SmartShop",
         webhooksEnabled = config.GetValue("Features:Webhooks", false),
+        integrationsEnabled = config.GetValue("Features:Integrations", false),
         platform = "web",
     });
 });

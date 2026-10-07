@@ -44,9 +44,9 @@
                         </div>
                     }
                 </div>
-                @if (_images.Count < 6) { <ImageUploader Purpose="ApplicationSample" Uploaded="@(f => { if (f is not null) _images.Add(f); })" /> }
+                @if (_images.Count < 6) { <ImageUploader Purpose="ApplicationSample" @bind-Busy="_uploading" Uploaded="@(f => { if (f is not null) _images.Add(f); })" /> }
             </MudForm>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Class="mt-3" Disabled="_busy" OnClick="SubmitAsync">@L["ส่งคำขอ", "Submit"]</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Class="mt-3" Disabled="@(_busy || _uploading)" OnClick="SubmitAsync">@L["ส่งคำขอ", "Submit"]</MudButton>
         </MudPaper>
     }
     else if (!_mine.Any(a => a.Status is "Submitted" or "ChangesRequested"))
@@ -56,6 +56,8 @@
 </div>
 
 @code {
+    private bool _uploading; // a picture is still uploading: saving now would leave it out
+
     private static readonly string[] Categories = ["อาหาร", "ขนม", "เครื่องดื่ม", "ของใช้", "ผัก ผลไม้", "บริการ", "ซักรีด", "ความงาม", "ซ่อมแซม", "อื่นๆ"];
 
     private List<ShopApplication> _mine = [];

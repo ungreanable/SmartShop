@@ -39,6 +39,14 @@
     [Parameter] public bool AllowPdf { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
     [Parameter] public EventCallback<UploadResult> Uploaded { get; set; }
+    /// <summary>True while a file is being uploaded: bind it to keep the form's save button disabled until it finishes.</summary>
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<bool> BusyChanged { get; set; }
+
+    // Photos are shrunk on the device first: a 12 MP phone photo (5-10 MB) becomes a few hundred KB, which uploads in
+    // seconds on a mobile connection. The server keeps at most 2400 px anyway (ImageProcessor.OriginalMax).
+    private const int ResizeTo = 2400;
+    private const long ResizeAbove = 1024 * 1024;
 
     private bool _busy;
     private string? _fileName, _error;
@@ -57,9 +65,10 @@
             return;
         }
 
-        _busy = true;
+        await SetBusyAsync(true);
         try
         {
+            file = await ShrinkAsync(file);
             var content = new byte[file.Size];
             await using (var stream = file.OpenReadStream(MaxImageBytes)) await stream.ReadExactlyAsync(content);
             var (result, problem) = await Api.UploadAsync(content, file.Name, file.ContentType, Purpose);
@@ -74,9 +83,34 @@
         {
             Fail(L["อ่านไฟล์จากเครื่องไม่ได้ ลองเลือกใหม่อีกครั้ง", "Could not read the file from your device. Please choose it again."]);
         }
+        catch (TaskCanceledException)
+        {
+            Fail(Explain(new ApiProblem(0, "timeout", "Timeout")));
+        }
         finally
         {
-            _busy = false;
+            await SetBusyAsync(false);
+        }
+    }
+
+    private async Task SetBusyAsync(bool busy)
+    {
+        _busy = busy;
+        if (BusyChanged.HasDelegate) await BusyChanged.InvokeAsync(busy);
+    }
+
+    /// <summary>Large photos are scaled down in the browser (which also applies the camera's rotation); GIF and PDF are sent as they are.</summary>
+    private static async Task<IBrowserFile> ShrinkAsync(IBrowserFile file)
+    {
+        if (file.Size <= ResizeAbove || file.ContentType is not ("image/jpeg" or "image/png" or "image/webp")) return file;
+        try
+        {
+            var smaller = await file.RequestImageFileAsync("image/jpeg", ResizeTo, ResizeTo);
+            return smaller.Size > 0 && smaller.Size < file.Size ? smaller : file;
+        }
+        catch (Exception e) when (e is Microsoft.JSInterop.JSException or InvalidOperationException)
+        {
+            return file; // the browser could not decode it (e.g. HEIC on a PC): let the server explain
         }
     }
 
@@ -102,6 +136,7 @@
         ("server_unavailable", _) or (_, 503) => L["ระบบกำลังรีสตาร์ตหรือไม่ว่าง ลองใหม่อีกครั้งในไม่กี่วินาที", "The server is restarting or busy. Please try again in a few seconds."],
         ("rate_limited", _) or (_, 429) => L["อัปโหลดถี่เกินไป รอสักครู่แล้วลองใหม่", "Too many uploads. Wait a moment and try again."],
         (_, >= 500) => L["ระบบขัดข้องระหว่างบันทึกรูป ลองใหม่อีกครั้ง (ถ้ายังไม่ได้ แจ้งผู้ดูแลระบบ)", "The server failed while saving the picture. Please try again (tell the administrator if it keeps failing)."],
+        ("timeout", _) => L["อัปโหลดนานเกินไป สัญญาณอินเทอร์เน็ตอาจช้า ลองใหม่อีกครั้ง", "The upload took too long; the connection may be slow. Please try again."],
         ("network", _) or (_, 0) => L["เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่", "Could not reach the server. Check your connection and try again."],
         _ => p.Message,
     };

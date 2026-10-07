@@ -10,6 +10,7 @@
 @inject NavigationManager Nav
 @inject PendingJoin PendingJoin
 @inject IPushRegistrar Push
+@inject PushEvents PushEvents
 @inject Api Api
 
 <MudThemeProvider Theme="UiSetup.Theme" @bind-IsDarkMode="_dark" ObserveSystemDarkModeChange="true" />
@@ -98,7 +99,8 @@ else
             var channels = await Api.Get<Channels>("api/notifications/channels", silent: true);
             if (channels is not { WebPushConfigured: true } && Push.Kind == "WebPush") return;
             if (await Push.SubscribeAsync(channels?.VapidPublicKey) is not { } sub) return;
-            await Api.Post("api/notifications/devices", new { kind = Push.Kind, endpoint = sub.Endpoint, p256dh = sub.P256dh, auth = sub.Auth, label = sub.Label }, silent: true);
+            if (await Api.Post("api/notifications/devices", new { kind = Push.Kind, endpoint = sub.Endpoint, p256dh = sub.P256dh, auth = sub.Auth, label = sub.Label }, silent: true))
+                PushEvents.OnDeviceRegistered();
         }
         catch (Exception e) when (e is JSException or HttpRequestException or InvalidOperationException)
         {
@@ -126,11 +128,15 @@ else
         await InvokeAsync(StateHasChanged);
     }
 
-    private void OnNotification(RealtimeNotification n)
+    private async void OnNotification(RealtimeNotification n)
     {
         if (n.Type is "order.new" or "order.reminder") return; // handled by the order alarm
+        // In front: gone after 10 s. In the background: kept until the user comes back and closes it.
+        var focused = await Browser.HasFocusAsync();
         _ = InvokeAsync(() => Snackbar.Add($"{n.Title} · {n.Body}", n.Urgent ? Severity.Warning : Severity.Info, o =>
         {
+            o.RequireInteraction = !focused;
+            if (focused) o.VisibleStateDuration = 10_000;
             if (n.Link is null) return;
             o.Action = L["ดู", "View"];
             o.OnClick = _ =>

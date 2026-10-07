@@ -38,7 +38,7 @@
                         <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Class="ss-img-remove" OnClick="@(() => _images.Remove(img))" aria-label="@L["นำรูปออก", "Remove photo"]" />
                     </div>
                 }
-                @if (_images.Count < 5) { <ImageUploader Purpose="ItemImage" Uploaded="@(f => { if (f is not null) _images.Add((f.Id, f.ThumbnailUrl)); })" /> }
+                @if (_images.Count < 5) { <ImageUploader Purpose="ItemImage" @bind-Busy="_uploading" Uploaded="@(f => { if (f is not null) _images.Add((f.Id, f.ThumbnailUrl)); })" /> }
             </div>
 
             <MudText Typo="Typo.subtitle1" Class="mt-3" Style="font-weight:600">📦 @L["สต็อก", "Stock"]</MudText>
@@ -130,7 +130,7 @@
         </MudForm>
 
         <div class="d-flex gap-2 mt-4">
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true" Disabled="_busy" OnClick="SaveAsync">@L["บันทึก", "Save"]</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true" Disabled="@(_busy || _uploading)" OnClick="SaveAsync">@L["บันทึก", "Save"]</MudButton>
             @if (ItemId is not null) { <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="DeleteAsync">@L["ลบ", "Delete"]</MudButton> }
         </div>
         @if (ItemId is not null)
@@ -145,6 +145,8 @@
 </div>
 
 @code {
+    private bool _uploading; // a picture is still uploading: saving now would leave it out
+
     [Parameter] public Guid ShopId { get; set; }
     [Parameter] public Guid? ItemId { get; set; }
 
