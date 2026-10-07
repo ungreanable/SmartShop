@@ -9,6 +9,7 @@
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
 @inject PushEvents PushEvents
+@inject PushPrompt PushPrompt
 @implements IDisposable
 
 <div class="ss-page">
@@ -75,6 +76,11 @@
                     {
                         <MudChip T="string" Size="Size.Small" Color="Color.Success" Icon="@Icons.Material.Filled.Check">@L["เปิดอยู่", "On"]</MudChip>
                         <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => RemoveDeviceAsync(current))">@L["ปิด", "Turn off"]</MudButton>
+                    }
+                    else if (_permission == "denied")
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Error" Icon="@Icons.Material.Filled.NotificationsOff">@L["ถูกบล็อก", "Blocked"]</MudChip>
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" OnClick="PushPrompt.ShowUnblockHelpAsync">@L["วิธีปลดบล็อก", "How to unblock"]</MudButton>
                     }
                     else { <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" OnClick="EnablePushAsync">@L["เปิด", "Enable"]</MudButton> }
                 </div>
@@ -175,12 +181,13 @@
     public void Dispose() => PushEvents.DeviceRegistered -= OnDeviceRegistered;
 
     // The listed device that belongs to this browser, if it is subscribed.
-    private string? _currentKey;
+    private string? _currentKey, _permission;
     private Device? ThisDevice => _currentKey is null ? null : _channels?.Devices.FirstOrDefault(d => d.Key == _currentKey);
 
     private async Task LoadChannelsAsync()
     {
         _currentKey = await Push.CurrentKeyAsync();
+        _permission = _pushSupported ? await Push.PermissionAsync() : null;
         _channels = await Api.Get<Channels>("api/notifications/channels", silent: true);
         _settings = await Api.Get<NotificationSettings>("api/notifications/settings", silent: true);
         _quietFrom = _settings?.QuietFrom is { } f ? TimeSpan.Parse(f, System.Globalization.CultureInfo.InvariantCulture) : null;
@@ -195,25 +202,8 @@
 
     private async Task EnablePushAsync()
     {
-        PushSubscriptionInfo? sub;
-        try { sub = await Push.SubscribeAsync(_channels?.VapidPublicKey); }
-        catch (PushSetupException e)
-        {
-            Snackbar.Add(e.Reason == "no_service_worker"
-                ? L["เบราว์เซอร์ยังเตรียมระบบแจ้งเตือนไม่เสร็จ (Service Worker) ลองโหลดหน้าใหม่แล้วกดอีกครั้ง", "The browser's service worker is not ready. Reload the page and try again."]
-                : L["เปิดแจ้งเตือนไม่ได้: ", "Could not enable push: "] + e.Reason, Severity.Error);
-            return;
-        }
-        if (sub is null)
-        {
-            Snackbar.Add(L["ไม่ได้รับอนุญาตให้แจ้งเตือน", "Notification permission was not granted"], Severity.Warning);
-            return;
-        }
-        if (await Api.Post("api/notifications/devices", new { kind = Push.Kind, endpoint = sub.Endpoint, p256dh = sub.P256dh, auth = sub.Auth, label = sub.Label }))
-        {
-            Snackbar.Add(L["เปิดแจ้งเตือนบนอุปกรณ์นี้แล้ว", "Push enabled on this device"], Severity.Success);
-            await LoadChannelsAsync();
-        }
+        if (await PushPrompt.EnableAsync(_channels)) await LoadChannelsAsync();
+        else _permission = await Push.PermissionAsync();
     }
 
     private async Task RemoveDeviceAsync(Device d)

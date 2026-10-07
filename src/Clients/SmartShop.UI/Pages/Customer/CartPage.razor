@@ -3,6 +3,7 @@
 @inject PlantContext Plant
 @inject NavigationManager Nav
 @inject IDialogService Dialogs
+@inject PushPrompt PushPrompt
 
 <div class="ss-page">
     <MudText Typo="Typo.h5" Class="mb-3" Style="font-weight:700">@L["ตะกร้า & ชำระเงิน", "Cart & checkout"]</MudText>
@@ -192,6 +193,8 @@
         if (order is not null)
         {
             Nav.NavigateTo($"/orders/{order.Id}", replace: true);
+            // The moment notifications obviously help: the shop will answer this order.
+            _ = PushPrompt.OfferAsync(L["รับแจ้งเตือนเมื่อร้านรับออเดอร์และเมื่อของพร้อม", "Know when the shop accepts your order and when it is ready"]);
             return;
         }
         if (Api.LastProblem is { } p)

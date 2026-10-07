@@ -1,0 +1,27 @@
+@* Explains notifications before the browser asks. "Later" here costs nothing; "Block" in the browser's own prompt
+   cannot be undone by the app and counts against the site in Chrome. *@
+<MudDialog>
+    <DialogContent>
+        <div class="d-flex flex-column align-center text-center gap-2">
+            <MudIcon Icon="@Icons.Material.Filled.NotificationsActive" Color="Color.Primary" Style="font-size:3rem" />
+            <MudText Typo="Typo.body1" Style="font-weight:600">@(Reason ?? L["รับแจ้งเตือนออเดอร์บนอุปกรณ์นี้", "Get order alerts on this device"])</MudText>
+            <MudText Typo="Typo.body2" Class="ss-muted">
+                @L["แจ้งเฉพาะเรื่องออเดอร์ การชำระเงิน และแชทของคุณเท่านั้น ไม่มีโฆษณา ปิดได้ทุกเมื่อในหน้า \"ฉัน\"",
+                   "Only your orders, payments and chats. No ads. Turn it off any time on the \"Me\" page."]
+            </MudText>
+            <MudAlert Severity="Severity.Info" Dense="true" NoIcon="true" Class="mt-1">
+                @L["ขั้นต่อไป เบราว์เซอร์จะถามสิทธิ์ ให้กด \"อนุญาต\" (Allow)", "Next, your browser will ask: choose \"Allow\"."]
+            </MudAlert>
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["ไว้ทีหลัง", "Later"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => Dialog.Close(DialogResult.Ok(true)))">@L["ตกลง", "Continue"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    /// <summary>Why it helps right now, e.g. "Know when the shop accepts your order".</summary>
+    [Parameter] public string? Reason { get; set; }
+}

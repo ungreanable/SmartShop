@@ -6,6 +6,7 @@
 @inject OrderAlarm Alarm
 @inject IDialogService Dialogs
 @inject NavigationManager Nav
+@inject PushPrompt PushPrompt
 
 <div class="ss-page">
     @if (_settings is not null)
@@ -118,6 +119,12 @@
         Realtime.OrderUpdated += OnChanged;
         _settings = await Api.Get<ShopSettings>($"api/merchant/shops/{ShopId}");
         await LoadAsync(_tab);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Shop staff need alerts most: offer once on this page (our own explanation first, see PushPrompt).
+        if (firstRender) await PushPrompt.OfferAsync(L["รับแจ้งเตือนเมื่อมีออเดอร์ใหม่ แม้ปิดหน้าเว็บอยู่", "Get new-order alerts even when this page is closed"]);
     }
 
     private static object? Badge(int? count) => count is > 0 ? count : null;

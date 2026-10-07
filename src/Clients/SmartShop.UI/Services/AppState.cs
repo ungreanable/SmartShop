@@ -64,6 +64,7 @@ public static class UiSetup
         services.AddScoped<PlantContext>();
         services.AddScoped<PendingJoin>();
         services.AddScoped<PushEvents>();
+        services.AddScoped<PushPrompt>();
         services.AddScoped<Realtime>();
         services.AddScoped<Browser>();
         services.AddScoped<AppState>();
