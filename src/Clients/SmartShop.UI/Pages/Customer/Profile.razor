@@ -183,7 +183,15 @@
 
     private async Task EnablePushAsync()
     {
-        var sub = await Push.SubscribeAsync(_channels?.VapidPublicKey);
+        PushSubscriptionInfo? sub;
+        try { sub = await Push.SubscribeAsync(_channels?.VapidPublicKey); }
+        catch (PushSetupException e)
+        {
+            Snackbar.Add(e.Reason == "no_service_worker"
+                ? L["เบราว์เซอร์ยังเตรียมระบบแจ้งเตือนไม่เสร็จ (Service Worker) ลองโหลดหน้าใหม่แล้วกดอีกครั้ง", "The browser's service worker is not ready. Reload the page and try again."]
+                : L["เปิดแจ้งเตือนไม่ได้: ", "Could not enable push: "] + e.Reason, Severity.Error);
+            return;
+        }
         if (sub is null)
         {
             Snackbar.Add(L["ไม่ได้รับอนุญาตให้แจ้งเตือน", "Notification permission was not granted"], Severity.Warning);

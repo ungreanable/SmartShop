@@ -52,4 +52,10 @@ public interface IPushRegistrar
     Task UnsubscribeAsync() => Task.CompletedTask;
 }
 
+/// <summary>The device allows notifications but could not subscribe; <c>Reason</c> is "no_service_worker" or the browser's error.</summary>
+public sealed class PushSetupException(string reason) : InvalidOperationException(reason)
+{
+    public string Reason { get; } = reason;
+}
+
 public sealed record PushSubscriptionInfo(string Endpoint, string? P256dh, string? Auth, string Label);

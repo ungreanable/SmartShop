@@ -84,6 +84,7 @@ internal sealed class WebPushRegistrar(IJSRuntime js) : IPushRegistrar
         if (string.IsNullOrEmpty(vapidPublicKey)) return null;
         var result = await js.InvokeAsync<JsonElement?>("smartshop.push.subscribe", vapidPublicKey);
         if (result is not { ValueKind: JsonValueKind.Object } sub) return null;
+        if (sub.TryGetProperty("error", out var error)) throw new PushSetupException(error.GetString() ?? "unknown");
         var label = await js.InvokeAsync<string>("smartshop.deviceLabel");
         return new PushSubscriptionInfo(sub.GetProperty("endpoint").GetString()!, sub.GetProperty("p256dh").GetString(), sub.GetProperty("auth").GetString(), label);
     }

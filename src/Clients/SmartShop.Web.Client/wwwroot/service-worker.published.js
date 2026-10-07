@@ -15,7 +15,9 @@ async function onInstall() {
   const assetsRequests = self.assetsManifest.assets
     .filter(asset => offlineAssetsInclude.some(pattern => pattern.test(asset.url)))
     .filter(asset => !offlineAssetsExclude.some(pattern => pattern.test(asset.url)))
-    .map(asset => new Request(asset.url, { integrity: asset.hash, cache: 'no-cache' }));
+    // index.html is not integrity-checked: proxies such as Cloudflare (Rocket Loader, bot detection) rewrite HTML,
+    // and one mismatch would fail the whole install, leaving the app without push notifications.
+    .map(asset => new Request(asset.url, asset.url === 'index.html' ? { cache: 'no-cache' } : { integrity: asset.hash, cache: 'no-cache' }));
   await caches.open(cacheName).then(cache => cache.addAll(assetsRequests));
   self.skipWaiting();
 }

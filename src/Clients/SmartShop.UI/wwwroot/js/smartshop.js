@@ -76,13 +76,28 @@ window.smartshop = (() => {
   const push = {
     supported: () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window,
     permission: () => ('Notification' in window) ? Notification.permission : 'unsupported',
+    // Returns the subscription, null when permission is not granted, or { error } saying why it could not subscribe.
     subscribe: async (vapidPublicKey) => {
       const permission = await Notification.requestPermission();
       if (permission !== 'granted') return null;
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8Array(vapidPublicKey) });
-      const json = subscription.toJSON();
-      return { endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth };
+      try {
+        // ready never settles when the service worker failed to install, so do not wait forever.
+        const registration = await Promise.race([navigator.serviceWorker.ready, new Promise(r => setTimeout(() => r(null), 10000))]);
+        if (!registration) return { error: 'no_service_worker' };
+        const key = urlB64ToUint8Array(vapidPublicKey);
+        let subscription = await registration.pushManager.getSubscription();
+        // A subscription made with older server keys cannot receive pushes and blocks subscribing with the new ones.
+        const current = subscription?.options?.applicationServerKey;
+        if (subscription && current && !new Uint8Array(current).every((b, i) => b === key[i])) {
+          await subscription.unsubscribe();
+          subscription = null;
+        }
+        subscription = subscription || await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+        const json = subscription.toJSON();
+        return { endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth };
+      } catch (e) {
+        return { error: `${e?.name || 'Error'}: ${e?.message || e}` };
+      }
     },
     unsubscribe: async () => {
       try {
