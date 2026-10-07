@@ -9,6 +9,8 @@ public interface IPaymentDirectory
 
 public sealed record PaymentCreated(Guid PlantId, Guid PaymentId, Guid OrderId, Guid ShopId, Guid CustomerId) : IntegrationEvent(PlantId);
 public sealed record PaymentProofUploaded(Guid PlantId, Guid PaymentId, Guid OrderId, string OrderNo, Guid ShopId, Guid CustomerId) : IntegrationEvent(PlantId);
+/// <summary>The customer took back a slip attached by mistake; <paramref name="Status"/> is the payment status afterwards.</summary>
+public sealed record PaymentProofRemoved(Guid PlantId, Guid PaymentId, Guid OrderId, Guid ShopId, Guid CustomerId, PaymentStatus Status) : IntegrationEvent(PlantId);
 public sealed record PaymentVerified(Guid PlantId, Guid PaymentId, Guid OrderId, string OrderNo, Guid ShopId, Guid CustomerId, Guid ActorId) : IntegrationEvent(PlantId);
 public sealed record PaymentRejected(Guid PlantId, Guid PaymentId, Guid OrderId, string OrderNo, Guid ShopId, Guid CustomerId, Guid ActorId, string Reason) : IntegrationEvent(PlantId);
 public sealed record PaymentDuplicateSlipDetected(Guid PlantId, Guid PaymentId, Guid OrderId, string OrderNo, Guid ShopId, Guid DuplicateOfOrderId) : IntegrationEvent(PlantId);

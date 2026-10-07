@@ -98,6 +98,18 @@ public sealed class PaymentsModule : IModule
             return await ToDtoAsync(payment, role, outbox.DbContext, media, mediaService, ct);
         });
 
+        customer.MapDelete("/proofs/{proofId:guid}", async (Guid orderId, Guid proofId, Access access, IMediaService mediaService, IMediaUrls media,
+            IDbContextOutbox<PaymentsDbContext> outbox, CancellationToken ct) =>
+        {
+            var (payment, role) = await access.LoadAsync(orderId, ct, tracked: true);
+            if (role != "customer") throw new ForbiddenException("Only the customer removes their payment slips.");
+            var proof = payment.RemoveProof(proofId);
+            outbox.DbContext.Proofs.Remove(proof);
+            await outbox.PublishAsync(new PaymentProofRemoved(payment.PlantId, payment.Id, payment.OrderId, payment.ShopId, payment.CustomerId, payment.Status));
+            await outbox.SaveChangesAndFlushMessagesAsync(ct);
+            return await ToDtoAsync(payment, role, outbox.DbContext, media, mediaService, ct);
+        });
+
         var merchant = app.MapGroup("/merchant/orders/{orderId:guid}/payment").WithTags("Payments").RequirePlantMember();
 
         merchant.MapPost("/verify", async (Guid orderId, Access access, IDbContextOutbox<PaymentsDbContext> outbox, ICurrentUser user,

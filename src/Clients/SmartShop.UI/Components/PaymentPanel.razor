@@ -61,15 +61,23 @@
             <div class="d-flex flex-wrap gap-2 mt-1">
                 @foreach (var proof in _payment.Proofs)
                 {
-                    @if (proof.ThumbnailUrl is not null)
-                    {
-                        <img src="@proof.ThumbnailUrl" alt="" class="ss-zoomable" style="width:88px;height:88px;object-fit:cover;border-radius:8px"
-                             @onclick="@(() => ImagePreviewDialog.ShowAsync(Dialogs, proof.Url, L["สลิป", "Slip"]))" />
-                    }
-                    else
-                    {
-                        <a href="@proof.Url" target="_blank" rel="noopener"><MudChip T="string" Icon="@Icons.Material.Filled.PictureAsPdf">PDF</MudChip></a>
-                    }
+                    <div style="position:relative">
+                        @if (proof.ThumbnailUrl is not null)
+                        {
+                            <img src="@proof.ThumbnailUrl" alt="" class="ss-zoomable" style="width:88px;height:88px;object-fit:cover;border-radius:8px"
+                                 @onclick="@(() => ImagePreviewDialog.ShowAsync(Dialogs, proof.Url, L["สลิป", "Slip"]))" />
+                        }
+                        else
+                        {
+                            <a href="@proof.Url" target="_blank" rel="noopener"><MudChip T="string" Icon="@Icons.Material.Filled.PictureAsPdf">PDF</MudChip></a>
+                        }
+                        @* Attached by mistake: the customer can take it back until the shop confirms the payment. *@
+                        @if (_payment.CanUploadProof)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Class="ss-img-remove" Disabled="_removing"
+                                           OnClick="@(() => RemoveProofAsync(proof))" aria-label="@L["ลบสลิปนี้", "Remove this slip"]" />
+                        }
+                    </div>
                     @if (proof.DuplicateOfOrderNo is not null)
                     {
                         <MudAlert Severity="Severity.Error" Dense="true">⚠️ @L[$"สลิปนี้เคยใช้กับออเดอร์ #{proof.DuplicateOfOrderNo}", $"This slip was already used for order #{proof.DuplicateOfOrderNo}"]</MudAlert>
@@ -89,7 +97,8 @@
         @if (_payment.CanUploadProof)
         {
             <div class="mt-3">
-                <ImageUploader Purpose="PaymentSlip" AllowPdf="true" Uploaded="AttachAsync" Label="@L["แนบสลิป / หลักฐานการโอน", "Attach slip / proof"]" />
+                <ImageUploader Purpose="PaymentSlip" AllowPdf="true" Uploaded="AttachAsync"
+                               Label="@(_payment.Proofs.Count > 0 ? L["แนบสลิปเพิ่ม", "Attach another slip"] : L["แนบสลิป / หลักฐานการโอน", "Attach slip / proof"])" />
             </div>
         }
 
@@ -159,6 +168,25 @@
             _payment = updated;
             Snackbar.Add(L["แนบสลิปแล้ว รอร้านตรวจสอบ", "Slip attached, waiting for the shop"], Severity.Success);
         }
+    }
+
+    private bool _removing;
+
+    private async Task RemoveProofAsync(Proof proof)
+    {
+        if (await Dialogs.ShowMessageBoxAsync(L["ลบสลิปนี้?", "Remove this slip?"],
+                L["ร้านจะไม่เห็นสลิปนี้อีก ถ้าแนบผิดให้แนบสลิปที่ถูกต้องใหม่", "The shop will no longer see it. Attach the right slip if this one was a mistake."],
+                yesText: L["ลบสลิป", "Remove"], cancelText: L["ยกเลิก", "Cancel"]) != true) return;
+        _removing = true;
+        try
+        {
+            if (await Api.Delete($"api/orders/{OrderId}/payment/proofs/{proof.Id}"))
+            {
+                await ReloadAsync();
+                Snackbar.Add(L["ลบสลิปแล้ว", "Slip removed"], Severity.Info);
+            }
+        }
+        finally { _removing = false; }
     }
 
     private async Task ActAsync(string action, object? body)

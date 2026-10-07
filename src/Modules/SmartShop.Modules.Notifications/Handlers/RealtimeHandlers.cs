@@ -58,6 +58,7 @@ public static class RealtimePaymentHandler
 {
     public static Task Handle(PaymentCreated e, IRealtimePublisher rt, CancellationToken ct) => Send(rt, e.ShopId, e.CustomerId, e.OrderId, "Unpaid", ct);
     public static Task Handle(PaymentProofUploaded e, IRealtimePublisher rt, CancellationToken ct) => Send(rt, e.ShopId, e.CustomerId, e.OrderId, "PendingVerification", ct);
+    public static Task Handle(PaymentProofRemoved e, IRealtimePublisher rt, CancellationToken ct) => Send(rt, e.ShopId, e.CustomerId, e.OrderId, e.Status.ToString(), ct);
     public static Task Handle(PaymentVerified e, IRealtimePublisher rt, CancellationToken ct) => Send(rt, e.ShopId, e.CustomerId, e.OrderId, "Paid", ct);
     public static Task Handle(PaymentRejected e, IRealtimePublisher rt, CancellationToken ct) => Send(rt, e.ShopId, e.CustomerId, e.OrderId, "Rejected", ct);
 

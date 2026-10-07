@@ -68,6 +68,34 @@ public class PaymentTests(SmartShopFactory factory)
     }
 
     [Fact]
+    public async Task Customer_can_remove_a_wrong_slip_until_the_shop_confirms()
+    {
+        var s = await SetupAsync();
+        var order = await OrderAsync(s.Customer, s.ShopId, s.ItemId, s.PromptPayId);
+        await PaymentAsync(s.Customer, order.Id);
+        var wrong = await s.Customer.UploadAsync("PaymentSlip", Scenario.Png(300, 500, SkiaSharp.SKColors.Orange));
+        var withWrong = await s.Customer.PostAsync<PaymentDto>($"/api/orders/{order.Id}/payment/proofs", new { mediaId = wrong.Id });
+        var proofId = withWrong.Proofs.Single().Id;
+
+        // Only the customer takes a slip back.
+        (await s.Owner.DeleteRawAsync($"/api/orders/{order.Id}/payment/proofs/{proofId}")).IsSuccessStatusCode.ShouldBeFalse();
+
+        await s.Customer.DeleteOkAsync($"/api/orders/{order.Id}/payment/proofs/{proofId}");
+        var empty = await s.Customer.GetAsync<PaymentDto>($"/api/orders/{order.Id}/payment");
+        empty.Proofs.ShouldBeEmpty();
+        empty.Status.ShouldBe("Unpaid");
+        await FactoryExtensions.EventuallyAsync(async () =>
+            (await s.Customer.GetAsync<OrderDto>($"/api/orders/{order.Id}")).PaymentStatus.ShouldBe("Unpaid"));
+
+        // Once the shop has confirmed the payment, the slip stays.
+        var right = await s.Customer.UploadAsync("PaymentSlip", Scenario.Png(300, 500, SkiaSharp.SKColors.Teal));
+        var withRight = await s.Customer.PostAsync<PaymentDto>($"/api/orders/{order.Id}/payment/proofs", new { mediaId = right.Id });
+        await s.Owner.PostOkAsync($"/api/merchant/orders/{order.Id}/payment/verify");
+        (await s.Customer.DeleteRawAsync($"/api/orders/{order.Id}/payment/proofs/{withRight.Proofs.Single().Id}")).StatusCode
+            .ShouldBe(System.Net.HttpStatusCode.Conflict);
+    }
+
+    [Fact]
     public async Task Reusing_the_same_slip_for_another_order_is_flagged()
     {
         var s = await SetupAsync();

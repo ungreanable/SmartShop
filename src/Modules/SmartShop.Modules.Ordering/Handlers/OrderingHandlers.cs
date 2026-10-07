@@ -84,6 +84,9 @@ public static class PaymentStatusHandler
     public static Task Handle(PaymentProofUploaded e, OrderingDbContext db, IPaymentDirectory payments, TimeProvider clock, CancellationToken ct) =>
         Sync(db, payments, e.OrderId, PaymentStatus.PendingVerification, clock, e.CustomerId, null, ct);
 
+    public static Task Handle(PaymentProofRemoved e, OrderingDbContext db, IPaymentDirectory payments, TimeProvider clock, CancellationToken ct) =>
+        Sync(db, payments, e.OrderId, e.Status, clock, e.CustomerId, null, ct);
+
     public static Task Handle(PaymentVerified e, OrderingDbContext db, IPaymentDirectory payments, TimeProvider clock, CancellationToken ct) =>
         Sync(db, payments, e.OrderId, PaymentStatus.Paid, clock, e.ActorId, null, ct);
 

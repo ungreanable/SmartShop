@@ -67,6 +67,17 @@ public sealed class Payment
         return proof;
     }
 
+    /// <summary>The customer removes a slip attached by mistake, as long as the shop has not confirmed the payment.</summary>
+    public PaymentProof RemoveProof(Guid proofId)
+    {
+        if (Status is PaymentStatus.Paid or PaymentStatus.Voided)
+            throw new ConflictException("payment_closed", "This payment is already settled; the slip can no longer be removed.");
+        var proof = Proofs.FirstOrDefault(p => p.Id == proofId) ?? throw new NotFoundException("Slip", proofId);
+        Proofs.Remove(proof);
+        if (Proofs.Count == 0 && Status == PaymentStatus.PendingVerification) Status = PaymentStatus.Unpaid;
+        return proof;
+    }
+
     public void Verify(Guid actorId, DateTimeOffset now)
     {
         if (Status is PaymentStatus.Paid or PaymentStatus.Voided) throw new ConflictException("payment_closed", "This payment is already settled.");
