@@ -120,7 +120,8 @@ public static class SendWebPushHandler
                 {
                     ["vapidDetails"] = vapid,
                     ["TTL"] = notification.Priority == NotificationPriority.High ? 3600 : 86400,
-                    ["urgency"] = notification.Priority == NotificationPriority.High ? "high" : "normal",
+                    // The library has no "urgency" option (it throws); the Urgency header is passed as is.
+                    ["headers"] = new Dictionary<string, object> { ["Urgency"] = notification.Priority == NotificationPriority.High ? "high" : "normal" },
                 }, ct);
                 sent++;
             }
