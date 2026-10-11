@@ -4,7 +4,7 @@
     <CentralPackageTransitivePinningEnabled>false</CentralPackageTransitivePinningEnabled>
     <AspNetVersion>10.0.12</AspNetVersion>
     <EfVersion>10.0.12</EfVersion>
-    <AspireVersion>13.6.0</AspireVersion>
+    <AspireVersion>13.6.1</AspireVersion>
     <WolverineVersion>6.45.0</WolverineVersion>
     <OtelVersion>1.19.1</OtelVersion>
     <OtelInstrVersion>1.19.0</OtelInstrVersion>
