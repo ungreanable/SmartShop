@@ -30,7 +30,7 @@ jobs:
           global-json-file: global.json
 
       - name: NuGet cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Packages.props', 'Directory.Build.props', 'global.json') }}
@@ -62,7 +62,7 @@ jobs:
         with:
           global-json-file: global.json
       - name: NuGet cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Packages.props', 'Directory.Build.props', 'global.json') }}
@@ -96,7 +96,7 @@ jobs:
         with:
           global-json-file: global.json
       - name: NuGet cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Packages.props', 'Directory.Build.props', 'global.json') }}
