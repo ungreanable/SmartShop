@@ -36,18 +36,17 @@ app.MapGet("/app-config.json", (IConfiguration config, HttpResponse response) =>
     });
 });
 
-app.UseBlazorFrameworkFiles();
-// css/js/html are not fingerprinted: make browsers revalidate (cheap 304 via ETag) so updates show up right away.
-app.UseStaticFiles(new StaticFileOptions
-{
-    OnPrepareResponse = ctx =>
-    {
-        if (!ctx.Context.Request.Path.StartsWithSegments("/_framework"))
-            ctx.Context.Response.Headers.CacheControl = "no-cache";
-    },
-});
+// Static assets from the build manifest: files with a hash in their name (all of _framework) are served
+// "max-age=1 year, immutable" plus brotli/gzip versions made at build time, so a phone downloads the runtime once
+// per release. Files without a hash (index.html, app.css, smartshop.js, service-worker*.js, manifest) get
+// "no-cache" + ETag: browsers revalidate (a cheap 304) so updates show up right away.
+app.MapStaticAssets();
 app.MapReverseProxy();
-app.MapFallbackToFile("index.html");
+// Every app route (/shops/..., /orders/...) is index.html; never cached so a deploy is picked up at once.
+app.MapFallbackToFile("index.html", new StaticFileOptions
+{
+    OnPrepareResponse = ctx => ctx.Context.Response.Headers.CacheControl = "no-cache",
+});
 
 await app.RunAsync();
 return 0;

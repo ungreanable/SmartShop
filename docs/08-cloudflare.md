@@ -54,7 +54,18 @@
    - Expression: `(http.host eq "shop.ungrean.com" and (starts_with(http.request.uri.path, "/api/webhooks/") or starts_with(http.request.uri.path, "/api/public/")))`
    - Action: **Skip** (ติ๊กทุก Security feature ที่ข้ามได้)
    - ถ้าไม่ยกเว้น LINE จะส่ง Webhook เข้ามาไม่ได้
-7. **Caching:** ใช้ค่าเริ่มต้น **อย่า** ตั้ง "Cache Everything" ให้ Host นี้ (ระบบตั้ง `Cache-Control` ที่ถูกต้องไว้แล้ว และข้อมูลร้านเป็นข้อมูลเฉพาะสมาชิก)
+7. **Caching:** **อย่า** ตั้ง "Cache Everything" ให้ทั้ง Host นี้ (ข้อมูลร้านและ `/api/*` เป็นข้อมูลเฉพาะสมาชิก)
+   - ไฟล์ของแอปใน `/_framework/*` มีรหัส (Hash) อยู่ในชื่อไฟล์ ระบบส่ง `Cache-Control: max-age=31536000, immutable`
+     และไฟล์บีบอัด Brotli มาให้เอง ส่วน `index.html`, `service-worker*.js`, `manifest.webmanifest`, `app.css`, `smartshop.js`
+     ส่ง `no-cache` (Browser ถามซ้ำทุกครั้ง ได้ 304 ถ้าไม่เปลี่ยน) ห้ามให้ Cloudflare เก็บไฟล์กลุ่มนี้นานกว่าที่ระบบบอก
+     ไม่งั้นมือถือจะได้แอปเวอร์ชันเก่าหลัง Deploy
+   - แนะนำ: ให้ Cloudflare เก็บไฟล์ `/_framework/*` และ `/_content/*` ไว้ที่ขอบ (Edge) ใกล้ผู้ใช้ แทนที่จะวิ่งไป Server ที่สิงคโปร์ทุกครั้ง
+     - ไปที่ **Caching → Cache Rules → Create rule**
+     - Expression: `(http.host eq "shop.ungrean.com" and (starts_with(http.request.uri.path, "/_framework/") or starts_with(http.request.uri.path, "/_content/")))`
+     - Cache eligibility: **Eligible for cache**
+     - Edge TTL: **Use cache-control header if present** (ทำตาม Origin: ไฟล์มี Hash เก็บได้ 1 ปี ไฟล์ไม่มี Hash จะถาม Origin ซ้ำ)
+     - Browser TTL: **Respect origin**
+     - ไม่ต้องล้าง Cache หลัง Deploy: เวอร์ชันใหม่มีชื่อไฟล์ใหม่ (Hash ใหม่)
 
 ## 2. Firewall ของ Server (แนะนำมาก)
 
