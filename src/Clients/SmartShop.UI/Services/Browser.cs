@@ -43,6 +43,16 @@ public sealed class Browser(IJSRuntime js)
         }
     }
 
+    /// <summary>Calls <c>OnUpdateAvailable</c> on <paramref name="listener"/> when a new app version is waiting (web only).</summary>
+    public async ValueTask WatchForUpdatesAsync<T>(DotNetObjectReference<T> listener) where T : class
+    {
+        try { await js.InvokeVoidAsync("smartshop.sw.onUpdate", listener); }
+        catch (JSException) { } // the mobile app and an older smartshop.js have no web updates to offer
+    }
+
+    /// <summary>Switches to the waiting version; the page reloads once it has taken over.</summary>
+    public ValueTask ApplyUpdateAsync() => js.InvokeVoidAsync("smartshop.sw.apply");
+
     public ValueTask ScrollToAsync(string elementId) => js.InvokeVoidAsync("smartshop.scrollTo", elementId);
     public ValueTask SetBadgeAsync(int count) => js.InvokeVoidAsync("smartshop.setBadge", count);
     public ValueTask<string> UserAgentLabelAsync() => js.InvokeAsync<string>("smartshop.deviceLabel");

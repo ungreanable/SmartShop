@@ -19,8 +19,14 @@ async function onInstall() {
     // and one mismatch would fail the whole install, leaving the app without push notifications.
     .map(asset => new Request(asset.url, asset.url === 'index.html' ? { cache: 'no-cache' } : { integrity: asset.hash, cache: 'no-cache' }));
   await caches.open(cacheName).then(cache => cache.addAll(assetsRequests));
-  self.skipWaiting();
+  // No skipWaiting here: an update waits until the user taps "reload" (SKIP_WAITING below) or the next launch,
+  // instead of swapping the app under someone who is in the middle of ordering. The first install still takes
+  // over at once (there is no older worker to wait for).
 }
+
+self.addEventListener('message', event => {
+  if (event.data === 'SKIP_WAITING') self.skipWaiting();
+});
 
 async function onActivate() {
   const cacheKeys = await caches.keys();

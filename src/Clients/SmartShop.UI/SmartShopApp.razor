@@ -174,10 +174,29 @@ else
         }));
     }
 
+    private DotNetObjectReference<SmartShopApp>? _self;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _self = DotNetObjectReference.Create(this);
+        await Browser.WatchForUpdatesAsync(_self);
+    }
+
+    /// <summary>A new version was deployed and is ready: offer it, but never reload in the middle of an order.</summary>
+    [JSInvokable]
+    public void OnUpdateAvailable() => _ = InvokeAsync(() => Snackbar.Add(L["มีเวอร์ชันใหม่", "A new version is available"], Severity.Info, o =>
+    {
+        o.RequireInteraction = true;
+        o.Action = L["โหลดใหม่", "Reload"];
+        o.OnClick = async _ => await Browser.ApplyUpdateAsync();
+    }));
+
     private void Refresh() => InvokeAsync(StateHasChanged);
 
     public void Dispose()
     {
+        _self?.Dispose();
         L.Changed -= Refresh;
         Session.Changed -= OnSessionChanged;
         Realtime.Notification -= OnNotification;
