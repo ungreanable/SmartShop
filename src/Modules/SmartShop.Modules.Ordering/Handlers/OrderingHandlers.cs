@@ -21,6 +21,18 @@ public static class ExpireOrderHandler
     }
 }
 
+/// <summary>The customer did not answer the shop's prices in time: expire the order and release its stock.</summary>
+public static class ExpireQuoteHandler
+{
+    public static async Task Handle(ExpireQuoteIfNotAnswered command, OrderingDbContext db, IMessageBus bus, TimeProvider clock, CancellationToken ct)
+    {
+        var order = await db.Orders.FirstOrDefaultAsync(o => o.Id == command.OrderId, ct);
+        if (order is null || !order.ExpireQuote(clock.GetUtcNow())) return; // answered, or a newer quote moved the deadline
+        await bus.PublishAsync(new OrderExpired(order.PlantId, order.Id, order.OrderNo, order.ShopId, order.ShopName, order.CustomerId,
+            order.PromotionId, order.LineInfos(), QuoteUnanswered: true));
+    }
+}
+
 /// <summary>Nobody accepted yet: remind every shop member again, until the order expires.</summary>
 public static class RemindPendingOrderHandler
 {

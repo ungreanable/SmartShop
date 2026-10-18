@@ -14,7 +14,8 @@ namespace SmartShop.Modules.Shops.Endpoints;
 /// <summary>Shop-settings section of a shop backup file (the menu is in the catalog section).</summary>
 /// <summary><paramref name="Images"/>: signed links (id → URL) so the app can embed the pictures in the file; ignored on restore.</summary>
 public sealed record ShopBackup(int Version, ProfileRequest Profile, List<OpeningHourDto> Hours, OrderSettingsRequest Order,
-    DeliveryOptionsRequest Delivery, List<PaymentMethodRequest> PaymentMethods, Dictionary<Guid, string>? Images = null);
+    DeliveryOptionsRequest Delivery, List<PaymentMethodRequest> PaymentMethods, Dictionary<Guid, string>? Images = null,
+    bool? AcceptsCustomOrders = null);
 public sealed record ShopRestoreResult(int PaymentMethodsCreated, int PaymentMethodsUpdated, bool HoursRestored, bool PicturesKept);
 
 internal static class ShopBackupEndpoints
@@ -37,7 +38,8 @@ internal static class ShopBackupEndpoints
                 new DeliveryOptionsRequest(s.PickupEnabled, s.PickupInstruction, s.DeliveryEnabled, s.DeliveryZoneNote, s.DeliveryMinOrder),
                 s.PaymentMethods.OrderBy(p => p.SortOrder).Select(p => new PaymentMethodRequest(p.Type, p.DisplayName, p.PromptPayId, p.QrImageId,
                     p.BankName, p.AccountNumber, p.AccountName, p.Instructions, p.ImageId, p.RequiresProof, p.Enabled)).ToList(),
-                images == true ? pictures.OfType<Guid>().Distinct().ToDictionary(id => id, id => media.For(id)!) : null);
+                images == true ? pictures.OfType<Guid>().Distinct().ToDictionary(id => id, id => media.For(id)!) : null,
+                s.AcceptsCustomOrders);
         });
 
         // Applies the saved settings. Payment methods are matched by type and name and never deleted.
@@ -73,6 +75,7 @@ internal static class ShopBackupEndpoints
             var o = b.Order;
             shop.UpdateOrderSettings(o.AcceptMode, o.AcceptTimeoutMinutes, o.ReminderAfterMinutes, o.AutoCompleteHours,
                 o.AllowPreorderWhenClosed, o.PrepTimeMinutes, o.SlotIntervalMinutes, o.RequirePaymentBeforePreparing);
+            if (b.AcceptsCustomOrders is { } custom) shop.SetAcceptsCustomOrders(custom); // older files do not have it
             var d = b.Delivery;
             shop.UpdateDeliveryOptions(d.PickupEnabled, d.PickupInstruction, d.DeliveryEnabled, d.DeliveryZoneNote, d.DeliveryMinOrder);
 

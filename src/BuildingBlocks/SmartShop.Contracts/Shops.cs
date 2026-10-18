@@ -25,7 +25,8 @@ public sealed record ShopOrderingInfo(
     bool AllowPreorderWhenClosed, int PrepTimeMinutes, int SlotIntervalMinutes,
     bool PickupEnabled, bool DeliveryEnabled, decimal? DeliveryMinOrder,
     bool RequirePaymentBeforePreparing,
-    IReadOnlyList<PaymentMethodInfo> PaymentMethods);
+    IReadOnlyList<PaymentMethodInfo> PaymentMethods,
+    bool AcceptsCustomOrders = false);
 
 public sealed record ShopMemberInfo(Guid UserId, ShopRole Role, bool ReceiveOrderNotifications, string? DisplayLabel);
 

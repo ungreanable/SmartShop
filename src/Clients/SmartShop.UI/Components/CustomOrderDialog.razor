@@ -1,0 +1,57 @@
+@* "ตามสั่ง": the customer writes the dish in their own words; the shop prices it before cooking. *@
+@inject Api Api
+@inject IDialogService Dialogs
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="ss-muted mb-2">
+            @L["เขียนเมนูที่อยากได้ ร้านจะใส่ราคาให้ก่อน แล้วคุณกดยืนยันราคาอีกครั้ง ร้านถึงจะเริ่มทำ",
+               "Describe the dish. The shop sends a price first; it only starts cooking after you accept it."]
+        </MudText>
+        <MudTextField @bind-Value="_text" Label="@L["อยากกินอะไร", "What would you like?"]"
+                      Placeholder="@L["เช่น ผัดกะเพราหมูสับ ไข่เยี่ยวม้า ไม่เผ็ด", "e.g. Stir-fried basil pork with century egg, not spicy"]"
+                      Variant="Variant.Outlined" Lines="2" MaxLength="200" Counter="200" Immediate="true" AutoFocus="true" />
+        <div class="d-flex align-center gap-2 mt-3">
+            <MudText>@L["จำนวน", "Quantity"]</MudText>
+            <MudIconButton Icon="@Icons.Material.Filled.Remove" Size="Size.Small" Variant="Variant.Outlined" Disabled="@(_qty <= 1)" OnClick="@(() => _qty--)" aria-label="@L["ลดจำนวน", "Less"]" />
+            <MudText Typo="Typo.h6" Style="min-width:28px; text-align:center">@_qty</MudText>
+            <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small" Variant="Variant.Outlined" Disabled="@(_qty >= 99)" OnClick="@(() => _qty++)" aria-label="@L["เพิ่มจำนวน", "More"]" />
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["ยกเลิก", "Cancel"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_busy || string.IsNullOrWhiteSpace(_text))" OnClick="AddAsync">@L["ใส่ตะกร้า", "Add to cart"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter, EditorRequired] public Guid ShopId { get; set; }
+
+    private string? _text;
+    private int _qty = 1;
+    private bool _busy;
+
+    private async Task AddAsync()
+    {
+        _busy = true;
+        try
+        {
+            var body = new { shopId = ShopId, text = _text!.Trim(), quantity = _qty, replaceCart = false };
+            var cart = await Api.Post<Cart>("api/cart/custom", body, silent: true);
+            if (cart is null && Api.LastProblem?.Code == "cart_other_shop")
+            {
+                var replace = await Dialogs.ShowMessageBoxAsync(L["เริ่มตะกร้าใหม่?", "Start a new cart?"],
+                    L["ตะกร้ามีสินค้าจากร้านอื่นอยู่ จะล้างตะกร้าเดิมแล้วเพิ่มรายการนี้ไหม", "Your cart has items from another shop. Clear it and add this item?"],
+                    yesText: L["เริ่มใหม่", "Start new"], cancelText: L["ยกเลิก", "Cancel"]);
+                if (replace == true) cart = await Api.Post<Cart>("api/cart/custom", body with { replaceCart = true });
+            }
+            else if (cart is null && Api.LastProblem is { } problem)
+            {
+                await Dialogs.ShowMessageBoxAsync(L["เพิ่มไม่ได้", "Cannot add"], problem.Message, yesText: "OK");
+            }
+            if (cart is not null) Dialog.Close(DialogResult.Ok(cart));
+        }
+        finally { _busy = false; }
+    }
+}

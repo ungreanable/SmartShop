@@ -107,6 +107,14 @@
                 <MudSwitch T="bool" @bind-Value="_preorder" Color="Color.Primary" Label="@L["รับสั่งล่วงหน้าตอนร้านปิด", "Accept pre-orders while closed"]" />
                 <MudSwitch T="bool" @bind-Value="_payFirst" Color="Color.Primary" Label="@L["ต้องชำระเงินก่อนเริ่มทำ (ยกเว้นเงินสด)", "Require payment before preparing (except cash)"]" />
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Class="mt-2" OnClick="SaveOrderSettingsAsync">@L["บันทึก", "Save"]</MudButton>
+                <MudDivider Class="my-3" />
+                @* Saved right away (its own endpoint), like a feature switch. *@
+                <MudSwitch T="bool" Value="_s.Shop.AcceptsCustomOrders" ValueChanged="SetCustomOrdersAsync" Color="Color.Primary"
+                           Label="@L["✍️ รับสั่งตามสั่ง", "✍️ Take custom orders"]" />
+                <MudText Typo="Typo.caption" Class="ss-muted d-block">
+                    @L["ลูกค้าเขียนเมนูที่อยากได้เอง ร้านใส่ราคาให้ก่อน แล้วลูกค้ายืนยันราคาภายใน 15 นาที ร้านค่อยเริ่มทำ (ใช้คูปองกับออเดอร์แบบนี้ไม่ได้)",
+                       "Customers write their own dishes; you send prices first and start once they accept within 15 minutes (no coupons on these orders)."]
+                </MudText>
             </MudExpansionPanel>
 
             <MudExpansionPanel Text="@L["💳 วิธีชำระเงิน", "💳 Payment methods"]">
@@ -162,6 +170,8 @@
     }
 
     private string Url(string path) => $"api/merchant/shops/{ShopId}/{path}";
+
+    private async Task SetCustomOrdersAsync(bool enabled) => await Saved(await Api.Put(Url("custom-orders"), new { enabled }));
 
     private async Task Saved(bool ok)
     {

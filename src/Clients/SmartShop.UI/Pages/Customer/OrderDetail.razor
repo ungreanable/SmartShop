@@ -44,6 +44,12 @@
         @if (IsShop && !Terminal)
         {
             <MudPaper Elevation="0" Class="@($"pa-3 mb-3 ss-card {(_order.Status == "PendingAcceptance" ? "ss-new-order" : "")}")" Outlined="true">
+                @if (_order.Status == "AwaitingPriceApproval")
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">
+                        @L["ส่งราคาแล้ว รอลูกค้ายืนยัน", "Prices sent, waiting for the customer"]@(_order.ExpiresAt is { } until ? $" ({L["ถึง", "until"]} {Fmt.Time(until)})" : "")
+                    </MudAlert>
+                }
                 @if (_order.CancelRequestedAt is not null)
                 {
                     <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@L["ลูกค้าขอยกเลิก", "Customer asks to cancel"]: @_order.CancelRequestReason</MudAlert>
@@ -54,6 +60,18 @@
                 }
                 @switch (_order.Status)
                 {
+                    case "PendingAcceptance" or "AwaitingPriceApproval" when _order.NeedsQuote:
+                        @if (_order.Status == "PendingAcceptance" || _editQuote)
+                        {
+                            @if (_order.Status == "PendingAcceptance" && _order.ExpiresAt is { } quoteBy) { <MudText Typo="Typo.caption" Color="Color.Warning">⏳ @L["ต้องตอบก่อน", "Answer before"] @Fmt.Time(quoteBy)</MudText> }
+                            <QuoteEditor Order="_order" Busy="_busy" Submit="QuoteAsync" />
+                        }
+                        else
+                        {
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" OnClick="@(() => _editQuote = true)">@L["แก้ราคา", "Change prices"]</MudButton>
+                        }
+                        <MudButton Variant="Variant.Text" Color="Color.Error" FullWidth="true" Class="mt-1" OnClick="RejectAsync">@L["ปฏิเสธออเดอร์", "Reject order"]</MudButton>
+                        break;
                     case "PendingAcceptance":
                         @if (_order.ExpiresAt is { } exp) { <MudText Typo="Typo.caption" Color="Color.Warning">⏳ @L["ต้องรับก่อน", "Accept before"] @Fmt.Time(exp)</MudText> }
                         <div class="d-flex gap-2 mt-1">
@@ -120,17 +138,22 @@
                 <div class="d-flex py-1">
                     <MudText Style="min-width:32px">@line.Quantity×</MudText>
                     <div style="flex:1">
-                        <MudText>@line.Name</MudText>
+                        <MudText Style="@(line.Unavailable ? "text-decoration:line-through" : null)">@line.Name</MudText>
+                        @if (line.IsCustom) { <MudText Typo="Typo.caption" Color="Color.Secondary">✍️ @L["ตามสั่ง", "Custom"]</MudText> }
+                        @if (line.Unavailable) { <MudText Typo="Typo.caption" Color="Color.Error">❌ @L["ร้านทำไม่ได้", "The shop cannot make this"]@(line.ShopNote is null ? "" : $": {line.ShopNote}")</MudText> }
+                        else if (line.ShopNote is not null) { <MudText Typo="Typo.caption" Color="Color.Info">💬 @line.ShopNote</MudText> }
                         @if (line.Options.Count > 0) { <MudText Typo="Typo.caption" Class="ss-muted">@string.Join(", ", line.Options.Select(o => o.Name))</MudText> }
                         @if (line.SlotStart is { } s) { <MudText Typo="Typo.caption" Color="Color.Info">⏰ @Fmt.Day(s) @Fmt.Time(s)</MudText> }
                         @if (line.Note is not null) { <MudText Typo="Typo.caption" Class="ss-muted">📝 @line.Note</MudText> }
                     </div>
-                    <MudText>@Fmt.Baht(line.LineTotal)</MudText>
+                    @if (line.IsCustom && _order.Status == "PendingAcceptance") { <MudText Class="ss-muted">@L["รอราคา", "To be priced"]</MudText> }
+                    else { <MudText>@Fmt.Baht(line.LineTotal)</MudText> }
                 </div>
             }
             <MudDivider Class="my-2" />
             @if (_order.Discount > 0) { <div class="d-flex"><MudText Color="Color.Success">@L["ส่วนลด", "Discount"] @_order.PromotionCode</MudText><MudSpacer /><MudText Color="Color.Success">-@Fmt.Baht(_order.Discount)</MudText></div> }
-            <div class="d-flex"><MudText Typo="Typo.subtitle1" Style="font-weight:700">@L["รวม", "Total"]</MudText><MudSpacer /><MudText Typo="Typo.subtitle1" Style="font-weight:700">@Fmt.Baht(_order.Total)</MudText></div>
+            @if (_order.QuoteMessage is not null && _order.NeedsQuote) { <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">💬 @L["จากร้าน", "From the shop"]: @_order.QuoteMessage</MudAlert> }
+            <div class="d-flex"><MudText Typo="Typo.subtitle1" Style="font-weight:700">@(_order.NeedsQuote && _order.Status == "PendingAcceptance" ? L["รวมเบื้องต้น (ยังไม่รวมรายการตามสั่ง)", "So far (custom dishes not priced yet)"] : L["รวม", "Total"])</MudText><MudSpacer /><MudText Typo="Typo.subtitle1" Style="font-weight:700">@Fmt.Baht(_order.Total)</MudText></div>
         </MudPaper>
 
         @if (!IsShop && ShopId is null && Plant.MyShops.Any(s => s.Id == _order.ShopId))
@@ -140,7 +163,14 @@
                 <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" Href="@($"/merchant/{_order.ShopId}/orders/{OrderId}")">@L["จัดการในฐานะร้าน", "Manage as shop"]</MudButton>
             </MudAlert>
         }
-        <PaymentPanel OrderId="OrderId" AsShop="@(ShopId is not null)" @ref="_payment" />
+        @if (_order.QuotePending)
+        {
+            <MudAlert Severity="Severity.Normal" Dense="true" Class="mb-3">💳 @L["ชำระเงินได้หลังยืนยันราคา", "Payment opens once the price is agreed"]</MudAlert>
+        }
+        else
+        {
+            <PaymentPanel OrderId="OrderId" AsShop="@(ShopId is not null)" @ref="_payment" />
+        }
 
         @if (_order.DeliveryPhotoUrl is not null)
         {
@@ -152,6 +182,16 @@
         @if (IsCustomer)
         {
             <div class="d-flex flex-column gap-2 mt-3">
+                @if (_order.Status == "AwaitingPriceApproval")
+                {
+                    <MudPaper Outlined="true" Class="pa-3 ss-card ss-new-order">
+                        <MudText Typo="Typo.subtitle1" Style="font-weight:700">💬 @L["ร้านใส่ราคาแล้ว", "The shop sent its prices"] · @Fmt.Baht(_order.Total)</MudText>
+                        @if (_order.ExpiresAt is { } answerBy) { <MudText Typo="Typo.caption" Color="Color.Warning">⏳ @L["กรุณายืนยันก่อน", "Please answer before"] @Fmt.Time(answerBy) @L["ไม่อย่างนั้นออเดอร์จะหมดเวลา", "or the order expires"]</MudText> }
+                        <MudButton Disabled="_busy" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true" Class="mt-2"
+                                   OnClick="@(() => CustomerActionAsync("accept-quote", null))">✅ @L["ยอมรับราคา", "Accept the price"] @Fmt.Baht(_order.Total)</MudButton>
+                        <MudButton Disabled="_busy" Variant="Variant.Text" Color="Color.Error" FullWidth="true" OnClick="DeclineQuoteAsync">@L["ไม่รับ ยกเลิกออเดอร์", "Decline and cancel"]</MudButton>
+                    </MudPaper>
+                }
                 @if (_order.Status == "Delivered")
                 {
                     <MudButton Disabled="_busy" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" OnClick="@(() => CustomerActionAsync("confirm-received", null))">✅ @L["ยืนยันได้รับสินค้าแล้ว", "I received my order"]</MudButton>
@@ -208,7 +248,7 @@
 
     private int StepIndex => _order?.Status switch
     {
-        "PendingAcceptance" => 0,
+        "PendingAcceptance" or "AwaitingPriceApproval" => 0,
         "Accepted" => 1,
         "Preparing" => 2,
         "Ready" or "OutForDelivery" => 3,
@@ -218,7 +258,9 @@
 
     private string Headline => _order?.Status switch
     {
+        "PendingAcceptance" when _order.NeedsQuote => IsShop ? L["ออเดอร์ตามสั่ง! กรุณาใส่ราคา", "Custom order! Please set the prices"] : L["รอร้านใส่ราคา...", "Waiting for the shop's prices..."],
         "PendingAcceptance" => IsShop ? L["ออเดอร์ใหม่! กรุณากดรับ", "New order! Please accept"] : L["รอร้านกดรับออเดอร์...", "Waiting for the shop to accept..."],
+        "AwaitingPriceApproval" => IsShop ? L["รอลูกค้ายืนยันราคา", "Waiting for the customer to accept the price"] : L["ร้านใส่ราคาแล้ว กรุณายืนยัน", "The shop sent its prices, please confirm"],
         "Accepted" => L["ร้านรับออเดอร์แล้ว", "The shop accepted your order"],
         "Preparing" => L["ร้านกำลังเตรียม", "The shop is preparing"],
         "Ready" => _order.FulfillmentType == "Pickup" ? L["พร้อมแล้ว มารับได้เลย", "Ready for pickup"] : L["พร้อมแล้ว กำลังจะไปส่ง", "Ready, delivering soon"],
@@ -252,12 +294,30 @@
     {
         var parameters = new DialogParameters<ForceCloseDialog>
         {
-            { x => x.CanComplete, _order!.Status != "PendingAcceptance" },
+            { x => x.CanComplete, _order!.Status is not ("PendingAcceptance" or "AwaitingPriceApproval") },
             { x => x.CanCancel, _order.Status != "Delivered" },
         };
         var result = await (await Dialogs.ShowAsync<ForceCloseDialog>(L["บังคับปิดออเดอร์", "Force close order"] + " #" + _order.OrderNo, parameters)).Result;
         if (result is { Canceled: false, Data: ForceCloseResult r })
             await ShopActionAsync("force-close", new { outcome = r.Outcome, reason = r.Reason });
+    }
+
+    private bool _editQuote;
+
+    private async Task QuoteAsync(object body)
+    {
+        await ShopActionAsync("quote", body);
+        if (_order?.Status == "AwaitingPriceApproval")
+        {
+            _editQuote = false;
+            Snackbar.Add(L["ส่งราคาให้ลูกค้าแล้ว", "Prices sent to the customer"], Severity.Success);
+        }
+    }
+
+    private async Task DeclineQuoteAsync()
+    {
+        var reason = await AskAsync(L["ไม่รับราคา", "Decline the price"], L["เหตุผล (ไม่บังคับ)", "Reason (optional)"], required: false);
+        if (reason is not null) await CustomerActionAsync("cancel", new { reason = string.IsNullOrWhiteSpace(reason) ? L["ไม่รับราคา", "Declined the price"] : reason });
     }
 
     private async Task ShopActionAsync(string action, object? body)
@@ -345,6 +405,10 @@
     private string EventText(string type) => type switch
     {
         "Placed" => L["สั่งซื้อ", "Placed"],
+        "Quoted" => L["ร้านใส่ราคา", "Shop sent prices"],
+        "QuoteAccepted" => L["ลูกค้ายอมรับราคา", "Customer accepted the price"],
+        "QuoteDeclined" => L["ลูกค้าไม่รับราคา", "Customer declined the price"],
+        "QuoteExpired" => L["ลูกค้าไม่ได้ยืนยันราคา", "Price not answered in time"],
         "Accepted" => L["ร้านรับออเดอร์", "Accepted"],
         "AutoAccepted" => L["ร้านรับออเดอร์อัตโนมัติ", "Auto-accepted"],
         "Rejected" => L["ร้านปฏิเสธ", "Rejected"],

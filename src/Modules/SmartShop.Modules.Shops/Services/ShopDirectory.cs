@@ -22,7 +22,8 @@ internal sealed class ShopDirectory(ShopsDbContext db) : IShopDirectory
             s.AcceptMode, s.AcceptTimeoutMinutes, s.ReminderAfterMinutes, s.AutoCompleteHours,
             s.AllowPreorderWhenClosed, s.PrepTimeMinutes, s.SlotIntervalMinutes,
             s.PickupEnabled, s.DeliveryEnabled, s.DeliveryMinOrder, s.RequirePaymentBeforePreparing,
-            s.PaymentMethods.Where(p => p.Enabled).OrderBy(p => p.SortOrder).Select(p => p.ToInfo()).ToList());
+            s.PaymentMethods.Where(p => p.Enabled).OrderBy(p => p.SortOrder).Select(p => p.ToInfo()).ToList(),
+            s.AcceptsCustomOrders);
     }
 
     public async Task<IReadOnlyList<ShopMemberInfo>> GetMembersAsync(Guid shopId, CancellationToken ct = default) =>

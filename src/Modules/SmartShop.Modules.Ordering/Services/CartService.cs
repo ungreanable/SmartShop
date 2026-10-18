@@ -12,6 +12,8 @@ namespace SmartShop.Modules.Ordering.Services;
 
 public sealed record AddToCartRequest(Guid ShopId, Guid ItemId, int Quantity, List<Guid>? OptionIds, string? Note, DateTimeOffset? SlotStart, bool ReplaceCart = false);
 public sealed record UpdateCartLineRequest(int Quantity, List<Guid>? OptionIds, string? Note);
+/// <summary>A dish written by the customer ("ตามสั่ง"), e.g. "ผัดกะเพราหมูสับ ไข่เยี่ยวม้า".</summary>
+public sealed record AddCustomRequest(Guid ShopId, string Text, int Quantity = 1, bool ReplaceCart = false);
 
 internal sealed class CartService(
     ICurrentPlant plant, ICurrentUser user, OrderingDbContext db, IShopDirectory shops, ICatalogService catalog,
@@ -54,6 +56,31 @@ internal sealed class CartService(
         return await PriceAsync(cart, ct);
     }
 
+    public async Task<CartDto> AddCustomAsync(AddCustomRequest req, CancellationToken ct)
+    {
+        var shop = await shops.GetOrderingInfoAsync(req.ShopId, ct);
+        if (shop is null || shop.PlantId != plant.PlantId) throw new NotFoundException("Shop", req.ShopId);
+        if (!shop.AcceptsCustomOrders) throw new DomainException("custom_not_accepted", "This shop does not take custom orders.");
+
+        var now = clock.GetUtcNow();
+        var cart = await db.Carts.FirstOrDefaultAsync(c => c.UserId == user.Id && c.PlantId == plant.PlantId, ct);
+        if (cart is null)
+        {
+            cart = new Cart(user.Id, plant.PlantId, req.ShopId, now);
+            db.Carts.Add(cart);
+        }
+        else if (cart.ShopId != req.ShopId)
+        {
+            if (cart.Lines.Count > 0 && !req.ReplaceCart)
+                throw new ConflictException("cart_other_shop", "Your cart has items from another shop. Start a new cart?");
+            cart.Reset(req.ShopId, now);
+        }
+
+        cart.AddCustom(req.Text, req.Quantity, now);
+        await db.SaveChangesAsync(ct);
+        return await PriceAsync(cart, ct);
+    }
+
     public async Task<CartDto> UpdateAsync(Guid lineId, UpdateCartLineRequest req, CancellationToken ct)
     {
         var cart = await RequireCartAsync(ct);
@@ -82,11 +109,15 @@ internal sealed class CartService(
     {
         if (cart is null || cart.Lines.Count == 0) return new CartDto(cart?.ShopId, null, [], 0, 0, false);
         var shop = await shops.GetOrderingInfoAsync(cart.ShopId, ct);
-        var items = (await catalog.GetCheckoutItemsAsync(cart.ShopId, cart.Lines.Select(l => l.ItemId).Distinct().ToList(), clock.GetUtcNow(), ct))
+        var items = (await catalog.GetCheckoutItemsAsync(cart.ShopId, cart.Lines.Where(l => !l.IsCustom).Select(l => l.ItemId).Distinct().ToList(), clock.GetUtcNow(), ct))
             .ToDictionary(i => i.ItemId);
 
         var lines = cart.Lines.Select(l =>
         {
+            // Custom dish: priced by the shop after ordering.
+            if (l.IsCustom)
+                return new CartLineDto(l.Id, l.ItemId, l.Note ?? "", null, l.Quantity, 0, [], [], 0, null, null,
+                    shop?.AcceptsCustomOrders == true, shop?.AcceptsCustomOrders == true ? null : "custom_not_accepted", null, true);
             if (!items.TryGetValue(l.ItemId, out var item))
                 return new CartLineDto(l.Id, l.ItemId, "?", null, l.Quantity, 0, l.OptionIds, [], 0, l.Note, l.SlotStart, false, "item_removed", null);
             var priced = LinePricer.Price(item, l.OptionIds);
@@ -99,6 +130,6 @@ internal sealed class CartService(
         }).ToList();
 
         return new CartDto(cart.ShopId, shop?.Name, lines, lines.Sum(l => l.LineTotal), lines.Sum(l => l.Quantity),
-            lines.All(l => l.IsOrderable) && shop?.IsActive == true);
+            lines.All(l => l.IsOrderable) && shop?.IsActive == true, lines.Any(l => l.IsCustom));
     }
 }

@@ -36,7 +36,7 @@ public sealed record ShopDetails(Guid Id, string Name, string Code, string? Cate
     string? HouseNo, string? Phone, string? LineContact, ShopStatus Status, List<OpeningHour> Hours, List<Closure> UpcomingClosures,
     string? VacationMessage, bool PickupEnabled, string? PickupInstruction, bool DeliveryEnabled, string? DeliveryZoneNote,
     decimal? DeliveryMinOrder, int PrepTimeMinutes, decimal RatingAverage, int RatingCount, List<PaymentMethod> PaymentMethods,
-    string? MyRole, bool IsFavorite);
+    string? MyRole, bool IsFavorite, bool AcceptsCustomOrders = false);
 public sealed record ShopSettings(ShopDetails Shop, Guid? LogoId, Guid? CoverId, string Lifecycle, string? SuspendReason, string AcceptMode,
     int AcceptTimeoutMinutes, int ReminderAfterMinutes, int AutoCompleteHours, bool AllowPreorderWhenClosed, int SlotIntervalMinutes,
     bool RequirePaymentBeforePreparing, string OverrideMode, DateTimeOffset? OverrideUntil, DateTimeOffset? BusyUntil, DateTimeOffset? VacationUntil,
@@ -86,10 +86,14 @@ public sealed record Slot(DateTimeOffset Start, DateTimeOffset End, int Remainin
 // ---- cart / orders ----
 public sealed record Option(string Group, string Name, decimal PriceDelta);
 public sealed record CartLine(Guid Id, Guid ItemId, string Name, string? ThumbnailUrl, int Quantity, decimal UnitPrice, List<Guid> OptionIds,
-    List<Option> Options, decimal LineTotal, string? Note, DateTimeOffset? SlotStart, bool IsOrderable, string? Problem, int? Remaining);
-public sealed record Cart(Guid? ShopId, string? ShopName, List<CartLine> Lines, decimal Subtotal, int ItemCount, bool CanCheckout);
+    List<Option> Options, decimal LineTotal, string? Note, DateTimeOffset? SlotStart, bool IsOrderable, string? Problem, int? Remaining,
+    bool IsCustom = false);
+/// <summary><c>NeedsQuote</c>: has custom dishes ("ตามสั่ง") that the shop prices after the order is placed.</summary>
+public sealed record Cart(Guid? ShopId, string? ShopName, List<CartLine> Lines, decimal Subtotal, int ItemCount, bool CanCheckout,
+    bool NeedsQuote = false);
 public sealed record Address(string? HouseNo, string? Soi, string? Note);
-public sealed record OrderLine(Guid ItemId, string Name, int Quantity, decimal UnitPrice, List<Option> Options, decimal LineTotal, string? Note, DateTimeOffset? SlotStart);
+public sealed record OrderLine(Guid ItemId, string Name, int Quantity, decimal UnitPrice, List<Option> Options, decimal LineTotal, string? Note, DateTimeOffset? SlotStart,
+    Guid Id = default, bool IsCustom = false, bool Unavailable = false, string? ShopNote = null);
 public sealed record Person(Guid Id, string Name, string? PictureUrl, string? Phone);
 public sealed record TimelineEntry(string Type, string? ActorName, string? Note, string? PhotoUrl, DateTimeOffset At);
 public sealed record Order(Guid Id, string OrderNo, string Status, Guid ShopId, string ShopName, Person Customer, string FulfillmentType,
@@ -97,10 +101,16 @@ public sealed record Order(Guid Id, string OrderNo, string Status, Guid ShopId, 
     decimal Subtotal, decimal Discount, decimal Total, string? PromotionCode, Guid PaymentMethodId, string PaymentMethodType,
     string PaymentMethodName, string PaymentStatus, string? AcceptedByName, string? CancelReason, string? CancelRequestReason,
     DateTimeOffset? CancelRequestedAt, string? DeliveryPhotoUrl, DateTimeOffset PlacedAt, DateTimeOffset? ExpiresAt,
-    DateTimeOffset? AutoCompleteAt, DateTimeOffset? CompletedAt, List<TimelineEntry> Timeline, Guid? PreOrderRoundId, string ViewerRole);
+    DateTimeOffset? AutoCompleteAt, DateTimeOffset? CompletedAt, List<TimelineEntry> Timeline, Guid? PreOrderRoundId, string ViewerRole,
+    bool NeedsQuote = false, string? QuoteMessage = null)
+{
+    /// <summary>Custom dishes not priced yet (shop's turn) or priced and waiting for the customer.</summary>
+    public bool QuotePending => NeedsQuote && Status is "PendingAcceptance" or "AwaitingPriceApproval";
+}
 public sealed record OrderSummary(Guid Id, string OrderNo, string Status, Guid ShopId, string ShopName, string CustomerName, string? CustomerHouseNo,
     string FulfillmentType, DateTimeOffset? ScheduledFrom, DateTimeOffset? ScheduledTo, int ItemCount, string ItemsPreview, decimal Total,
-    string PaymentMethodType, string PaymentStatus, DateTimeOffset PlacedAt, DateTimeOffset? ExpiresAt, bool CancelRequested);
+    string PaymentMethodType, string PaymentStatus, DateTimeOffset PlacedAt, DateTimeOffset? ExpiresAt, bool CancelRequested,
+    bool NeedsQuote = false);
 public sealed record OrderCounts(int New, int Active, int Ready, int Today);
 public sealed record PrepItem(Guid ItemId, string Name, string Options, int Quantity, int Orders);
 public sealed record SalesDay(DateOnly Day, int Orders, decimal Revenue);

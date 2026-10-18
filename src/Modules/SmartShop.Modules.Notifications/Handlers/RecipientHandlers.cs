@@ -30,8 +30,8 @@ public static class OrderNotificationHandler
         var when = e.ScheduledFrom is { } f ? $" · รับ {f.ToOffset(TimeSpan.FromHours(7)):dd/MM HH:mm}" : "";
         var how = e.FulfillmentType == FulfillmentType.Delivery ? "ให้ร้านไปส่ง" : "รับที่ร้าน";
         await d.NotifyAsync(await shops.GetOrderNotificationRecipientsAsync(e.ShopId, ct), e.PlantId, e.EventId,
-            new("order.new", P.High, $"🛎️ ออเดอร์ใหม่ #{e.OrderNo}",
-                $"{customer} · {e.Lines.Sum(l => l.Quantity)} รายการ · {Links.Baht(e.Total)} · {how}{when}",
+            new("order.new", P.High, e.AwaitingQuote ? $"🛎️ ออเดอร์ตามสั่งใหม่ #{e.OrderNo} · รอใส่ราคา" : $"🛎️ ออเดอร์ใหม่ #{e.OrderNo}",
+                $"{customer} · {e.Lines.Sum(l => l.Quantity)} รายการ · {(e.AwaitingQuote ? "ร้านต้องใส่ราคาก่อน" : Links.Baht(e.Total))} · {how}{when}",
                 Links.ShopOrder(e.ShopId, e.OrderId), ExemptFromQuietHours: true), ct);
     }
 
@@ -45,15 +45,34 @@ public static class OrderNotificationHandler
             new("order.cancel_requested", P.High, $"ลูกค้าขอยกเลิกออเดอร์ #{e.OrderNo}", e.Reason ?? "กรุณาตรวจสอบและตอบกลับ",
                 Links.ShopOrder(e.ShopId, e.OrderId)), ct);
 
+    public static async Task Handle(OrderQuoteAccepted e, NotificationDispatcher d, IShopDirectory shops, CancellationToken ct) =>
+        await d.NotifyAsync(await shops.GetOrderNotificationRecipientsAsync(e.ShopId, ct), e.PlantId, e.EventId,
+            new("order.quote_accepted", P.High, $"✅ ลูกค้ายอมรับราคา #{e.OrderNo}", $"{Links.Baht(e.Total)} · เริ่มทำได้เลย",
+                Links.ShopOrder(e.ShopId, e.OrderId), ExemptFromQuietHours: true), ct);
+
     // ---- to the customer ----
+    public static Task Handle(OrderQuoted e, NotificationDispatcher d, CancellationToken ct) =>
+        Customer(d, e.CustomerId, e.PlantId, e.EventId, e.OrderId, "order.quoted", P.High, $"💬 {e.ShopName} ใส่ราคาออเดอร์ #{e.OrderNo} แล้ว",
+            $"{Links.Baht(e.Total)}{(e.Message is { } m ? " · " + m : "")} · กดยืนยันภายใน 15 นาที", ct);
+
     public static Task Handle(OrderAccepted e, NotificationDispatcher d, CancellationToken ct) =>
         Customer(d, e.CustomerId, e.PlantId, e.EventId, e.OrderId, "order.accepted", P.High, $"✅ {e.ShopName} รับออเดอร์ #{e.OrderNo} แล้ว", "ร้านกำลังเตรียมให้ค่ะ", ct);
 
     public static Task Handle(OrderRejected e, NotificationDispatcher d, CancellationToken ct) =>
         Customer(d, e.CustomerId, e.PlantId, e.EventId, e.OrderId, "order.rejected", P.High, $"❌ {e.ShopName} ไม่สามารถรับออเดอร์ #{e.OrderNo}", e.Reason, ct);
 
-    public static Task Handle(OrderExpired e, NotificationDispatcher d, CancellationToken ct) =>
-        Customer(d, e.CustomerId, e.PlantId, e.EventId, e.OrderId, "order.expired", P.High, $"ออเดอร์ #{e.OrderNo} หมดเวลา", $"{e.ShopName} ไม่ได้ตอบรับในเวลาที่กำหนด", ct);
+    public static async Task Handle(OrderExpired e, NotificationDispatcher d, IShopDirectory shops, CancellationToken ct)
+    {
+        if (!e.QuoteUnanswered)
+        {
+            await Customer(d, e.CustomerId, e.PlantId, e.EventId, e.OrderId, "order.expired", P.High, $"ออเดอร์ #{e.OrderNo} หมดเวลา", $"{e.ShopName} ไม่ได้ตอบรับในเวลาที่กำหนด", ct);
+            return;
+        }
+        await Customer(d, e.CustomerId, e.PlantId, e.EventId, e.OrderId, "order.expired", P.Medium, $"ออเดอร์ #{e.OrderNo} หมดเวลา",
+            "ไม่ได้ยืนยันราคาภายใน 15 นาที สั่งใหม่ได้ทุกเมื่อ", ct);
+        await d.NotifyAsync(await shops.GetOrderNotificationRecipientsAsync(e.ShopId, ct), e.PlantId, e.EventId,
+            new("order.expired", P.Medium, $"ลูกค้าไม่ได้ยืนยันราคา #{e.OrderNo}", "ออเดอร์หมดเวลาแล้ว ไม่ต้องทำ", Links.ShopOrder(e.ShopId, e.OrderId)), ct);
+    }
 
     public static async Task Handle(OrderCancelled e, NotificationDispatcher d, IShopDirectory shops, CancellationToken ct)
     {

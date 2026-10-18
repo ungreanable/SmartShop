@@ -205,6 +205,14 @@ namespace SmartShop.Modules.Ordering.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("promotion_id");
 
+                    b.Property<string>("QuoteMessage")
+                        .HasColumnType("text")
+                        .HasColumnName("quote_message");
+
+                    b.Property<Guid?>("QuotedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("quoted_by");
+
                     b.Property<DateTimeOffset?>("ScheduledFrom")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("scheduled_from");
@@ -573,6 +581,8 @@ namespace SmartShop.Modules.Ordering.Data.Migrations
 
                             b1.Property<Guid>("Id");
 
+                            b1.Property<bool>("IsCustom");
+
                             b1.Property<Guid>("ItemId");
 
                             b1.Property<string>("Name")
@@ -582,7 +592,11 @@ namespace SmartShop.Modules.Ordering.Data.Migrations
 
                             b1.Property<int>("Quantity");
 
+                            b1.Property<string>("ShopNote");
+
                             b1.Property<DateTimeOffset?>("SlotStart");
+
+                            b1.Property<bool>("Unavailable");
 
                             b1.Property<decimal>("UnitPrice");
 

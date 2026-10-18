@@ -27,7 +27,7 @@ public sealed record ShopDetailsDto(
     string? VacationMessage,
     bool PickupEnabled, string? PickupInstruction, bool DeliveryEnabled, string? DeliveryZoneNote, decimal? DeliveryMinOrder,
     int PrepTimeMinutes, decimal RatingAverage, int RatingCount,
-    IReadOnlyList<PaymentMethodDto> PaymentMethods, ShopRole? MyRole, bool IsFavorite);
+    IReadOnlyList<PaymentMethodDto> PaymentMethods, ShopRole? MyRole, bool IsFavorite, bool AcceptsCustomOrders = false);
 
 public sealed record ShopSettingsDto(
     ShopDetailsDto Shop, Guid? LogoId, Guid? CoverId, ShopLifecycle Lifecycle, string? SuspendReason,
@@ -65,7 +65,7 @@ internal static class ShopMapper
         s.PrepTimeMinutes, s.RatingAverage, s.RatingCount,
         s.PaymentMethods.Where(p => includeDisabledPayments || p.Enabled).OrderBy(p => p.SortOrder).Select(p => Payment(p, media)).ToList(),
         viewerId is { } v ? s.Member(v)?.Role : null,
-        isFavorite);
+        isFavorite, s.AcceptsCustomOrders);
 
     public static ShopSettingsDto Settings(Shop s, IMediaUrls media, DateTimeOffset now, Guid viewerId) => new(
         Details(s, media, now, viewerId, false, includeDisabledPayments: true), s.LogoId, s.CoverId, s.Status, s.SuspendReason,

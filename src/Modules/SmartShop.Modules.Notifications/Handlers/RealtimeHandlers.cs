@@ -25,6 +25,8 @@ public static class RealtimeOrderHandler
         await Updated(rt, e.ShopId, e.CustomerId, e.OrderId, OrderStatus.Accepted, ct);
     }
 
+    // The shop sent its prices: every shop device stops ringing; the customer's screen shows the prices.
+    public static Task Handle(OrderQuoted e, IRealtimePublisher rt, CancellationToken ct) => Claimed(rt, e.ShopId, e.CustomerId, e.OrderId, e.OrderNo, OrderStatus.AwaitingPriceApproval, ct);
     public static Task Handle(OrderRejected e, IRealtimePublisher rt, CancellationToken ct) => Claimed(rt, e.ShopId, e.CustomerId, e.OrderId, e.OrderNo, OrderStatus.Rejected, ct);
     public static Task Handle(OrderExpired e, IRealtimePublisher rt, CancellationToken ct) => Claimed(rt, e.ShopId, e.CustomerId, e.OrderId, e.OrderNo, OrderStatus.Expired, ct);
     public static Task Handle(OrderCancelled e, IRealtimePublisher rt, CancellationToken ct) => Claimed(rt, e.ShopId, e.CustomerId, e.OrderId, e.OrderNo, OrderStatus.Cancelled, ct);

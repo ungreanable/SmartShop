@@ -55,6 +55,8 @@ public static class UiSetup
             o.SnackbarConfiguration.VisibleStateDuration = 4000;
             o.SnackbarConfiguration.ShowCloseIcon = true;
             o.SnackbarConfiguration.PreventDuplicates = true;
+            // A phone screen fits about two: more would cover the page when several arrive while the app is in the background.
+            o.SnackbarConfiguration.MaxDisplayedSnackbars = 2;
         });
         services.AddScoped(_ => new HttpClient { BaseAddress = new Uri(config.ApiBaseUrl) });
         services.AddScoped<Loc>();

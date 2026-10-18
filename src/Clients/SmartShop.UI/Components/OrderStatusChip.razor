@@ -5,7 +5,7 @@
 
     public static Color ColorOf(string status) => status switch
     {
-        "PendingAcceptance" => Color.Warning,
+        "PendingAcceptance" or "AwaitingPriceApproval" => Color.Warning,
         "Accepted" or "Preparing" or "Ready" or "OutForDelivery" => Color.Info,
         "Delivered" => Color.Primary,
         "Completed" => Color.Success,
@@ -15,6 +15,7 @@
     public static string TextOf(string status, Loc l) => status switch
     {
         "PendingAcceptance" => l["รอร้านรับ", "Waiting for shop"],
+        "AwaitingPriceApproval" => l["รอยืนยันราคา", "Price to confirm"],
         "Accepted" => l["ร้านรับแล้ว", "Accepted"],
         "Preparing" => l["กำลังเตรียม", "Preparing"],
         "Ready" => l["พร้อมแล้ว", "Ready"],

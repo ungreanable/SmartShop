@@ -53,6 +53,8 @@ public sealed class Shop
     public int PrepTimeMinutes { get; private set; } = 20;
     public int SlotIntervalMinutes { get; private set; } = 30;
     public bool RequirePaymentBeforePreparing { get; private set; }
+    /// <summary>Customers may write their own dishes ("ตามสั่ง"); the shop prices them before the order goes ahead.</summary>
+    public bool AcceptsCustomOrders { get; private set; }
 
     // ---- delivery options (no delivery fee inside the village) ----
     public bool PickupEnabled { get; private set; } = true;
@@ -177,6 +179,8 @@ public sealed class Shop
         SlotIntervalMinutes = Guard.Range(slotIntervalMinutes, "Slot interval", 10, 240);
         RequirePaymentBeforePreparing = requirePaymentBeforePreparing;
     }
+
+    public void SetAcceptsCustomOrders(bool accepts) => AcceptsCustomOrders = accepts;
 
     public void UpdateDeliveryOptions(bool pickupEnabled, string? pickupInstruction, bool deliveryEnabled, string? deliveryZoneNote, decimal? deliveryMinOrder)
     {

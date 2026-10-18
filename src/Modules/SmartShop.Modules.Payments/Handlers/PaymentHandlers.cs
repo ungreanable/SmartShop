@@ -13,14 +13,25 @@ public static class CreatePaymentHandler
 {
     public static async Task Handle(OrderPlaced e, PaymentsDbContext db, IShopDirectory shops, IMessageBus bus, TimeProvider clock, CancellationToken ct)
     {
-        if (await db.Payments.AnyAsync(p => p.OrderId == e.OrderId, ct)) return; // redelivery
+        // Custom dishes: the amount is only known once the customer agrees to the shop's prices (OrderQuoteAccepted).
+        if (e.AwaitingQuote) return;
+        await CreateAsync(db, shops, bus, clock, e.PlantId, e.OrderId, e.OrderNo, e.ShopId, e.CustomerId, e.Total, e.PaymentMethodId, e.PaymentMethodType, ct);
+    }
 
-        var shop = await shops.GetOrderingInfoAsync(e.ShopId, ct);
-        var method = shop?.PaymentMethods.FirstOrDefault(m => m.Id == e.PaymentMethodId)
-                     ?? new PaymentMethodInfo(e.PaymentMethodId, e.PaymentMethodType, e.PaymentMethodType.ToString(), null, null, null, null, null, null, null, false);
-        var payment = Payment.Create(e.OrderId, e.OrderNo, e.PlantId, e.ShopId, e.CustomerId, e.Total, method, clock.GetUtcNow());
+    public static Task Handle(OrderQuoteAccepted e, PaymentsDbContext db, IShopDirectory shops, IMessageBus bus, TimeProvider clock, CancellationToken ct) =>
+        CreateAsync(db, shops, bus, clock, e.PlantId, e.OrderId, e.OrderNo, e.ShopId, e.CustomerId, e.Total, e.PaymentMethodId, e.PaymentMethodType, ct);
+
+    private static async Task CreateAsync(PaymentsDbContext db, IShopDirectory shops, IMessageBus bus, TimeProvider clock, Guid plantId, Guid orderId,
+        string orderNo, Guid shopId, Guid customerId, decimal total, Guid methodId, PaymentMethodType methodType, CancellationToken ct)
+    {
+        if (await db.Payments.AnyAsync(p => p.OrderId == orderId, ct)) return; // redelivery
+
+        var shop = await shops.GetOrderingInfoAsync(shopId, ct);
+        var method = shop?.PaymentMethods.FirstOrDefault(m => m.Id == methodId)
+                     ?? new PaymentMethodInfo(methodId, methodType, methodType.ToString(), null, null, null, null, null, null, null, false);
+        var payment = Payment.Create(orderId, orderNo, plantId, shopId, customerId, total, method, clock.GetUtcNow());
         db.Payments.Add(payment);
-        await bus.PublishAsync(new PaymentCreated(e.PlantId, payment.Id, e.OrderId, e.ShopId, e.CustomerId));
+        await bus.PublishAsync(new PaymentCreated(plantId, payment.Id, orderId, shopId, customerId));
     }
 }
 

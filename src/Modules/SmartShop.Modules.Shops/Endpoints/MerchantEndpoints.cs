@@ -26,6 +26,7 @@ public sealed record DeliveryOptionsRequest(bool PickupEnabled, string? PickupIn
 public sealed record PaymentMethodRequest(PaymentMethodType Type, string DisplayName, string? PromptPayId, Guid? QrImageId,
     string? BankName, string? AccountNumber, string? AccountName, string? Instructions, Guid? ImageId, bool? RequiresProof, bool Enabled = true);
 public sealed record ReorderRequest(List<Guid> Ids);
+public sealed record CustomOrdersRequest(bool Enabled);
 
 internal static class MerchantEndpoints
 {
@@ -113,6 +114,15 @@ internal static class MerchantEndpoints
             shop.EndVacation();
             await ctx.SaveAsync(shop, ct, true, new ShopProfileUpdated(shop.PlantId, shop.Id));
             return ShopMapper.Status(shop, ctx.Now);
+        });
+
+        // "ตามสั่ง": customers write their own dishes and the shop prices them.
+        m.MapPut("/custom-orders", async (Guid shopId, CustomOrdersRequest r, MerchantContext ctx, CancellationToken ct) =>
+        {
+            var shop = await ctx.LoadAsync(shopId, ShopRole.Manager, ct);
+            shop.SetAcceptsCustomOrders(r.Enabled);
+            await ctx.SaveAsync(shop, ct, true, new ShopProfileUpdated(shop.PlantId, shop.Id));
+            return Results.NoContent();
         });
 
         m.MapPut("/order-settings", async (Guid shopId, OrderSettingsRequest r, MerchantContext ctx, CancellationToken ct) =>

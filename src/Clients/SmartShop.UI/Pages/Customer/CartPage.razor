@@ -28,9 +28,10 @@
                 <div class="d-flex gap-2 py-2 align-center" style="border-top:1px solid var(--mud-palette-lines-default)">
                     <div style="flex:1; min-width:0">
                         <MudText Typo="Typo.body1">@line.Name</MudText>
+                        @if (line.IsCustom) { <MudText Typo="Typo.caption" Color="Color.Secondary">✍️ @L["ตามสั่ง · ร้านใส่ราคาหลังสั่ง", "Custom · the shop prices it after you order"]</MudText> }
                         @if (line.Options.Count > 0) { <MudText Typo="Typo.caption" Class="ss-muted">@string.Join(", ", line.Options.Select(o => o.Name))</MudText> }
                         @if (line.SlotStart is { } s) { <MudText Typo="Typo.caption" Color="Color.Info">⏰ @Fmt.Day(s) @Fmt.Time(s)</MudText> }
-                        @if (line.Note is not null) { <MudText Typo="Typo.caption" Class="ss-muted">📝 @line.Note</MudText> }
+                        @if (line.Note is not null && !line.IsCustom) { <MudText Typo="Typo.caption" Class="ss-muted">📝 @line.Note</MudText> }
                         @if (!line.IsOrderable) { <MudText Typo="Typo.caption" Color="Color.Error">⚠️ @Problem(line.Problem)</MudText> }
                     </div>
                     <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error" OnClick="@(() => ChangeAsync(line, -line.Quantity))"
@@ -38,7 +39,7 @@
                     <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Remove" Disabled="@(line.Quantity <= 1)" OnClick="@(() => ChangeAsync(line, -1))" />
                     <MudText Style="min-width:16px; text-align:center">@line.Quantity</MudText>
                     <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Add" OnClick="@(() => ChangeAsync(line, 1))" />
-                    <MudText Style="min-width:64px; text-align:right">@Fmt.Baht(line.LineTotal)</MudText>
+                    <MudText Style="min-width:64px; text-align:right" Class="@(line.IsCustom ? "ss-muted" : null)">@(line.IsCustom ? L["รอราคา", "TBD"] : Fmt.Baht(line.LineTotal))</MudText>
                 </div>
             }
             <MudButton Href="@($"/shops/{_shop.Id}")" StartIcon="@Icons.Material.Filled.Add" Size="Size.Small" Variant="Variant.Text">@L["เพิ่มรายการ", "Add more"]</MudButton>
@@ -94,8 +95,12 @@
             }
         </MudRadioGroup>
 
-        <MudTextField @bind-Value="_coupon" Label="@L["โค้ดส่วนลด (ถ้ามี)", "Coupon code (optional)"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3"
-                      Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.LocalOffer" OnBlur="PreviewDiscountAsync" />
+        @* Custom dishes are priced after ordering, so discounts cannot be worked out: no coupon on such orders. *@
+        @if (!_cart.NeedsQuote)
+        {
+            <MudTextField @bind-Value="_coupon" Label="@L["โค้ดส่วนลด (ถ้ามี)", "Coupon code (optional)"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3"
+                          Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.LocalOffer" OnBlur="PreviewDiscountAsync" />
+        }
         <MudTextField @bind-Value="_note" Label="@L["หมายเหตุถึงร้าน", "Note for the shop"]" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" Class="mt-2" />
 
         <MudPaper Outlined="true" Class="pa-3 mt-4 ss-card">
@@ -106,11 +111,18 @@
             }
             <div class="d-flex"><MudText>@L["ค่าส่ง", "Delivery"]</MudText><MudSpacer /><MudText>@L["ฟรี", "Free"]</MudText></div>
             <MudDivider Class="my-2" />
-            <div class="d-flex"><MudText Typo="Typo.h6">@L["รวม", "Total"]</MudText><MudSpacer /><MudText Typo="Typo.h6">@Fmt.Baht(Math.Max(0, _cart.Subtotal - (_discount?.Discount ?? 0)))</MudText></div>
+            <div class="d-flex"><MudText Typo="Typo.h6">@(_cart.NeedsQuote ? L["รวมเบื้องต้น", "So far"] : L["รวม", "Total"])</MudText><MudSpacer /><MudText Typo="Typo.h6">@Fmt.Baht(Math.Max(0, _cart.Subtotal - (_discount?.Discount ?? 0)))</MudText></div>
+            @if (_cart.NeedsQuote)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">
+                    ✍️ @L["มีรายการตามสั่ง ร้านจะใส่ราคาให้ก่อน แล้วคุณกดยืนยันราคาอีกครั้งภายใน 15 นาที ร้านถึงจะเริ่มทำ (ยังไม่ต้องจ่ายเงินตอนนี้)",
+                          "Custom dishes: the shop sends prices first and starts cooking once you accept them within 15 minutes (nothing to pay yet)."]
+                </MudAlert>
+            }
         </MudPaper>
 
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true" Class="mt-4" Disabled="@(!CanOrder || _busy)" OnClick="PlaceAsync">
-            @(_busy ? L["กำลังสั่ง...", "Placing order..."] : L["สั่งเลย", "Place order"])
+            @(_busy ? L["กำลังสั่ง...", "Placing order..."] : _cart.NeedsQuote ? L["ส่งให้ร้านใส่ราคา", "Ask the shop for prices"] : L["สั่งเลย", "Place order"])
         </MudButton>
     }
 </div>
@@ -170,7 +182,7 @@
     {
         // Without a code the server returns the best automatic promotion (or nothing), exactly as checkout will apply it.
         _discount = null;
-        if (_cart?.ShopId is not { } shopId || _cart.Lines.Count == 0) return;
+        if (_cart?.ShopId is not { } shopId || _cart.Lines.Count == 0 || _cart.NeedsQuote) return;
         var code = string.IsNullOrWhiteSpace(_coupon) ? null : _coupon.Trim();
         _discount = await Api.Post<DiscountPreview>($"api/shops/{shopId}/promotions/preview", new { code, subtotal = _cart.Subtotal }, silent: code is null);
     }
@@ -186,7 +198,7 @@
             deliveryAddress = _fulfillment == "Delivery" ? new { houseNo = _houseNo, soi = _soi, note = _addressNote } : null,
             paymentMethodId = _paymentMethodId,
             note = _note,
-            couponCode = string.IsNullOrWhiteSpace(_coupon) ? null : _coupon.Trim(),
+            couponCode = string.IsNullOrWhiteSpace(_coupon) || _cart!.NeedsQuote ? null : _coupon.Trim(),
         };
         var order = await Api.Post<Order>("api/orders", body, silent: true, idempotencyKey: _idempotencyKey);
         _busy = false;
@@ -208,6 +220,7 @@
         "not_enough_stock" => L["สินค้าเหลือไม่พอ", "Not enough stock"],
         "outside_hours" => L["ไม่ใช่เวลาขาย", "Not sold at this time"],
         "item_removed" => L["ร้านเอาออกแล้ว", "Removed by the shop"],
+        "custom_not_accepted" => L["ร้านปิดรับสั่งตามสั่งแล้ว", "The shop no longer takes custom orders"],
         _ => L["กรุณาตรวจสอบรายการ", "Please check this item"],
     };
 

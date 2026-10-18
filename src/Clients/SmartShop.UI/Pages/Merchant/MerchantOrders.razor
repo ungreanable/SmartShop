@@ -68,7 +68,8 @@
                     <MudText Typo="Typo.h6" Style="font-weight:700">#@o.OrderNo</MudText>
                     <MudText Typo="Typo.caption" Class="ss-muted ms-2">@Fmt.Ago(o.PlacedAt, L)</MudText>
                     <MudSpacer />
-                    <MudText Typo="Typo.subtitle1" Style="font-weight:700">@Fmt.Baht(o.Total)</MudText>
+                    @if (o.NeedsQuote && o.Status == "PendingAcceptance") { <MudChip T="string" Size="Size.Small" Color="Color.Warning">✍️ @L["รอใส่ราคา", "Needs prices"]</MudChip> }
+                    else { <MudText Typo="Typo.subtitle1" Style="font-weight:700">@Fmt.Baht(o.Total)</MudText> }
                 </div>
                 <MudText Typo="Typo.body2">👤 @o.CustomerName @(o.CustomerHouseNo is null ? "" : $"· {L["บ้าน", "house"]} {o.CustomerHouseNo}")</MudText>
                 <MudText Typo="Typo.body2">@(o.FulfillmentType == "Delivery" ? "🛵" : "🏠") @(o.ScheduledFrom is { } f && o.ScheduledTo is { } t ? Fmt.Window(f, t) : L["เร็วที่สุด", "ASAP"])</MudText>
@@ -79,6 +80,9 @@
                     <MudSpacer />
                     @switch (o.Status)
                     {
+                        case "PendingAcceptance" when o.NeedsQuote:
+                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Href="@($"/merchant/{ShopId}/orders/{o.Id}")">✍️ @L["ใส่ราคา", "Set prices"]</MudButton>
+                            break;
                         case "PendingAcceptance":
                             <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" Href="@($"/merchant/{ShopId}/orders/{o.Id}")">@L["ปฏิเสธ", "Reject"]</MudButton>
                             <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => ActAsync(o, "accept"))">@L["รับออเดอร์", "Accept"]</MudButton>

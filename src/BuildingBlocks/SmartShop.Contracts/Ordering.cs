@@ -7,6 +7,8 @@ public enum OrderStatus
 {
     PendingAcceptance, Accepted, Preparing, Ready, OutForDelivery, Delivered, Completed,
     Rejected, Cancelled, Expired,
+    /// <summary>Custom ("ตามสั่ง") order: the shop set the prices, waiting for the customer to agree.</summary>
+    AwaitingPriceApproval,
 }
 
 public sealed record OrderLineInfo(Guid ItemId, string Name, int Quantity, decimal UnitPrice, DateTimeOffset? SlotStart);
@@ -39,7 +41,15 @@ public sealed record OrderPlaced(
     decimal Subtotal, decimal Discount, decimal Total, FulfillmentType FulfillmentType,
     Guid PaymentMethodId, PaymentMethodType PaymentMethodType,
     DateTimeOffset? ScheduledFrom, DateTimeOffset? ScheduledTo,
-    Guid? PromotionId, IReadOnlyList<OrderLineInfo> Lines) : IntegrationEvent(PlantId);
+    Guid? PromotionId, IReadOnlyList<OrderLineInfo> Lines, bool AwaitingQuote = false) : IntegrationEvent(PlantId);
+
+/// <summary>The shop priced the customer's free-text lines; the customer has until <paramref name="AnswerBy"/> to agree.</summary>
+public sealed record OrderQuoted(Guid PlantId, Guid OrderId, string OrderNo, Guid ShopId, string ShopName, Guid CustomerId,
+    decimal Total, string? Message, DateTimeOffset AnswerBy) : IntegrationEvent(PlantId);
+
+/// <summary>The customer agreed to the shop's prices: the order goes ahead and can now be paid.</summary>
+public sealed record OrderQuoteAccepted(Guid PlantId, Guid OrderId, string OrderNo, Guid ShopId, string ShopName, Guid CustomerId,
+    decimal Subtotal, decimal Discount, decimal Total, Guid PaymentMethodId, PaymentMethodType PaymentMethodType) : IntegrationEvent(PlantId);
 
 public sealed record OrderAccepted(Guid PlantId, Guid OrderId, string OrderNo, Guid ShopId, string ShopName, Guid CustomerId, Guid ActorId) : IntegrationEvent(PlantId);
 public sealed record OrderPreparing(Guid PlantId, Guid OrderId, string OrderNo, Guid ShopId, string ShopName, Guid CustomerId) : IntegrationEvent(PlantId);
@@ -51,7 +61,9 @@ public sealed record OrderCompleted(Guid PlantId, Guid OrderId, string OrderNo, 
 /// <summary>Terminal "did not happen" states share one shape: stock and promotions must be released.</summary>
 public sealed record OrderRejected(Guid PlantId, Guid OrderId, string OrderNo, Guid ShopId, string ShopName, Guid CustomerId, Guid ActorId, string Reason, Guid? PromotionId, IReadOnlyList<OrderLineInfo> Lines) : IntegrationEvent(PlantId);
 public sealed record OrderCancelled(Guid PlantId, Guid OrderId, string OrderNo, Guid ShopId, string ShopName, Guid CustomerId, Guid? ActorId, bool ByCustomer, string? Reason, Guid? PromotionId, IReadOnlyList<OrderLineInfo> Lines) : IntegrationEvent(PlantId);
-public sealed record OrderExpired(Guid PlantId, Guid OrderId, string OrderNo, Guid ShopId, string ShopName, Guid CustomerId, Guid? PromotionId, IReadOnlyList<OrderLineInfo> Lines) : IntegrationEvent(PlantId);
+/// <summary><paramref name="QuoteUnanswered"/>: the customer, not the shop, let it run out (custom-dish prices not answered).</summary>
+public sealed record OrderExpired(Guid PlantId, Guid OrderId, string OrderNo, Guid ShopId, string ShopName, Guid CustomerId, Guid? PromotionId, IReadOnlyList<OrderLineInfo> Lines,
+    bool QuoteUnanswered = false) : IntegrationEvent(PlantId);
 
 public sealed record OrderCancellationRequested(Guid PlantId, Guid OrderId, string OrderNo, Guid ShopId, Guid CustomerId, string? Reason) : IntegrationEvent(PlantId);
 public sealed record OrderPendingReminder(Guid PlantId, Guid OrderId, string OrderNo, Guid ShopId, string ShopName, int Attempt) : IntegrationEvent(PlantId);
@@ -60,5 +72,6 @@ public sealed record OrderReported(Guid PlantId, Guid OrderId, string OrderNo, G
 public sealed record OrderReportResolved(Guid PlantId, Guid OrderId, Guid ReportId, Guid ReporterId, string Resolution) : IntegrationEvent(PlantId);
 
 public sealed record ExpireOrderIfNotAccepted(Guid OrderId) : IScheduledCommand;
+public sealed record ExpireQuoteIfNotAnswered(Guid OrderId) : IScheduledCommand;
 public sealed record RemindShopPendingOrder(Guid OrderId, int Attempt) : IScheduledCommand;
 public sealed record AutoCompleteOrder(Guid OrderId) : IScheduledCommand;

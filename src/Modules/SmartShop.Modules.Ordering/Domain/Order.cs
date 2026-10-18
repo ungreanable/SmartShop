@@ -22,8 +22,17 @@ public sealed class OrderLine
     public List<OrderLineOption> Options { get; set; } = [];
     public string? Note { get; set; }
     public DateTimeOffset? SlotStart { get; set; }
-    public decimal LineTotal => (UnitPrice + Options.Sum(o => o.PriceDelta)) * Quantity;
+    /// <summary>Dish written by the customer ("ตามสั่ง"); <see cref="UnitPrice"/> is set by the shop's quote.</summary>
+    public bool IsCustom { get; set; }
+    /// <summary>The shop cannot make this custom dish; it is not charged.</summary>
+    public bool Unavailable { get; set; }
+    /// <summary>The shop's note on a custom dish, e.g. why it cannot be made.</summary>
+    public string? ShopNote { get; set; }
+    public decimal LineTotal => Unavailable ? 0 : (UnitPrice + Options.Sum(o => o.PriceDelta)) * Quantity;
 }
+
+/// <summary>The shop's answer for one custom line: a unit price, or "cannot make it" with a reason.</summary>
+public sealed record QuoteLine(Guid LineId, decimal? UnitPrice, bool Unavailable, string? Note);
 
 public sealed class OrderLineOption
 {
@@ -46,6 +55,8 @@ public sealed class OrderEvent
 /// An order to one shop. State machine:
 /// PendingAcceptance -> Accepted -> Preparing -> Ready -> (OutForDelivery) -> Delivered -> Completed,
 /// with Rejected / Cancelled / Expired as alternative terminal states. Shops may skip intermediate steps.
+/// Orders with custom dishes ("ตามสั่ง") go PendingAcceptance -> AwaitingPriceApproval (the shop sent prices)
+/// -> Accepted once the customer agrees.
 /// Lines are snapshots: later price or name changes never affect existing orders.
 /// </summary>
 public sealed class Order
@@ -76,6 +87,9 @@ public sealed class Order
     public PaymentStatus PaymentStatus { get; private set; }
     public Guid? PreOrderRoundId { get; private set; }
     public Guid? AcceptedBy { get; private set; }
+    /// <summary>Message from the shop that came with its prices (custom orders).</summary>
+    public string? QuoteMessage { get; private set; }
+    public Guid? QuotedBy { get; private set; }
     public string? CancelReason { get; private set; }
     public string? CancelRequestReason { get; private set; }
     public DateTimeOffset? CancelRequestedAt { get; private set; }
@@ -126,11 +140,15 @@ public sealed class Order
         return order;
     }
 
+    /// <summary>Has dishes written by the customer, so the shop must price them before anything else.</summary>
+    public bool NeedsQuote => Lines.Any(l => l.IsCustom);
+
     public bool IsTerminal => Status is OrderStatus.Completed or OrderStatus.Rejected or OrderStatus.Cancelled or OrderStatus.Expired;
 
     public void Accept(Guid? actorId, DateTimeOffset now)
     {
         Require("accept", OrderStatus.PendingAcceptance);
+        if (NeedsQuote) throw new ConflictException("quote_required", "This order has custom dishes: set their prices first.");
         Status = OrderStatus.Accepted;
         AcceptedBy = actorId;
         AcceptedAt = now;
@@ -138,9 +156,58 @@ public sealed class Order
         Log(actorId is null ? "AutoAccepted" : "Accepted", actorId, null, null, now);
     }
 
+    /// <summary>
+    /// The shop prices the custom dishes (or marks them as not possible) and asks the customer to agree by
+    /// <paramref name="answerBy"/>. It may send new prices again while the customer has not answered.
+    /// </summary>
+    public void Quote(Guid actorId, IReadOnlyList<QuoteLine> answers, string? message, DateTimeOffset answerBy, DateTimeOffset now)
+    {
+        Require("price", OrderStatus.PendingAcceptance, OrderStatus.AwaitingPriceApproval);
+        if (!NeedsQuote) throw new ConflictException("quote_not_needed", "This order has no custom dishes. Accept it instead.");
+        foreach (var line in Lines.Where(l => l.IsCustom))
+        {
+            var answer = answers.FirstOrDefault(a => a.LineId == line.Id)
+                         ?? throw new DomainException("quote_incomplete", $"Set a price for \"{line.Name}\" or mark it as not possible.");
+            line.Unavailable = answer.Unavailable;
+            line.UnitPrice = answer.Unavailable ? 0
+                : Guard.Money(answer.UnitPrice ?? throw new DomainException("quote_incomplete", $"Set a price for \"{line.Name}\"."), "Price");
+            line.ShopNote = Guard.Optional(answer.Note, "Note", 200);
+        }
+        if (Lines.All(l => l.Unavailable))
+            throw new DomainException("quote_nothing", "Nothing in this order can be made. Reject the order instead.");
+
+        Subtotal = Lines.Sum(l => l.LineTotal);
+        Total = Math.Max(0, Subtotal - Discount);
+        QuoteMessage = Guard.Optional(message, "Message", 300);
+        QuotedBy = actorId;
+        Status = OrderStatus.AwaitingPriceApproval;
+        ExpiresAt = answerBy;
+        Log("Quoted", actorId, QuoteMessage, null, now);
+    }
+
+    /// <summary>The customer agrees to the shop's prices: the order goes ahead as if the shop had accepted it.</summary>
+    public void AcceptQuote(Guid customerId, DateTimeOffset now)
+    {
+        Require("accept the price of", OrderStatus.AwaitingPriceApproval);
+        Status = OrderStatus.Accepted;
+        AcceptedBy = QuotedBy;
+        AcceptedAt = now;
+        ExpiresAt = null;
+        Log("QuoteAccepted", customerId, null, null, now);
+    }
+
+    /// <summary>The customer did not answer the prices in time (a newer quote moves the deadline).</summary>
+    public bool ExpireQuote(DateTimeOffset now)
+    {
+        if (Status != OrderStatus.AwaitingPriceApproval || ExpiresAt > now) return false;
+        Close(OrderStatus.Expired, "The customer did not answer the price in time.", now);
+        Log("QuoteExpired", null, null, null, now);
+        return true;
+    }
+
     public void Reject(Guid actorId, string reason, DateTimeOffset now)
     {
-        Require("reject", OrderStatus.PendingAcceptance);
+        Require("reject", OrderStatus.PendingAcceptance, OrderStatus.AwaitingPriceApproval);
         Close(OrderStatus.Rejected, Guard.NotEmpty(reason, "Reason", 300), now);
         Log("Rejected", actorId, CancelReason, null, now);
     }
@@ -148,10 +215,11 @@ public sealed class Order
     /// <summary>Customers may cancel freely only before the shop accepted.</summary>
     public void CancelByCustomer(Guid customerId, string? reason, DateTimeOffset now)
     {
-        if (Status != OrderStatus.PendingAcceptance)
+        if (Status is not (OrderStatus.PendingAcceptance or OrderStatus.AwaitingPriceApproval))
             throw new ConflictException("cannot_cancel", "The shop already accepted this order. Send a cancellation request instead.");
+        var declinedPrice = Status == OrderStatus.AwaitingPriceApproval;
         Close(OrderStatus.Cancelled, Guard.Optional(reason, "Reason", 300), now);
-        Log("CancelledByCustomer", customerId, CancelReason, null, now);
+        Log(declinedPrice ? "QuoteDeclined" : "CancelledByCustomer", customerId, CancelReason, null, now);
     }
 
     public void RequestCancel(Guid customerId, string? reason, DateTimeOffset now)
@@ -175,8 +243,9 @@ public sealed class Order
     /// <summary>Shop cancels (or approves the customer's request) any time before delivery.</summary>
     public void CancelByShop(Guid actorId, string reason, DateTimeOffset now)
     {
-        if (IsTerminal || Status is OrderStatus.Delivered or OrderStatus.PendingAcceptance)
-            throw new ConflictException("cannot_cancel", Status == OrderStatus.PendingAcceptance ? "Reject the order instead." : "This order can no longer be cancelled.");
+        if (IsTerminal || Status is OrderStatus.Delivered or OrderStatus.PendingAcceptance or OrderStatus.AwaitingPriceApproval)
+            throw new ConflictException("cannot_cancel", Status is OrderStatus.PendingAcceptance or OrderStatus.AwaitingPriceApproval
+                ? "Reject the order instead." : "This order can no longer be cancelled.");
         Close(OrderStatus.Cancelled, Guard.NotEmpty(reason, "Reason", 300), now);
         Log("CancelledByShop", actorId, CancelReason, null, now);
     }
@@ -238,8 +307,8 @@ public sealed class Order
     /// </summary>
     public void ForceComplete(Guid actorId, string reason, DateTimeOffset now)
     {
-        if (IsTerminal || Status == OrderStatus.PendingAcceptance)
-            throw new ConflictException("cannot_force_complete", Status == OrderStatus.PendingAcceptance
+        if (IsTerminal || Status is OrderStatus.PendingAcceptance or OrderStatus.AwaitingPriceApproval)
+            throw new ConflictException("cannot_force_complete", !IsTerminal
                 ? "Accept or reject the order instead." : "This order is already closed.");
         var note = Guard.NotEmpty(reason, "Reason", 300);
         Complete(now);
@@ -312,7 +381,7 @@ public sealed class Order
     }
 
     public OrderLineInfo[] LineInfos() =>
-        Lines.Select(l => new OrderLineInfo(l.ItemId, l.Name, l.Quantity, l.UnitPrice, l.SlotStart)).ToArray();
+        Lines.Where(l => !l.Unavailable).Select(l => new OrderLineInfo(l.ItemId, l.Name, l.Quantity, l.UnitPrice, l.SlotStart)).ToArray();
 }
 
 public sealed record PlaceOrder(

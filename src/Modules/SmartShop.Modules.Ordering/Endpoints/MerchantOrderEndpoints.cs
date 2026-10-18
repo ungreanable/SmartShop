@@ -7,6 +7,7 @@ using SmartShop.Contracts.Payments;
 using SmartShop.Contracts.Shops;
 using SmartShop.Infrastructure.Tenancy;
 using SmartShop.Modules.Ordering.Data;
+using SmartShop.Modules.Ordering.Domain;
 using SmartShop.Modules.Ordering.Services;
 using SmartShop.SharedKernel;
 using SmartShop.SharedKernel.Scheduling;
@@ -23,6 +24,8 @@ public sealed record SalesReportDto(DateOnly From, DateOnly To, int Orders, deci
     List<SalesDayDto> Days, List<TopItemDto> TopItems);
 
 public sealed record ForceCloseRequest(string Outcome, string? Reason);
+public sealed record QuoteLineRequest(Guid LineId, decimal? UnitPrice, bool Unavailable, string? Note);
+public sealed record QuoteRequest(List<QuoteLineRequest> Lines, string? Message);
 
 internal static class MerchantOrderEndpoints
 {
@@ -38,7 +41,7 @@ internal static class MerchantOrderEndpoints
             var query = db.Orders.AsNoTracking().Where(o => o.ShopId == shopId && o.PlantId == plant.PlantId);
             query = tab switch
             {
-                "new" => query.Where(o => o.Status == OrderStatus.PendingAcceptance),
+                "new" => query.Where(o => o.Status == OrderStatus.PendingAcceptance || o.Status == OrderStatus.AwaitingPriceApproval),
                 "active" => query.Where(o => o.Status == OrderStatus.Accepted || o.Status == OrderStatus.Preparing),
                 "ready" => query.Where(o => o.Status == OrderStatus.Ready || o.Status == OrderStatus.OutForDelivery || o.Status == OrderStatus.Delivered),
                 _ => query.Where(o => o.Status == OrderStatus.Completed || o.Status == OrderStatus.Cancelled
@@ -63,7 +66,7 @@ internal static class MerchantOrderEndpoints
             int Of(params OrderStatus[] s) => counts.Where(c => s.Contains(c.Key)).Sum(c => c.Count);
             var since = clock.GetUtcNow().AddHours(-24);
             var today = await db.Orders.CountAsync(o => o.ShopId == shopId && o.PlacedAt >= since, ct);
-            return new OrderCountsDto(Of(OrderStatus.PendingAcceptance), Of(OrderStatus.Accepted, OrderStatus.Preparing),
+            return new OrderCountsDto(Of(OrderStatus.PendingAcceptance, OrderStatus.AwaitingPriceApproval), Of(OrderStatus.Accepted, OrderStatus.Preparing),
                 Of(OrderStatus.Ready, OrderStatus.OutForDelivery, OrderStatus.Delivered), today);
         });
 
@@ -75,7 +78,7 @@ internal static class MerchantOrderEndpoints
                 (o.Status == OrderStatus.Accepted || o.Status == OrderStatus.Preparing || o.Status == OrderStatus.PendingAcceptance));
             if (roundId is { } r) query = query.Where(o => o.PreOrderRoundId == r);
             var orders = await query.ToListAsync(ct);
-            return orders.SelectMany(o => o.Lines.Select(l => (o.Id, Line: l)))
+            return orders.SelectMany(o => o.Lines.Where(l => !l.Unavailable).Select(l => (o.Id, Line: l)))
                 .GroupBy(x => (x.Line.ItemId, x.Line.Name, Options: string.Join(", ", x.Line.Options.Select(op => op.Name))))
                 .Select(g => new PrepItemDto(g.Key.ItemId, g.Key.Name, g.Key.Options, g.Sum(x => x.Line.Quantity), g.Select(x => x.Id).Distinct().Count()))
                 .OrderByDescending(x => x.Quantity).ToList();
@@ -93,7 +96,7 @@ internal static class MerchantOrderEndpoints
             var bangkok = TimeSpan.FromHours(7);
             var days = completed.GroupBy(o => DateOnly.FromDateTime(o.PlacedAt.ToOffset(bangkok).DateTime))
                 .Select(g => new SalesDayDto(g.Key, g.Count(), g.Sum(o => o.Total))).OrderBy(d => d.Day).ToList();
-            var top = completed.SelectMany(o => o.Lines).GroupBy(l => l.Name)
+            var top = completed.SelectMany(o => o.Lines).Where(l => !l.Unavailable).GroupBy(l => l.Name)
                 .Select(g => new TopItemDto(g.Key, g.Sum(l => l.Quantity), g.Sum(l => l.LineTotal)))
                 .OrderByDescending(x => x.Quantity).Take(10).ToList();
             return new SalesReportDto(f, t, completed.Count, revenue, completed.Count == 0 ? 0 : decimal.Round(revenue / completed.Count, 2),
@@ -121,6 +124,18 @@ internal static class MerchantOrderEndpoints
             var order = await a.ForShopAsync(id, ShopRole.Staff, ct);
             order.Accept(a.UserId, a.Now);
             await a.SaveAsync(ct, new OrderAccepted(order.PlantId, order.Id, order.OrderNo, order.ShopId, order.ShopName, order.CustomerId, a.UserId));
+            return await a.ToDtoAsync(order, "shop", ct);
+        });
+
+        // Custom dishes: the shop sets their prices (or says it cannot make one); the customer then has 15 minutes to agree.
+        o.MapPost("/quote", async (Guid id, QuoteRequest req, OrderActions a, CancellationToken ct) =>
+        {
+            var order = await a.ForShopAsync(id, ShopRole.Staff, ct);
+            var answerBy = a.Now.Add(QuoteAnswerTime);
+            order.Quote(a.UserId, req.Lines.Select(l => new QuoteLine(l.LineId, l.UnitPrice, l.Unavailable, l.Note)).ToList(), req.Message, answerBy, a.Now);
+            await a.Bus.ScheduleAsync(new ExpireQuoteIfNotAnswered(order.Id), answerBy);
+            await a.SaveAsync(ct, new OrderQuoted(order.PlantId, order.Id, order.OrderNo, order.ShopId, order.ShopName, order.CustomerId,
+                order.Total, order.QuoteMessage, answerBy));
             return await a.ToDtoAsync(order, "shop", ct);
         });
 
@@ -207,6 +222,9 @@ internal static class MerchantOrderEndpoints
             return await a.ToDtoAsync(order, "shop", ct);
         });
     }
+
+    /// <summary>How long the customer has to agree to the shop's prices before the order expires.</summary>
+    public static readonly TimeSpan QuoteAnswerTime = TimeSpan.FromMinutes(15);
 
     private static (DateTimeOffset Start, DateTimeOffset End, DateOnly From, DateOnly To) Range(DateOnly? from, DateOnly? to, TimeProvider clock)
     {

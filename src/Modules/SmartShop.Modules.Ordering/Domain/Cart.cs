@@ -43,12 +43,25 @@ public sealed class Cart
         return line;
     }
 
+    /// <summary>A dish written by the customer ("ตามสั่ง"); the shop prices it after the order is placed.</summary>
+    public CartLine AddCustom(string text, int quantity, DateTimeOffset now)
+    {
+        Guard.Range(quantity, "Quantity", 1, 99);
+        if (Lines.Count >= 50) throw new DomainException("cart_full", "The cart can hold at most 50 lines.");
+        if (Lines.Count(l => l.IsCustom) >= 10) throw new DomainException("too_many_custom", "At most 10 custom dishes per order.");
+        var line = new CartLine { Id = Ids.New(), ItemId = Guid.Empty, Quantity = quantity, Note = Guard.NotEmpty(text, "Dish", 200) };
+        Lines.Add(line);
+        UpdatedAt = now;
+        return line;
+    }
+
     public void Update(Guid lineId, int quantity, List<Guid>? optionIds, string? note, DateTimeOffset now)
     {
         var line = Lines.FirstOrDefault(l => l.Id == lineId) ?? throw new NotFoundException("Cart line", lineId);
-        line.Quantity = Guard.Range(quantity, "Quantity", 1, 999);
-        if (optionIds is not null) line.OptionIds = [.. optionIds.Distinct()];
-        line.Note = Guard.Optional(note, "Note", 200);
+        line.Quantity = Guard.Range(quantity, "Quantity", 1, line.IsCustom ? 99 : 999);
+        if (optionIds is not null && !line.IsCustom) line.OptionIds = [.. optionIds.Distinct()];
+        // A custom dish IS its text: it cannot become empty.
+        line.Note = line.IsCustom ? Guard.NotEmpty(note ?? line.Note ?? "", "Dish", 200) : Guard.Optional(note, "Note", 200);
         UpdatedAt = now;
     }
 
@@ -69,6 +82,8 @@ public sealed class Cart
 public sealed class CartLine
 {
     public Guid Id { get; set; }
+    /// <summary>Custom dish ("ตามสั่ง"): no catalog item, the text is in <see cref="Note"/>.</summary>
+    public bool IsCustom => ItemId == Guid.Empty;
     public Guid ItemId { get; set; }
     public int Quantity { get; set; }
     public List<Guid> OptionIds { get; set; } = [];

@@ -24,6 +24,7 @@ internal static class CustomerOrderEndpoints
         var cart = api.MapGroup("/cart").WithTags("Cart").RequirePlantMember();
         cart.MapGet("/", (CartService carts, CancellationToken ct) => carts.GetAsync(ct));
         cart.MapPost("/items", (AddToCartRequest req, CartService carts, CancellationToken ct) => carts.AddAsync(req, ct));
+        cart.MapPost("/custom", (AddCustomRequest req, CartService carts, CancellationToken ct) => carts.AddCustomAsync(req, ct));
         cart.MapPut("/items/{lineId:guid}", (Guid lineId, UpdateCartLineRequest req, CartService carts, CancellationToken ct) => carts.UpdateAsync(lineId, req, ct));
         cart.MapDelete("/items/{lineId:guid}", (Guid lineId, CartService carts, CancellationToken ct) => carts.RemoveAsync(lineId, ct));
         cart.MapDelete("/", async (CartService carts, CancellationToken ct) =>
@@ -66,6 +67,18 @@ internal static class CustomerOrderEndpoints
             return await a.ToDtoAsync(o, "customer", ct);
         });
 
+        // Custom dishes: the customer agrees to the shop's prices and the order goes ahead (declining = /cancel).
+        orders.MapPost("/{id:guid}/accept-quote", async (Guid id, OrderActions a, CancellationToken ct) =>
+        {
+            var o = await a.ForCustomerAsync(id, ct);
+            o.AcceptQuote(a.UserId, a.Now);
+            await a.SaveAsync(ct,
+                new OrderQuoteAccepted(o.PlantId, o.Id, o.OrderNo, o.ShopId, o.ShopName, o.CustomerId, o.Subtotal, o.Discount, o.Total,
+                    o.PaymentMethodId, o.PaymentMethodType),
+                new OrderAccepted(o.PlantId, o.Id, o.OrderNo, o.ShopId, o.ShopName, o.CustomerId, o.AcceptedBy ?? a.UserId));
+            return await a.ToDtoAsync(o, "customer", ct);
+        });
+
         orders.MapPost("/{id:guid}/request-cancel", async (Guid id, ReasonRequest req, OrderActions a, CancellationToken ct) =>
         {
             var o = await a.ForCustomerAsync(id, ct);
@@ -89,11 +102,13 @@ internal static class CustomerOrderEndpoints
             var o = await a.ForCustomerAsync(id, ct);
             CartDto? cartDto = null;
             var first = true;
-            foreach (var line in o.Lines.Where(l => l.SlotStart is null))
+            foreach (var line in o.Lines.Where(l => l.SlotStart is null && !l.Unavailable))
             {
                 try
                 {
-                    cartDto = await carts.AddAsync(new AddToCartRequest(o.ShopId, line.ItemId, line.Quantity, null, line.Note, null, first), ct);
+                    cartDto = line.IsCustom
+                        ? await carts.AddCustomAsync(new AddCustomRequest(o.ShopId, line.Name, line.Quantity, first), ct)
+                        : await carts.AddAsync(new AddToCartRequest(o.ShopId, line.ItemId, line.Quantity, null, line.Note, null, first), ct);
                     first = false;
                 }
                 catch (SharedKernel.DomainException) { /* item gone or options changed: skip */ }

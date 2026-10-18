@@ -119,6 +119,10 @@ namespace SmartShop.Modules.Shops.Data.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("accept_timeout_minutes");
 
+                    b.Property<bool>("AcceptsCustomOrders")
+                        .HasColumnType("boolean")
+                        .HasColumnName("accepts_custom_orders");
+
                     b.Property<bool>("AllowPreorderWhenClosed")
                         .HasColumnType("boolean")
                         .HasColumnName("allow_preorder_when_closed");

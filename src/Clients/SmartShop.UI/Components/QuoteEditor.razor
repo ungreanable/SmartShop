@@ -1,0 +1,78 @@
+@* Shop side of a custom ("ตามสั่ง") order: a price for every dish the customer wrote, or "cannot make it" with a
+   reason, plus an optional message. The customer then has 15 minutes to agree. *@
+
+<MudText Typo="Typo.subtitle1" Style="font-weight:600">✍️ @L["ใส่ราคารายการตามสั่ง", "Price the custom dishes"]</MudText>
+<MudText Typo="Typo.caption" Class="ss-muted d-block mb-2">
+    @L["ลูกค้าจะเห็นราคาแล้วกดยืนยันภายใน 15 นาที ร้านค่อยเริ่มทำหลังลูกค้ายืนยัน", "The customer confirms within 15 minutes; start cooking after that."]
+</MudText>
+
+@foreach (var row in _rows)
+{
+    <div class="ss-quote-row">
+        <MudText Typo="Typo.body2" Style="font-weight:600">@row.Line.Quantity× @row.Line.Name</MudText>
+        <div class="d-flex align-center gap-2 flex-wrap">
+            @if (!row.Unavailable)
+            {
+                <MudNumericField T="decimal?" @bind-Value="row.Price" Label="@L["ราคาต่อจาน (บาท)", "Price each (baht)"]" Min="0" Max="100000"
+                                 Variant="Variant.Outlined" Margin="Margin.Dense" HideSpinButtons="true" Immediate="true" Style="max-width:160px" />
+            }
+            <MudCheckBox T="bool" @bind-Value="row.Unavailable" Color="Color.Error" Dense="true" Label="@L["ทำไม่ได้", "Cannot make"]" />
+        </div>
+        <MudTextField @bind-Value="row.Note" Label="@(row.Unavailable ? L["เหตุผล เช่น วัตถุดิบหมด", "Why, e.g. out of stock"] : L["หมายเหตุถึงลูกค้า (ไม่บังคับ)", "Note to the customer (optional)"])"
+                      Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="200" />
+    </div>
+}
+
+<MudTextField @bind-Value="_message" Label="@L["ข้อความถึงลูกค้า (ไม่บังคับ)", "Message to the customer (optional)"]"
+              Placeholder="@L["เช่น ไข่เยี่ยวม้าหมด เปลี่ยนเป็นไข่ดาวได้ไหม", "e.g. Out of century eggs, fried egg instead?"]"
+              Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" MaxLength="300" Class="mt-2" />
+
+<div class="d-flex align-center mt-2">
+    <MudText Typo="Typo.subtitle1">@L["ยอดรวมที่ลูกค้าจะเห็น", "Total the customer will see"]</MudText>
+    <MudSpacer />
+    <MudText Typo="Typo.subtitle1" Style="font-weight:700">@Fmt.Baht(Total)</MudText>
+</div>
+<MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true" Class="mt-2" Disabled="@(Busy || !Complete)"
+           OnClick="SubmitAsync">@L["ส่งราคาให้ลูกค้า", "Send prices to the customer"]</MudButton>
+@if (!Complete) { <MudText Typo="Typo.caption" Class="ss-muted">@L["ใส่ราคาทุกรายการ หรือเลือก \"ทำไม่ได้\"", "Price every dish or mark it as not possible"]</MudText> }
+
+@code {
+    [Parameter, EditorRequired] public Order Order { get; set; } = default!;
+    [Parameter] public bool Busy { get; set; }
+    /// <summary>Receives the request body for <c>POST merchant/orders/{id}/quote</c>.</summary>
+    [Parameter] public EventCallback<object> Submit { get; set; }
+
+    private sealed class Row(OrderLine line)
+    {
+        public OrderLine Line { get; } = line;
+        public decimal? Price { get; set; } = line.Unavailable || line.UnitPrice == 0 ? null : line.UnitPrice;
+        public bool Unavailable { get; set; } = line.Unavailable;
+        public string? Note { get; set; } = line.ShopNote;
+    }
+
+    private List<Row> _rows = [];
+    private string? _message;
+    private Guid _loadedFor;
+
+    // Prefilled with the previous quote when the shop sends new prices.
+    protected override void OnParametersSet()
+    {
+        if (_loadedFor == Order.Id) return;
+        _loadedFor = Order.Id;
+        _rows = Order.Lines.Where(l => l.IsCustom).Select(l => new Row(l)).ToList();
+        _message = Order.QuoteMessage;
+    }
+
+    // Every dish answered, and something left to make (otherwise the shop should reject the order).
+    private bool Complete => _rows.All(r => r.Unavailable || r.Price is >= 0)
+                             && (_rows.Any(r => !r.Unavailable) || Order.Lines.Any(l => !l.IsCustom));
+
+    private decimal Total => Order.Lines.Where(l => !l.IsCustom).Sum(l => l.LineTotal) - Order.Discount
+                             + _rows.Where(r => !r.Unavailable).Sum(r => (r.Price ?? 0) * r.Line.Quantity);
+
+    private Task SubmitAsync() => Submit.InvokeAsync(new
+    {
+        lines = _rows.Select(r => new { lineId = r.Line.Id, unitPrice = r.Unavailable ? null : r.Price, unavailable = r.Unavailable, note = r.Note }).ToList(),
+        message = _message,
+    });
+}

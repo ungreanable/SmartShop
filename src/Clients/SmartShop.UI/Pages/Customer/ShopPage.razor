@@ -66,6 +66,17 @@
             </MudExpansionPanels>
         </MudPaper>
 
+        @if (_shop.AcceptsCustomOrders && !Suspended)
+        {
+            <MudPaper Outlined="true" Class="pa-3 mt-2 ss-card d-flex align-center gap-2" Style="cursor:pointer" @onclick="OpenCustomAsync">
+                <div style="flex:1; min-width:0">
+                    <MudText Typo="Typo.subtitle1" Style="font-weight:600">✍️ @L["สั่งตามสั่ง", "Custom order"]</MudText>
+                    <MudText Typo="Typo.caption" Class="ss-muted">@L["ไม่มีในเมนู? เขียนสิ่งที่อยากกินได้เลย ร้านจะใส่ราคาให้ก่อนทำ", "Not on the menu? Write what you want; the shop prices it first."]</MudText>
+                </div>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" OnClick="OpenCustomAsync">@L["เขียนรายการ", "Write it"]</MudButton>
+            </MudPaper>
+        }
+
         @if (_menu is null)
         {
             <Loading Rows="3" />
@@ -125,7 +136,7 @@
     <div class="ss-cart-bar">
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Href="/cart" Style="border-radius:28px; justify-content:space-between; text-transform:none">
             <span>🛒 @L["ดูตะกร้า", "View cart"] · @_cart!.ItemCount @L["รายการ", "items"]</span>
-            <span>@Fmt.Baht(_cart.Subtotal)</span>
+            <span>@Fmt.Baht(_cart.Subtotal)@(_cart.NeedsQuote ? " + ✍️" : "")</span>
         </MudButton>
     </div>
 }
@@ -189,6 +200,19 @@
         {
             _cart = cart;
             Snackbar.Add(L["เพิ่มลงตะกร้าแล้ว", "Added to cart"], Severity.Success);
+        }
+    }
+
+    private async Task OpenCustomAsync()
+    {
+        if (_shop is null || Suspended) return;
+        var parameters = new DialogParameters<CustomOrderDialog> { { x => x.ShopId, ShopId } };
+        var dialog = await Dialogs.ShowAsync<CustomOrderDialog>(L["สั่งตามสั่ง", "Custom order"], parameters,
+            new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small, Position = DialogPosition.BottomCenter });
+        if (await dialog.Result is { Canceled: false, Data: Cart cart })
+        {
+            _cart = cart;
+            Snackbar.Add(L["เพิ่มลงตะกร้าแล้ว ร้านจะใส่ราคาหลังคุณสั่ง", "Added. The shop prices it after you order."], Severity.Success);
         }
     }
 

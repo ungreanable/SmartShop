@@ -107,6 +107,24 @@ public class OrderStateMachineTests
         order.Accept(Ids.New(), Now);
         Should.Throw<DomainException>(() => order.Dispatch(Ids.New(), Now));
     }
+
+    [Fact]
+    public void Unanswered_quote_expires_only_after_the_latest_deadline()
+    {
+        var dish = new OrderLine { Id = Ids.New(), ItemId = Guid.Empty, Name = "ผัดกะเพรา", Quantity = 1, IsCustom = true };
+        var order = Order.Place(new PlaceOrder(Ids.New(), Ids.New(), Ids.New(), "ร้าน", Ids.New(), "A-003", FulfillmentType.Pickup, null, null, null, null,
+            [dish], 0, null, null, new PaymentMethodInfo(Ids.New(), PaymentMethodType.Cash, "เงินสด", null, null, null, null, null, null, null, false),
+            null, "k-654321", 15), Now);
+        Should.Throw<ConflictException>(() => order.Accept(Ids.New(), Now)); // custom dishes must be priced first
+
+        order.Quote(Ids.New(), [new QuoteLine(dish.Id, 60, false, null)], null, Now.AddMinutes(15), Now);
+        order.Quote(Ids.New(), [new QuoteLine(dish.Id, 55, false, null)], null, Now.AddMinutes(25), Now.AddMinutes(10)); // new prices, new deadline
+        order.Total.ShouldBe(55);
+
+        order.ExpireQuote(Now.AddMinutes(15)).ShouldBeFalse(); // the first deadline no longer counts
+        order.ExpireQuote(Now.AddMinutes(25)).ShouldBeTrue();
+        order.Status.ShouldBe(OrderStatus.Expired);
+    }
 }
 
 public class InventoryTests

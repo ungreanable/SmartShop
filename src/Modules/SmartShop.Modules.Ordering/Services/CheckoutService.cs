@@ -51,11 +51,18 @@ internal sealed class CheckoutService(
             throw new DomainException("fulfillment_unavailable", "The shop does not offer this option.");
 
         var now = clock.GetUtcNow();
-        var items = await catalog.GetCheckoutItemsAsync(shop.ShopId, cart.Lines.Select(l => l.ItemId).Distinct().ToList(), req.ScheduledFrom ?? now, ct);
+        var needsQuote = cart.Lines.Any(l => l.IsCustom);
+        if (needsQuote && !shop.AcceptsCustomOrders) throw new DomainException("custom_not_accepted", "This shop does not take custom orders.");
+        // Prices of custom dishes are only known after the shop quotes: no coupon on such orders.
+        if (needsQuote && !string.IsNullOrWhiteSpace(req.CouponCode))
+            throw new DomainException("coupon_custom", "Coupons cannot be used on orders with custom dishes.");
+        var items = await catalog.GetCheckoutItemsAsync(shop.ShopId, cart.Lines.Where(l => !l.IsCustom).Select(l => l.ItemId).Distinct().ToList(), req.ScheduledFrom ?? now, ct);
         var (from, to, round) = ResolveTime(req, shop, items, now);
+        if (needsQuote && round is not null)
+            throw new DomainException("mixed_rounds", "Pre-order items must be ordered separately from custom dishes.");
 
         var byId = items.ToDictionary(i => i.ItemId);
-        foreach (var group in cart.Lines.GroupBy(l => l.ItemId))
+        foreach (var group in cart.Lines.Where(l => !l.IsCustom).GroupBy(l => l.ItemId))
         {
             var item = byId.GetValueOrDefault(group.Key) ?? throw new DomainException("item_unavailable", "An item in your cart is no longer available.");
             LinePricer.ThrowIfUnavailable(item, group.Sum(l => l.Quantity));
@@ -65,6 +72,11 @@ internal sealed class CheckoutService(
         var reservations = new List<ReserveLine>();
         foreach (var cl in cart.Lines)
         {
+            if (cl.IsCustom)
+            {
+                lines.Add(new OrderLine { Id = cl.Id, ItemId = Guid.Empty, Name = cl.Note ?? "", Quantity = cl.Quantity, UnitPrice = 0, IsCustom = true });
+                continue;
+            }
             var item = byId[cl.ItemId];
             if (item.AllowedFulfillment is { } allowed && !allowed.Contains(req.FulfillmentType))
                 throw new DomainException("fulfillment_item", $"\"{item.Name}\" is only available for {string.Join("/", allowed)}.");
@@ -87,7 +99,7 @@ internal sealed class CheckoutService(
         }
 
         var subtotal = lines.Sum(l => l.LineTotal);
-        if (req.FulfillmentType == FulfillmentType.Delivery && shop.DeliveryMinOrder is { } min && subtotal < min)
+        if (!needsQuote && req.FulfillmentType == FulfillmentType.Delivery && shop.DeliveryMinOrder is { } min && subtotal < min)
             throw new DomainException("min_order", $"Delivery requires a minimum order of {min:N0} baht.");
 
         var method = shop.PaymentMethods.FirstOrDefault(p => p.Id == req.PaymentMethodId)
@@ -96,7 +108,7 @@ internal sealed class CheckoutService(
 
         var promotions = services.GetService<IPromotionService>();
         DiscountResult? discount = null;
-        if (promotions is not null)
+        if (promotions is not null && !needsQuote)
         {
             discount = await promotions.EvaluateAsync(shop.ShopId, user.Id, req.CouponCode, subtotal, now, ct);
             if (!string.IsNullOrWhiteSpace(req.CouponCode) && discount is null)
@@ -121,9 +133,10 @@ internal sealed class CheckoutService(
 
             await outbox.PublishAsync(new OrderPlaced(order.PlantId, order.Id, order.OrderNo, order.ShopId, order.ShopName, order.CustomerId,
                 order.Subtotal, order.Discount, order.Total, order.FulfillmentType, method.Id, method.Type, from, to, order.PromotionId,
-                order.LineInfos()));
+                order.LineInfos(), needsQuote));
 
-            if (shop.AcceptMode == AcceptMode.Auto)
+            // Custom dishes always wait for the shop's prices, even in shops that accept automatically.
+            if (shop.AcceptMode == AcceptMode.Auto && !needsQuote)
             {
                 order.Accept(null, now);
                 await outbox.PublishAsync(new OrderAccepted(order.PlantId, order.Id, order.OrderNo, order.ShopId, order.ShopName, order.CustomerId, Guid.Empty));

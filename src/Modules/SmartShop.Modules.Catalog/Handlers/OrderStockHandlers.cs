@@ -12,8 +12,9 @@ public static class CatalogOrderPlacedHandler
 {
     public static async Task Handle(OrderPlaced e, CatalogDbContext db, StockAnnouncer announcer, IMessageBus bus, CancellationToken ct)
     {
-        await RoundCounter.AddAsync(db, e.Lines, +1, ct);
-        await Announce.PublishAsync(bus, await announcer.CheckAsync(e.Lines.Select(l => l.ItemId), ct));
+        var lines = Catalogued.Of(e.Lines);
+        await RoundCounter.AddAsync(db, lines, +1, ct);
+        await Announce.PublishAsync(bus, await announcer.CheckAsync(lines.Select(l => l.ItemId), ct));
     }
 }
 
@@ -22,8 +23,9 @@ public static class CatalogOrderCompletedHandler
 {
     public static async Task Handle(OrderCompleted e, StockLedger ledger, StockAnnouncer announcer, IMessageBus bus, CancellationToken ct)
     {
-        await ledger.CommitAsync(e.OrderId, e.Lines.Select(l => l.ItemId), ct);
-        await Announce.PublishAsync(bus, await announcer.CheckAsync(e.Lines.Select(l => l.ItemId), ct));
+        var lines = Catalogued.Of(e.Lines);
+        await ledger.CommitAsync(e.OrderId, lines.Select(l => l.ItemId), ct);
+        await Announce.PublishAsync(bus, await announcer.CheckAsync(lines.Select(l => l.ItemId), ct));
     }
 }
 
@@ -48,11 +50,18 @@ public static class CatalogOrderExpiredHandler
         Release.RunAsync(db, ledger, announcer, bus, e.OrderId, e.Lines, ct);
 }
 
+/// <summary>Custom dishes ("ตามสั่ง") have no catalog item (empty id): nothing to count or release for them.</summary>
+internal static class Catalogued
+{
+    public static IReadOnlyList<OrderLineInfo> Of(IReadOnlyList<OrderLineInfo> lines) => lines.Where(l => l.ItemId != Guid.Empty).ToList();
+}
+
 internal static class Release
 {
     public static async Task RunAsync(CatalogDbContext db, StockLedger ledger, StockAnnouncer announcer, IMessageBus bus, Guid orderId,
         IReadOnlyList<OrderLineInfo> lines, CancellationToken ct)
     {
+        lines = Catalogued.Of(lines);
         await ledger.ReleaseAsync(orderId, lines.Select(l => l.ItemId), ct);
         await RoundCounter.AddAsync(db, lines, -1, ct);
         await Announce.PublishAsync(bus, await announcer.CheckAsync(lines.Select(l => l.ItemId), ct));
