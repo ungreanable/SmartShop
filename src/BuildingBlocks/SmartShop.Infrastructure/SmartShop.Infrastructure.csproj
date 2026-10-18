@@ -10,6 +10,8 @@
     <ProjectReference Include="..\SmartShop.Contracts\SmartShop.Contracts.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Pins the patched version over the one SignalR.StackExchangeRedis brings (see Directory.Packages.props). -->
+    <PackageReference Include="MessagePack" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="EFCore.NamingConventions" />

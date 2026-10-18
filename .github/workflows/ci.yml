@@ -25,12 +25,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
-          global-json-file: global.json
+          # Latest 10.0 SDK (security patches); global.json only sets the minimum (rollForward: latestFeature).
+          dotnet-version: 10.0.x
 
       - name: NuGet cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Packages.props', 'Directory.Build.props', 'global.json') }}
@@ -58,11 +59,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
-          global-json-file: global.json
+          # Latest 10.0 SDK (security patches); global.json only sets the minimum (rollForward: latestFeature).
+          dotnet-version: 10.0.x
       - name: NuGet cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Packages.props', 'Directory.Build.props', 'global.json') }}
@@ -92,11 +94,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
-          global-json-file: global.json
+          # Latest 10.0 SDK (security patches); global.json only sets the minimum (rollForward: latestFeature).
+          dotnet-version: 10.0.x
       - name: NuGet cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Packages.props', 'Directory.Build.props', 'global.json') }}

@@ -31,7 +31,7 @@ jobs:
     outputs:
       done: ${{ steps.retag.outputs.done }}
     steps:
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -83,16 +83,17 @@ jobs:
         arch: [x64, arm64]
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
-          global-json-file: global.json
+          # Latest 10.0 SDK (security patches); global.json only sets the minimum (rollForward: latestFeature).
+          dotnet-version: 10.0.x
       - name: NuGet cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Packages.props', 'Directory.Build.props', 'global.json') }}
           restore-keys: nuget-${{ runner.os }}-
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -113,7 +114,7 @@ jobs:
     if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}

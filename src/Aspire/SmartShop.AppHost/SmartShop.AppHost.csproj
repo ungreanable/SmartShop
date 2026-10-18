@@ -1,10 +1,12 @@
-<Project Sdk="Aspire.AppHost.Sdk/13.6.0">
+<Project Sdk="Aspire.AppHost.Sdk/13.6.1">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <UserSecretsId>smartshop-apphost</UserSecretsId>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Pins the patched version over the one Aspire.Hosting brings (see Directory.Packages.props). -->
+    <PackageReference Include="MessagePack" />
     <PackageReference Include="Aspire.Hosting.PostgreSQL" />
     <PackageReference Include="Aspire.Hosting.Valkey" />
     <PackageReference Include="Aspire.Hosting.RabbitMQ" />
