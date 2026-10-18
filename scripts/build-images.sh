@@ -22,7 +22,8 @@ for project in src/Hosts/SmartShop.Api src/Hosts/SmartShop.Worker src/Clients/Sm
   case "$project" in */SmartShop.Api|*/SmartShop.Worker) r2r=(-r "$runtime" -p:PublishReadyToRun=true) ;; esac
   dotnet publish "$project" -c Release -t:PublishContainer "${r2r[@]}" \
     -p:ContainerRuntimeIdentifier="$runtime" \
-    -p:ContainerRepository="$prefix/$name" -p:ContainerImageTag="$tag"     -p:SourceRevisionId="$(git rev-parse --short=7 HEAD 2>/dev/null || echo local)"
+    -p:ContainerRepository="$prefix/$name" -p:ContainerImageTag="$tag" \
+    -p:SourceRevisionId="$(git rev-parse --short=7 HEAD 2>/dev/null || echo local)"
 done
 
 docker image ls --filter "reference=$prefix/*"
