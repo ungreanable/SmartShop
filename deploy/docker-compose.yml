@@ -78,6 +78,8 @@ services:
       Line__AddFriendUrl: "${LINE_ADD_FRIEND_URL:-}"
       Features__Webhooks: "${FEATURES_WEBHOOKS:-false}"
       Features__Integrations: "${FEATURES_INTEGRATIONS:-false}"
+      # Shown in the app ("SmartShop v0.3.13"); release images are only re-tagged, so the number comes from here.
+      App__Version: "${TAG:-edge}"
       OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
 
   api:

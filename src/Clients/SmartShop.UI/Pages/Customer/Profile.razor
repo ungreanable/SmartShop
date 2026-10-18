@@ -143,7 +143,7 @@
         </MudPaper>
 
         <MudButton FullWidth="true" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Logout" OnClick="SignOutAsync">@L["ออกจากระบบ", "Log out"]</MudButton>
-        <MudText Typo="Typo.caption" Align="Align.Center" Class="ss-muted d-block mt-4">SmartShop · Open source (MIT)</MudText>
+        <MudText Typo="Typo.caption" Align="Align.Center" Class="ss-muted d-block mt-4">SmartShop@(VersionText) · Open source (MIT)</MudText>
     }
 </div>
 
@@ -154,6 +154,7 @@
     private string? _name, _phone, _houseNo, _soi;
     private TimeSpan? _quietFrom, _quietTo;
     private bool _pushSupported;
+    private string VersionText => Config.Version is { Length: > 0 } v ? (char.IsDigit(v[0]) ? $" v{v}" : $" ({v})") : "";
 
     private string PushHint => Push.Kind == "WebPush"
         ? L["อุปกรณ์นี้ไม่รองรับ (iOS: เพิ่มไปที่หน้าจอโฮมก่อน / ในแอป LINE ไม่รองรับ)", "Not supported here (iOS: add to Home Screen first; not inside LINE)"]

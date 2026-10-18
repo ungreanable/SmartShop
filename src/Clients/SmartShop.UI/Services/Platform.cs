@@ -11,6 +11,8 @@ public sealed class AppConfig
     public bool WebhooksEnabled { get; set; }
     /// <summary>Shows the shop's "Integrations (API)" settings; hidden until the feature is ready.</summary>
     public bool IntegrationsEnabled { get; set; }
+    /// <summary>Release number ("0.3.13") or "build abc1234"; null when unknown (e.g. local development).</summary>
+    public string? Version { get; set; }
     public string AppName { get; set; } = "SmartShop";
     public string Platform { get; set; } = "web";
 }

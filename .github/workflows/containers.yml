@@ -106,7 +106,7 @@ jobs:
           bash scripts/codegen.sh "$project"
           dotnet publish "$project" -c Release -t:PublishContainer \
             -p:ContainerRegistry=ghcr.io -p:ContainerRepository="${GITHUB_REPOSITORY_OWNER,,}/$name" \
-            -p:ContainerRuntimeIdentifier="linux-${{ matrix.arch }}" -p:ContainerImageTag="build-$GITHUB_RUN_ID-${{ matrix.arch }}"
+            -p:ContainerRuntimeIdentifier="linux-${{ matrix.arch }}" -p:ContainerImageTag="build-$GITHUB_RUN_ID-${{ matrix.arch }}"             -p:SourceRevisionId="${GITHUB_SHA::7}"
 
   # Combine both architectures into the public multi-arch tags.
   manifest:

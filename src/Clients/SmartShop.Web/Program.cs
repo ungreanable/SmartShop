@@ -32,6 +32,7 @@ app.MapGet("/app-config.json", (IConfiguration config, HttpResponse response) =>
         appName = config["Client:AppName"] ?? "SmartShop",
         webhooksEnabled = config.GetValue("Features:Webhooks", false),
         integrationsEnabled = config.GetValue("Features:Integrations", false),
+        version = AppVersion.Of(config),
         platform = "web",
     });
 });
@@ -51,3 +52,20 @@ app.MapFallbackToFile("index.html");
 
 await app.RunAsync();
 return 0;
+
+/// <summary>
+/// "0.3.13" from the deployed image tag (App:Version = TAG), or the commit the image was built from when the
+/// tag is a moving one (edge / latest) or missing.
+/// </summary>
+internal static class AppVersion
+{
+    public static string? Of(IConfiguration config)
+    {
+        var tag = config["App:Version"]?.Trim().TrimStart('v');
+        if (!string.IsNullOrEmpty(tag) && tag is not ("edge" or "latest")) return tag;
+        var informational = typeof(AppVersion).Assembly
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion;
+        return informational?.Split('+') is [_, var commit, ..] ? "build " + commit[..Math.Min(7, commit.Length)] : null;
+    }
+}

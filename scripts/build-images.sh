@@ -18,7 +18,7 @@ for project in src/Hosts/SmartShop.Api src/Hosts/SmartShop.Worker src/Clients/Sm
   bash scripts/codegen.sh "$project"
   dotnet publish "$project" -c Release -t:PublishContainer \
     -p:ContainerRuntimeIdentifier="$runtime" \
-    -p:ContainerRepository="$prefix/$name" -p:ContainerImageTag="$tag"
+    -p:ContainerRepository="$prefix/$name" -p:ContainerImageTag="$tag"     -p:SourceRevisionId="$(git rev-parse --short=7 HEAD 2>/dev/null || echo local)"
 done
 
 docker image ls --filter "reference=$prefix/*"
