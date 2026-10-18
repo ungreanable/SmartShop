@@ -33,7 +33,8 @@ public static class MessagingSetup
         this IHostApplicationBuilder builder, MessagingRole role, IEnumerable<Assembly> handlerAssemblies)
     {
         var configuration = builder.Configuration;
-        var dbConnection = configuration.GetDatabaseConnectionString();
+        // Wolverine's message store shares the application's pool instead of opening a second one per process.
+        var dataSource = builder.Services.GetSmartShopDataSource(configuration);
         var rabbitConnection = configuration.GetConnectionString("rabbitmq");
 
         if (role != MessagingRole.Standalone && string.IsNullOrWhiteSpace(rabbitConnection))
@@ -55,10 +56,17 @@ public static class MessagingSetup
             if (System.Reflection.Assembly.GetEntryAssembly() is { } host && host.GetName().Name?.StartsWith("SmartShop.", StringComparison.Ordinal) == true)
                 opts.ApplicationAssembly = host;
 
-            opts.PersistMessagesWithPostgresql(dbConnection, ModuleDbContext.WolverineSchema);
+            opts.PersistMessagesWithPostgresql(dataSource, ModuleDbContext.WolverineSchema);
             opts.AutoBuildMessageStorageOnStartup = JasperFx.AutoCreate.CreateOrUpdate;
             if (role == MessagingRole.Standalone)
+            {
                 opts.Durability.Mode = DurabilityMode.Solo;
+                // A single small box that is idle most of the time: poll the database for due scheduled messages (order
+                // expiry, reminders, shop open/close boundaries) and recoverable messages every 15 s instead of 5 s;
+                // those all tolerate a few seconds of lateness. Orphans only exist after a restart of the one node.
+                opts.Durability.ScheduledJobPollingTime = TimeSpan.FromSeconds(15);
+                opts.Durability.OrphanedMessageSweepPollingTime = TimeSpan.FromSeconds(30);
+            }
             opts.UseEntityFrameworkCoreTransactions();
             opts.Policies.AutoApplyTransactions();
             opts.Policies.UseDurableLocalQueues();
