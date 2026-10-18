@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using SmartShop.Contracts.Plants;
 using SmartShop.Contracts.Shops;
 using SmartShop.Infrastructure.Auth;
+using SmartShop.Infrastructure.Messaging;
 
 namespace SmartShop.Infrastructure.Realtime;
 
@@ -89,11 +90,14 @@ internal sealed class RealtimePublisher(IHubContext<RealtimeHub> hub) : IRealtim
 
 public static class RealtimeSetup
 {
-    public static IServiceCollection AddSmartShopRealtime(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddSmartShopRealtime(this IServiceCollection services, IConfiguration configuration,
+        MessagingRole role = MessagingRole.Api)
     {
         var signalR = services.AddSignalR();
         var redis = configuration.GetConnectionString("cache");
-        if (!string.IsNullOrWhiteSpace(redis))
+        // The backplane only matters when another process (the worker, other API replicas) pushes to clients connected
+        // here. A Standalone process is the only one, and the backplane would keep a pub/sub connection open for nothing.
+        if (!string.IsNullOrWhiteSpace(redis) && role != MessagingRole.Standalone)
             signalR.AddStackExchangeRedis(redis, o => o.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("smartshop"));
 
         services.AddSingleton<IRealtimePublisher, RealtimePublisher>();

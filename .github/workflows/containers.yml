@@ -103,7 +103,11 @@ jobs:
           project="${{ matrix.project }}"
           name="$(basename "$project" .csproj | tr '[:upper:]' '[:lower:]' | sed 's/\./-/g')"
           bash scripts/codegen.sh "$project"
-          dotnet publish "$project" -c Release -t:PublishContainer \
+          # ReadyToRun for the server hosts (faster start, less JIT memory). It needs an explicit runtime; the Web host
+          # is left out because the property would also reach its WebAssembly client (NETSDK1095).
+          r2r=()
+          case "$project" in */SmartShop.Api.csproj|*/SmartShop.Worker.csproj) r2r=(-r "linux-${{ matrix.arch }}" -p:PublishReadyToRun=true) ;; esac
+          dotnet publish "$project" -c Release -t:PublishContainer "${r2r[@]}" \
             -p:ContainerRegistry=ghcr.io -p:ContainerRepository="${GITHUB_REPOSITORY_OWNER,,}/$name" \
             -p:ContainerRuntimeIdentifier="linux-${{ matrix.arch }}" -p:ContainerImageTag="build-$GITHUB_RUN_ID-${{ matrix.arch }}"
 

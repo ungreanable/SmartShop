@@ -5,6 +5,7 @@ using SmartShop.Infrastructure.Auth;
 using SmartShop.Infrastructure.Caching;
 using SmartShop.Infrastructure.Http;
 using SmartShop.Infrastructure.Media;
+using SmartShop.Infrastructure.Messaging;
 using SmartShop.Infrastructure.Persistence;
 using SmartShop.Infrastructure.Realtime;
 using SmartShop.Infrastructure.Storage;
@@ -15,7 +16,7 @@ namespace SmartShop.Infrastructure;
 public static class InfrastructureSetup
 {
     /// <summary>Cross-cutting services shared by every host (API and worker).</summary>
-    public static IHostApplicationBuilder AddSmartShopInfrastructure(this IHostApplicationBuilder builder)
+    public static IHostApplicationBuilder AddSmartShopInfrastructure(this IHostApplicationBuilder builder, MessagingRole role = MessagingRole.Api)
     {
         var services = builder.Services;
         var configuration = builder.Configuration;
@@ -24,7 +25,7 @@ public static class InfrastructureSetup
         services.AddSmartShopDataSource(configuration);
         services.AddSmartShopCaching(configuration);
         services.AddSmartShopStorage(configuration);
-        services.AddSmartShopRealtime(configuration);
+        services.AddSmartShopRealtime(configuration, role);
         services.AddSmartShopAuth(configuration);
         services.AddSmartShopTenancy();
         services.AddSingleton<IMediaUrls, MediaUrls>();

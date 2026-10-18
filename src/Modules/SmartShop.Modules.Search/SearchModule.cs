@@ -147,7 +147,9 @@ public sealed class SearchModule : IModule
             var shops = await db.Shops.AsNoTracking()
                 .Where(s => s.PlantId == plant.PlantId && s.IsActive && EF.Functions.ILike(s.SearchText, pattern))
                 .Take(30).ToListAsync(ct);
+            // Only the names: a listing row also carries the schedule jsonb, description and search text.
             var shopNames = await db.Shops.AsNoTracking().Where(s => s.PlantId == plant.PlantId && s.IsActive)
+                .Select(s => new { s.ShopId, s.Name })
                 .ToDictionaryAsync(s => s.ShopId, s => s.Name, ct);
             var items = await db.Items.AsNoTracking()
                 .Where(i => i.PlantId == plant.PlantId && i.IsVisible && EF.Functions.ILike(i.Name, pattern))
