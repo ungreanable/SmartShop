@@ -33,6 +33,7 @@ public sealed class MediaModule : IModule
         builder.Services.AddModuleDbContext<MediaDbContext>(MediaDbContext.SchemaName);
         builder.Services.AddScoped<MediaService>();
         builder.Services.AddScoped<IMediaService>(sp => sp.GetRequiredService<MediaService>());
+        builder.Services.AddSingleton<MediaLookupCache>();
     }
 
     public void MapEndpoints(IEndpointRouteBuilder app)
@@ -69,22 +70,37 @@ public sealed class MediaModule : IModule
         // Anonymous on purpose: <img> tags cannot send tokens. The HMAC signature proves the URL was issued
         // to an authorised viewer and expires within ~2 hours.
         media.MapGet("/{id:guid}/{variant}", async (Guid id, string variant, long exp, string sig, HttpContext http,
-            IMediaUrls urls, MediaDbContext db, IObjectStorage storage, CancellationToken ct) =>
+            IMediaUrls urls, MediaDbContext db, MediaLookupCache lookup, IObjectStorage storage, CancellationToken ct) =>
         {
             var parsed = MediaUrls.Parse(variant);
             if (parsed is null || !urls.Verify(id, parsed.Value, exp, sig)) return Results.NotFound();
 
-            var obj = await db.Objects.AsNoTracking().FirstOrDefaultAsync(m => m.Id == id, ct);
-            if (obj is null) return Results.NotFound();
+            // Media never changes after upload, so id + variant is a strong validator. The signature in the query string
+            // changes every couple of hours, which defeats the browser cache; the ETag still lets it revalidate for free
+            // (no database or object-storage round trip).
+            var etag = $"\"{id:N}-{MediaUrls.Name(parsed.Value)}\"";
+            void CacheHeaders()
+            {
+                http.Response.Headers[HeaderNames.CacheControl] = "private, max-age=3600, immutable";
+                http.Response.Headers[HeaderNames.XContentTypeOptions] = "nosniff";
+                http.Response.Headers[HeaderNames.ETag] = etag;
+            }
+            if (http.Request.Headers.IfNoneMatch.Any(v => v?.Contains(etag, StringComparison.Ordinal) == true))
+            {
+                CacheHeaders();
+                return Results.StatusCode(StatusCodes.Status304NotModified);
+            }
 
-            var key = parsed == MediaVariant.Original || !obj.HasVariants
-                ? obj.OriginalKey
-                : obj.VariantKey(MediaUrls.Name(parsed.Value));
+            var hasVariants = await lookup.HasVariantsAsync(id, db, ct);
+            if (hasVariants is null) return Results.NotFound();
+
+            var key = parsed == MediaVariant.Original || hasVariants == false
+                ? Domain.MediaObject.OriginalKeyOf(id)
+                : Domain.MediaObject.VariantKeyOf(id, MediaUrls.Name(parsed.Value));
             var stored = await storage.GetAsync(key, ct);
             if (stored is null) return Results.NotFound();
 
-            http.Response.Headers[HeaderNames.CacheControl] = "private, max-age=3600, immutable";
-            http.Response.Headers[HeaderNames.XContentTypeOptions] = "nosniff";
+            CacheHeaders();
             return Results.Stream(stored.Content, stored.ContentType, enableRangeProcessing: false);
         }).AllowAnonymous().ExcludeFromDescription();
     }

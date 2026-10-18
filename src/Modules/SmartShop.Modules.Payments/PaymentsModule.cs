@@ -146,7 +146,7 @@ public sealed class PaymentsModule : IModule
     private static async Task<PaymentDto> ToDtoAsync(Payment p, string role, PaymentsDbContext db, IMediaUrls media, IMediaService mediaService, CancellationToken ct)
     {
         var duplicateIds = p.Proofs.Where(x => x.DuplicateOfPaymentId is not null).Select(x => x.DuplicateOfPaymentId!.Value).ToList();
-        var duplicateOrders = await db.Payments.AsNoTracking().Where(x => duplicateIds.Contains(x.Id)).ToDictionaryAsync(x => x.Id, x => x.OrderNo, ct);
+        var duplicateOrders = await db.Payments.AsNoTracking().Where(x => duplicateIds.Contains(x.Id)).Select(x => new { x.Id, x.OrderNo }).ToDictionaryAsync(x => x.Id, x => x.OrderNo, ct);
         var proofs = new List<ProofDto>();
         foreach (var proof in p.Proofs.OrderBy(x => x.UploadedAt))
         {

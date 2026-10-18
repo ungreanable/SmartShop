@@ -36,6 +36,11 @@ public static class Extensions
             logging.IncludeScopes = true;
         });
 
+        // Without a collector nothing reads the traces and metrics, yet instrumentation would still create an Activity per
+        // request/query and keep metric aggregations in memory. Only switch it on when an OTLP endpoint is configured.
+        if (string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]))
+            return builder;
+
         builder.Services.AddOpenTelemetry()
             .WithMetrics(metrics => metrics
                 .AddAspNetCoreInstrumentation()
@@ -48,10 +53,8 @@ public static class Extensions
                 .AddAspNetCoreInstrumentation(o => o.Filter = ctx =>
                     !ctx.Request.Path.StartsWithSegments(HealthEndpointPath) &&
                     !ctx.Request.Path.StartsWithSegments(AlivenessEndpointPath))
-                .AddHttpClientInstrumentation());
-
-        if (!string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]))
-            builder.Services.AddOpenTelemetry().UseOtlpExporter();
+                .AddHttpClientInstrumentation())
+            .UseOtlpExporter();
 
         return builder;
     }

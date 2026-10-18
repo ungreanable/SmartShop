@@ -3,6 +3,8 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using SmartShop.IntegrationTests.Infrastructure;
+using SmartShop.Modules.Notifications.Data;
+using SmartShop.Modules.Notifications.Domain;
 
 namespace SmartShop.IntegrationTests;
 
@@ -152,5 +154,29 @@ public class NotificationTests(SmartShopFactory factory)
         (await TestClient.ProblemCodeAsync(response)).ShouldBe("no_push_channel");
         // Closing is always allowed.
         await owner.PostOkAsync($"/api/merchant/shops/{shopId}/status", new { action = "close" });
+    }
+
+    [Fact]
+    public async Task Notifications_older_than_the_retention_period_are_deleted_with_their_deliveries()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var userId = Guid.NewGuid();
+        Notification Create(int daysAgo) => new(userId, null, "test.retention", NotificationPriority.Low, "t", "b", null, Guid.NewGuid(), now.AddDays(-daysAgo));
+        var (old, recent) = (Create(91), Create(89));
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<NotificationsDbContext>();
+            db.Notifications.AddRange(old, recent);
+            db.Deliveries.AddRange(new NotificationDelivery(old.Id, userId, Channel.Line, old.CreatedAt),
+                new NotificationDelivery(recent.Id, userId, Channel.Line, recent.CreatedAt));
+            await db.SaveChangesAsync();
+        }
+
+        await factory.RunJobAsync("notifications.retention");
+
+        using var check = factory.Services.CreateScope();
+        var after = check.ServiceProvider.GetRequiredService<NotificationsDbContext>();
+        (await after.Notifications.Where(n => n.UserId == userId).Select(n => n.Id).ToListAsync()).ShouldBe([recent.Id]);
+        (await after.Deliveries.Where(d => d.UserId == userId).Select(d => d.NotificationId).ToListAsync()).ShouldBe([recent.Id]);
     }
 }

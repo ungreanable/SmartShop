@@ -137,6 +137,7 @@ internal static class MerchantMemberEndpoints
             await outbox.SaveChangesAndFlushMessagesAsync(ct);
             await cache.RemoveAsync(Infrastructure.Caching.CacheKeys.ShopRole(shop.Id, user.Id), ct);
             await cache.RemoveAsync(Infrastructure.Caching.CacheKeys.ShopRecipients(shop.Id), ct);
+            await MerchantContext.InvalidateShopAsync(cache, shop.Id, ct);
             return new AcceptedInviteDto(shop.Id, shop.Name, invite.Role);
         }).WithTags("Shops").RequirePlantMember();
     }

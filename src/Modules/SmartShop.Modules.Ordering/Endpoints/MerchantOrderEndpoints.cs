@@ -53,8 +53,8 @@ internal static class MerchantOrderEndpoints
                 query = query.Where(o => o.PlacedAt >= start && o.PlacedAt < start.AddDays(1));
             }
             var rows = tab is "new" or "active" or "ready"
-                ? await query.OrderBy(o => o.ScheduledFrom ?? o.PlacedAt).Take(200).ToListAsync(ct)
-                : await query.OrderByDescending(o => o.PlacedAt).Take(100).ToListAsync(ct);
+                ? await query.OrderBy(o => o.ScheduledFrom ?? o.PlacedAt).Take(200).SelectSummaryRows().ToListAsync(ct)
+                : await query.OrderByDescending(o => o.PlacedAt).Take(100).SelectSummaryRows().ToListAsync(ct);
             return await actions.SummariesAsync(rows, ct);
         });
 
@@ -88,19 +88,24 @@ internal static class MerchantOrderEndpoints
         {
             await access.RequireAsync(shopId, ShopRole.Manager, ct);
             var (start, end, f, t) = Range(from, to, clock);
-            var orders = await db.Orders.AsNoTracking().Where(o => o.ShopId == shopId && o.PlacedAt >= start && o.PlacedAt < end).ToListAsync(ct);
+            // The range can be a year: read only the columns each figure needs instead of whole orders (timeline etc.).
+            var range = db.Orders.AsNoTracking().Where(o => o.ShopId == shopId && o.PlacedAt >= start && o.PlacedAt < end);
             // Delivered orders are sales already (they auto-complete after AutoCompleteHours); counting only Completed
             // left the report empty while customers had not pressed "received" yet.
-            var completed = orders.Where(o => o.Status is OrderStatus.Completed or OrderStatus.Delivered).ToList();
-            var revenue = completed.Sum(o => o.Total);
+            var completed = range.Where(o => o.Status == OrderStatus.Completed || o.Status == OrderStatus.Delivered);
             var bangkok = TimeSpan.FromHours(7);
-            var days = completed.GroupBy(o => DateOnly.FromDateTime(o.PlacedAt.ToOffset(bangkok).DateTime))
+            var days = (await completed.Select(o => new { o.PlacedAt, o.Total }).ToListAsync(ct))
+                .GroupBy(o => DateOnly.FromDateTime(o.PlacedAt.ToOffset(bangkok).DateTime))
                 .Select(g => new SalesDayDto(g.Key, g.Count(), g.Sum(o => o.Total))).OrderBy(d => d.Day).ToList();
-            var top = completed.SelectMany(o => o.Lines).Where(l => !l.Unavailable).GroupBy(l => l.Name)
+            var count = days.Sum(d => d.Orders);
+            var revenue = days.Sum(d => d.Revenue);
+            var lines = await completed.Select(o => o.Lines).ToListAsync(ct);
+            var top = lines.SelectMany(l => l).Where(l => !l.Unavailable).GroupBy(l => l.Name)
                 .Select(g => new TopItemDto(g.Key, g.Sum(l => l.Quantity), g.Sum(l => l.LineTotal)))
                 .OrderByDescending(x => x.Quantity).Take(10).ToList();
-            return new SalesReportDto(f, t, completed.Count, revenue, completed.Count == 0 ? 0 : decimal.Round(revenue / completed.Count, 2),
-                orders.Count(o => o.Status is OrderStatus.Cancelled or OrderStatus.Rejected or OrderStatus.Expired), days, top);
+            var cancelled = await range.CountAsync(o => o.Status == OrderStatus.Cancelled || o.Status == OrderStatus.Rejected
+                                                        || o.Status == OrderStatus.Expired, ct);
+            return new SalesReportDto(f, t, count, revenue, count == 0 ? 0 : decimal.Round(revenue / count, 2), cancelled, days, top);
         });
 
         shop.MapGet("/export.csv", async (Guid shopId, DateOnly? from, DateOnly? to, IShopAccess access, OrderingDbContext db, TimeProvider clock, CancellationToken ct) =>
@@ -108,7 +113,9 @@ internal static class MerchantOrderEndpoints
             await access.RequireAsync(shopId, ShopRole.Manager, ct);
             var (start, end, f, t) = Range(from, to, clock);
             var orders = await db.Orders.AsNoTracking().Where(o => o.ShopId == shopId && o.PlacedAt >= start && o.PlacedAt < end)
-                .OrderBy(o => o.PlacedAt).ToListAsync(ct);
+                .OrderBy(o => o.PlacedAt)
+                .Select(o => new { o.OrderNo, o.PlacedAt, o.Status, o.FulfillmentType, o.Lines, o.Subtotal, o.Discount, o.Total, o.PaymentMethodName, o.PaymentStatus })
+                .ToListAsync(ct);
             var csv = new System.Text.StringBuilder("﻿order_no,placed_at,status,fulfillment,items,subtotal,discount,total,payment_method,payment_status\n");
             foreach (var o in orders)
                 csv.AppendLine(string.Join(',', o.OrderNo, o.PlacedAt.ToOffset(TimeSpan.FromHours(7)).ToString("yyyy-MM-dd HH:mm"), o.Status, o.FulfillmentType,

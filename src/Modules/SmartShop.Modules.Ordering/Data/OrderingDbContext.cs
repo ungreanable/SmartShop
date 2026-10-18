@@ -55,6 +55,10 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
             e.OwnsMany(x => x.Timeline, t => t.ToJson("timeline"));
             e.HasIndex(x => new { x.CustomerId, x.IdempotencyKey }).IsUnique();
             e.HasIndex(x => new { x.ShopId, x.Status, x.PlacedAt });
+            // Merchant badge counts poll open orders only; closed ones are the vast majority of the table.
+            e.HasIndex(x => new { x.ShopId, x.Status }).HasFilter("closed_at IS NULL").HasDatabaseName("ix_orders_shop_id_status_open");
+            // Sales report, CSV export and "orders in the last 24 h" filter a shop by placement time across all statuses.
+            e.HasIndex(x => new { x.ShopId, x.PlacedAt });
             e.HasIndex(x => new { x.CustomerId, x.PlacedAt });
             e.HasIndex(x => new { x.PlantId, x.PlacedAt });
             e.HasIndex(x => x.PreOrderRoundId);

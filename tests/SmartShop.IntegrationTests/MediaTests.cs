@@ -71,6 +71,29 @@ public class MediaTests(SmartShopFactory factory)
     }
 
     [Fact]
+    public async Task Cached_image_is_revalidated_with_its_etag_without_sending_it_again()
+    {
+        var (_, admin) = await factory.CreatePlantAsync();
+        var upload = await admin.UploadAsync("ItemImage");
+        var anonymous = factory.CreateClient();
+
+        var first = await anonymous.GetAsync(upload.Url);
+        first.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var etag = first.Headers.ETag.ShouldNotBeNull();
+
+        using var revalidate = new HttpRequestMessage(HttpMethod.Get, upload.Url);
+        revalidate.Headers.IfNoneMatch.Add(etag);
+        var second = await anonymous.SendAsync(revalidate);
+        second.StatusCode.ShouldBe(HttpStatusCode.NotModified);
+        (await second.Content.ReadAsByteArrayAsync()).ShouldBeEmpty();
+
+        // The signature is still checked first: a matching ETag does not open an unsigned URL.
+        using var tampered = new HttpRequestMessage(HttpMethod.Get, upload.Url![..^4] + "0000");
+        tampered.Headers.IfNoneMatch.Add(etag);
+        (await anonymous.SendAsync(tampered)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task Tampered_signature_is_rejected()
     {
         var (_, admin) = await factory.CreatePlantAsync();

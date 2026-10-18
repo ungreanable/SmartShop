@@ -272,6 +272,13 @@ namespace SmartShop.Modules.Ordering.Data.Migrations
                     b.HasIndex("ShopId", "OrderNo")
                         .HasDatabaseName("ix_orders_shop_id_order_no");
 
+                    b.HasIndex("ShopId", "PlacedAt")
+                        .HasDatabaseName("ix_orders_shop_id_placed_at");
+
+                    b.HasIndex("ShopId", "Status")
+                        .HasDatabaseName("ix_orders_shop_id_status_open")
+                        .HasFilter("closed_at IS NULL");
+
                     b.HasIndex("ShopId", "Status", "PlacedAt")
                         .HasDatabaseName("ix_orders_shop_id_status_placed_at");
 

@@ -28,7 +28,7 @@ public static class SmartShopHost
     public static WebApplicationBuilder AddSmartShop(this WebApplicationBuilder builder, MessagingRole role)
     {
         builder.AddServiceDefaults();
-        builder.AddSmartShopInfrastructure();
+        builder.AddSmartShopInfrastructure(role);
 
         foreach (var module in Modules)
             module.Register(builder);

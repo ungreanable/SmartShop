@@ -23,6 +23,7 @@ public static class CacheKeys
     public static string ShopProfile(Guid shopId) => $"shop:{shopId}:profile";
     public static string ShopMenu(Guid shopId) => $"shop:{shopId}:menu";
     public static string ShopRecipients(Guid shopId) => $"shop:{shopId}:notify-recipients";
+    public static string ShopMembers(Guid shopId) => $"shop:{shopId}:members";
     public static string PlantFeed(Guid plantId) => $"plant:{plantId}:feed";
     public static string UserChannels(Guid userId) => $"user:{userId}:channels";
 }
