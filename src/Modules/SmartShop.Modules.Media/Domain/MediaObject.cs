@@ -35,8 +35,11 @@ public sealed class MediaObject
             CreatedAt = now,
         };
 
-    public string OriginalKey => $"{Id:N}/orig";
-    public string VariantKey(string variant) => $"{Id:N}/{variant}.webp";
+    public string OriginalKey => OriginalKeyOf(Id);
+    public string VariantKey(string variant) => VariantKeyOf(Id, variant);
+
+    public static string OriginalKeyOf(Guid id) => $"{id:N}/orig";
+    public static string VariantKeyOf(Guid id, string variant) => $"{id:N}/{variant}.webp";
 
     public MediaInfo ToInfo() => new(Id, OwnerId, PlantId, Purpose, ContentType, Size, Sha256);
 }
