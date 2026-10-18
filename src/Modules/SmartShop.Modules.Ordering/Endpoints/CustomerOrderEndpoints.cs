@@ -49,7 +49,7 @@ internal static class CustomerOrderEndpoints
             var query = db.Orders.AsNoTracking().Where(o => o.PlantId == plant.PlantId && o.CustomerId == user.Id);
             query = scope == "history" ? query.Where(o => !Active.Contains(o.Status)) : query.Where(o => Active.Contains(o.Status));
             var total = await query.CountAsync(ct);
-            var rows = await query.OrderByDescending(o => o.PlacedAt).Skip((number - 1) * size).Take(size).ToListAsync(ct);
+            var rows = await query.OrderByDescending(o => o.PlacedAt).Skip((number - 1) * size).Take(size).SelectSummaryRows().ToListAsync(ct);
             return new PagedResult<OrderSummaryDto>(await actions.SummariesAsync(rows, ct), total, number, size);
         });
 

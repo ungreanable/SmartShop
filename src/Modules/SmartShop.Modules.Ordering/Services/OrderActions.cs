@@ -77,7 +77,7 @@ internal sealed class OrderActions(
         return OrderMapper.ToDto(order, people, labels, urls, role);
     }
 
-    public async Task<List<OrderSummaryDto>> SummariesAsync(IReadOnlyList<Order> orders, CancellationToken ct)
+    public async Task<List<OrderSummaryDto>> SummariesAsync(IReadOnlyList<OrderSummaryRow> orders, CancellationToken ct)
     {
         var people = await users.GetProfilesAsync(orders.Select(o => o.CustomerId), ct);
         return orders.Select(o => OrderMapper.Summary(o, people)).ToList();

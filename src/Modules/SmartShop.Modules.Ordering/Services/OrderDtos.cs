@@ -68,9 +68,25 @@ internal static class OrderMapper
             o.PreOrderRoundId, viewerRole, o.NeedsQuote, o.QuoteMessage);
     }
 
-    public static OrderSummaryDto Summary(Order o, IReadOnlyDictionary<Guid, UserProfile> people) => new(
+    public static OrderSummaryDto Summary(OrderSummaryRow o, IReadOnlyDictionary<Guid, UserProfile> people) => new(
         o.Id, o.OrderNo, o.Status, o.ShopId, o.ShopName, people.GetValueOrDefault(o.CustomerId)?.DisplayName ?? "?",
-        o.DeliveryAddress?.HouseNo, o.FulfillmentType, o.ScheduledFrom, o.ScheduledTo,
+        o.HouseNo, o.FulfillmentType, o.ScheduledFrom, o.ScheduledTo,
         o.Lines.Sum(l => l.Quantity), string.Join(", ", o.Lines.Select(l => $"{l.Name} x{l.Quantity}")),
-        o.Total, o.PaymentMethodType, o.PaymentStatus, o.PlacedAt, o.ExpiresAt, o.CancelRequestedAt is not null, o.NeedsQuote);
+        o.Total, o.PaymentMethodType, o.PaymentStatus, o.PlacedAt, o.ExpiresAt, o.CancelRequested, o.Lines.Any(l => l.IsCustom));
+
+    /// <summary>
+    /// Order lists only need these columns. Loading whole orders also pulled the timeline jsonb (which grows with every
+    /// status change) and everything else for up to 200 rows per request.
+    /// </summary>
+    public static IQueryable<OrderSummaryRow> SelectSummaryRows(this IQueryable<Order> orders) =>
+        orders.Select(o => new OrderSummaryRow(o.Id, o.OrderNo, o.Status, o.ShopId, o.ShopName, o.CustomerId,
+            o.DeliveryAddress == null ? null : o.DeliveryAddress.HouseNo, o.FulfillmentType, o.ScheduledFrom, o.ScheduledTo,
+            o.Lines, o.Total, o.PaymentMethodType, o.PaymentStatus, o.PlacedAt, o.ExpiresAt, o.CancelRequestedAt != null));
 }
+
+/// <summary>The part of an order that list screens show (see <see cref="OrderMapper.SelectSummaryRows"/>).</summary>
+internal sealed record OrderSummaryRow(
+    Guid Id, string OrderNo, OrderStatus Status, Guid ShopId, string ShopName, Guid CustomerId, string? HouseNo,
+    FulfillmentType FulfillmentType, DateTimeOffset? ScheduledFrom, DateTimeOffset? ScheduledTo, List<OrderLine> Lines,
+    decimal Total, PaymentMethodType PaymentMethodType, PaymentStatus PaymentStatus, DateTimeOffset PlacedAt,
+    DateTimeOffset? ExpiresAt, bool CancelRequested);

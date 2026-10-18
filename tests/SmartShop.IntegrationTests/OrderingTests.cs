@@ -13,7 +13,10 @@ public sealed record AddressDto(string? HouseNo, string? Soi, string? Note);
 public sealed record OrderDto(Guid Id, string OrderNo, string Status, Guid ShopId, string FulfillmentType, AddressDto? DeliveryAddress,
     List<OrderLineDto> Lines, decimal Subtotal, decimal Total, string PaymentMethodType, string PaymentStatus, string? AcceptedByName,
     string? CancelReason, List<TimelineDto> Timeline, DateTimeOffset? ScheduledFrom);
-public sealed record SalesReportDto(DateOnly From, DateOnly To, int Orders, decimal Revenue, decimal AverageOrder, int Cancelled);
+public sealed record SalesDayDto(DateOnly Day, int Orders, decimal Revenue);
+public sealed record TopItemDto(string Name, int Quantity, decimal Revenue);
+public sealed record SalesReportDto(DateOnly From, DateOnly To, int Orders, decimal Revenue, decimal AverageOrder, int Cancelled,
+    List<SalesDayDto> Days, List<TopItemDto> TopItems);
 public sealed record OrderViewDto(Guid Id, string Status, string ViewerRole);
 public sealed record OrderSummaryDto(Guid Id, string OrderNo, string Status, string CustomerName, decimal Total, bool CancelRequested);
 
@@ -178,6 +181,9 @@ public class OrderingTests(SmartShopFactory factory)
         var report = await s.Owner.GetAsync<SalesReportDto>($"/api/merchant/shops/{s.ShopId}/orders/report?from={today}&to={today}");
         report.Orders.ShouldBe(2);
         report.Revenue.ShouldBe(100);
+        report.AverageOrder.ShouldBe(50);
+        report.Days.ShouldBe([new SalesDayDto(DateOnly.Parse(today, System.Globalization.CultureInfo.InvariantCulture), 2, 100)]);
+        report.TopItems.ShouldBe([new TopItemDto("ก๋วยเตี๋ยว", 2, 100)]);
     }
 
     [Fact]
