@@ -78,13 +78,40 @@ else
         await Plant.LoadAsync(force: true);
         State.Attach();
         Alarm.Attach();
-        await Realtime.StartAsync();
-        if (Plant.PlantId is { } plantId) await Realtime.JoinPlantAsync(plantId);
-        // Join every shop I work for, so new-order alarms ring anywhere in the app.
-        foreach (var shop in Plant.MyShops) await Realtime.JoinShopAsync(shop.Id);
-        await State.RefreshUnreadAsync();
+        // Show the app now: connecting real time and the unread badge take extra round trips (more on a weak
+        // signal) and nothing on screen needs them to draw.
+        _ = ConnectRealtimeAsync();
+        _ = RefreshUnreadAsync();
         await ResumeJoinAsync();
         _ = RefreshPushAsync();
+    }
+
+    private async Task ConnectRealtimeAsync()
+    {
+        try
+        {
+            // Groups are remembered before connecting; StartAsync joins them all at once.
+            if (Plant.PlantId is { } plantId) await Realtime.JoinPlantAsync(plantId);
+            // Join every shop I work for, so new-order alarms ring anywhere in the app.
+            foreach (var shop in Plant.MyShops) await Realtime.JoinShopAsync(shop.Id);
+            await Realtime.StartAsync();
+        }
+        catch (Exception e) when (e is JSException or HttpRequestException or InvalidOperationException or TaskCanceledException)
+        {
+            // Pages still load over plain HTTP; Realtime keeps retrying on its own.
+        }
+    }
+
+    private async Task RefreshUnreadAsync()
+    {
+        try
+        {
+            await State.RefreshUnreadAsync();
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            // Only the badge; it is refreshed again on the next notification or reconnect.
+        }
     }
 
     /// <summary>

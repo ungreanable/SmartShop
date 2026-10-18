@@ -44,7 +44,8 @@ window.smartshop = (() => {
   const liff = {
     isLineBrowser,
     init: async (liffId) => {
-      if (!liffId) return { ready: false };
+      // The SDK is a sizeable extra download and only logs in silently inside LINE; other browsers log in with the OAuth redirect.
+      if (!liffId || !isLineBrowser()) return { ready: false };
       await loadScript('https://static.line-scdn.net/liff/edge/2/sdk.js');
       await window.liff.init({ liffId });
       return { ready: true, inClient: window.liff.isInClient(), loggedIn: window.liff.isLoggedIn() };
@@ -167,6 +168,13 @@ window.smartshop = (() => {
   };
   const scrollTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   const hasFocus = () => document.hasFocus();
+  // Tells .NET when the app is back in front or the network returns, so real time reconnects right away
+  // instead of waiting out its back-off (phones drop connections whenever the screen turns off).
+  const onPageVisible = (dotnet) => {
+    const notify = () => { if (document.visibilityState === 'visible') dotnet.invokeMethodAsync('OnPageVisible').catch(() => { }); };
+    document.addEventListener('visibilitychange', notify);
+    window.addEventListener('online', notify);
+  };
   const setBadge = (count) => { try { count > 0 ? navigator.setAppBadge?.(count) : navigator.clearAppBadge?.(); } catch { } };
   const deviceLabel = () => {
     const ua = navigator.userAgent;
@@ -175,5 +183,5 @@ window.smartshop = (() => {
     return `${browser} · ${os}`;
   };
 
-  return { storage, alarm, liff, lineLogin, takeLoginState, push, copy, share, shareFile, saveImage, download, scrollTo, setBadge, deviceLabel, hasFocus };
+  return { storage, alarm, liff, lineLogin, takeLoginState, push, copy, share, shareFile, saveImage, download, scrollTo, setBadge, deviceLabel, hasFocus, onPageVisible };
 })();

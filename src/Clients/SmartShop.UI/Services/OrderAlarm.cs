@@ -29,8 +29,16 @@ public sealed class OrderAlarm(Realtime realtime, Browser browser, ISnackbar sna
     {
         realtime.NewOrder -= OnNewOrder;
         realtime.OrderClaimed -= OnClaimed;
+        realtime.Resynced -= OnResynced;
         realtime.NewOrder += OnNewOrder;
         realtime.OrderClaimed += OnClaimed;
+        realtime.Resynced += OnResynced;
+    }
+
+    // Claims sent while the connection was down are lost: check now instead of on the next timer tick.
+    private async void OnResynced()
+    {
+        if (_pending.Count > 0) await RecheckAsync();
     }
 
     public async Task SilenceAsync()

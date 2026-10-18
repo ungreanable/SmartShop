@@ -20,7 +20,7 @@
     {
         @foreach (var o in _orders)
         {
-            <MudPaper Outlined="true" Class="pa-3 mb-2 ss-card" Style="cursor:pointer" @onclick="@(() => Nav.NavigateTo($"/orders/{o.Id}"))">
+            <MudPaper @key="o.Id" Outlined="true" Class="pa-3 mb-2 ss-card" Style="cursor:pointer" @onclick="@(() => Nav.NavigateTo($"/orders/{o.Id}"))">
                 <div class="d-flex align-center">
                     <MudText Typo="Typo.subtitle1" Style="font-weight:600">@o.ShopName</MudText>
                     <MudSpacer />
@@ -41,9 +41,17 @@
     private int _tab;
     private List<OrderSummary>? _orders;
 
+    private Reloader? _reload;
+
     protected override async Task OnInitializedAsync()
     {
+        _reload = new Reloader(async () =>
+        {
+            await FetchAsync();
+            StateHasChanged();
+        });
         Realtime.OrderUpdated += OnUpdated;
+        Realtime.Resynced += OnUpdated;
         await LoadAsync(0);
     }
 
@@ -51,15 +59,25 @@
     {
         _tab = tab;
         _orders = null;
-        var page = await Api.Get<PagedResult<OrderSummary>>($"api/orders?scope={(tab == 0 ? "active" : "history")}");
-        _orders = page?.Items ?? [];
+        await _reload!.RunNowAsync();
     }
 
-    private async void OnUpdated(JsonElement _)
+    private async Task FetchAsync()
     {
-        await LoadAsync(_tab);
-        await InvokeAsync(StateHasChanged);
+        var tab = _tab;
+        var page = await Api.Get<PagedResult<OrderSummary>>($"api/orders?scope={(tab == 0 ? "active" : "history")}");
+        if (tab == _tab) _orders = page?.Items ?? _orders ?? []; // switched tabs meanwhile: the queued reload shows that one
     }
 
-    public void Dispose() => Realtime.OrderUpdated -= OnUpdated;
+    // One order step often sends a few events in a row: reload once, in place (no loading flash).
+    private void OnUpdated(JsonElement _) => OnUpdated();
+
+    private void OnUpdated() => _ = InvokeAsync(() => _reload?.Schedule(TimeSpan.FromMilliseconds(400)));
+
+    public void Dispose()
+    {
+        Realtime.OrderUpdated -= OnUpdated;
+        Realtime.Resynced -= OnUpdated;
+        _reload?.Dispose();
+    }
 }

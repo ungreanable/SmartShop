@@ -40,7 +40,9 @@
     protected override async Task OnParametersSetAsync()
     {
         Realtime.OrderMessage -= OnMessage;
+        Realtime.Resynced -= OnResynced;
         Realtime.OrderMessage += OnMessage;
+        Realtime.Resynced += OnResynced;
         await LoadAsync();
     }
 
@@ -71,5 +73,16 @@
         await InvokeAsync(StateHasChanged);
     }
 
-    public void Dispose() => Realtime.OrderMessage -= OnMessage;
+    // Messages sent while the connection was down never arrive as events.
+    private async void OnResynced()
+    {
+        await LoadAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        Realtime.OrderMessage -= OnMessage;
+        Realtime.Resynced -= OnResynced;
+    }
 }

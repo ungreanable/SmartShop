@@ -49,7 +49,7 @@
             <div class="ss-hscroll mb-4">
                 @foreach (var s in _home.OpenNow)
                 {
-                    <div class="ss-mini-card" style="cursor:pointer" @onclick="@(() => Nav.NavigateTo($"/shops/{s.Id}"))">
+                    <div @key="s.Id" class="ss-mini-card" style="cursor:pointer" @onclick="@(() => Nav.NavigateTo($"/shops/{s.Id}"))">
                         @if ((s.CoverUrl ?? s.LogoUrl) is { } img) { <img src="@img" alt="" loading="lazy" /> }
                         else { <div style="width:160px;height:100px;border-radius:12px;background:#DFF5E8" class="d-flex align-center justify-center"><MudIcon Icon="@Icons.Material.Filled.Storefront" Color="Color.Primary" /></div> }
                         <MudText Typo="Typo.subtitle2" Class="mt-1" Style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">@s.Name</MudText>
@@ -62,7 +62,7 @@
         <MudText Typo="Typo.h6" Class="mb-2" Style="font-weight:700">@L["ร้านทั้งหมด", "All shops"]</MudText>
         @foreach (var s in _home.Shops)
         {
-            <ShopCardView Shop="s" />
+            <ShopCardView @key="s.Id" Shop="s" />
         }
     }
 </div>
@@ -84,16 +84,32 @@
     private string? _category;
     private string? _q;
 
+    private Reloader? _homeReload;
+    private Reloader? _fullReload;
+
     protected override async Task OnInitializedAsync()
     {
+        _homeReload = new Reloader(async () =>
+        {
+            _home = await Api.Get<HomeFeed>(HomeUrl, silent: true) ?? _home;
+            StateHasChanged();
+        });
+        _fullReload = new Reloader(async () =>
+        {
+            await LoadAsync();
+            StateHasChanged();
+        });
         Realtime.ShopStatusChanged += OnShopChanged;
+        Realtime.Resynced += OnResynced;
         Plant.Changed += OnPlantChanged;
         await LoadAsync();
     }
 
+    private string HomeUrl => $"api/home{(_category is null ? "" : "?category=" + Uri.EscapeDataString(_category))}";
+
     private async Task LoadAsync()
     {
-        var home = Api.Get<HomeFeed>($"api/home{(_category is null ? "" : "?category=" + Uri.EscapeDataString(_category))}");
+        var home = Api.Get<HomeFeed>(HomeUrl);
         var cart = Api.Get<Cart>("api/cart", silent: true);
         var news = Api.Get<List<Announcement>>("api/plant/announcements", silent: true);
         _home = await home;
@@ -113,11 +129,17 @@
         if (!string.IsNullOrWhiteSpace(_q)) Nav.NavigateTo($"/search?q={Uri.EscapeDataString(_q)}");
     }
 
-    private async void OnShopChanged(JsonElement _)
+    // shop.status goes to the whole village: every open phone would reload at once when a shop opens, so wait a
+    // random 1-4 s (several changes then share one reload) and fetch only the shop list, not the cart or news.
+    private void OnShopChanged(JsonElement e)
     {
-        await LoadAsync();
-        await InvokeAsync(StateHasChanged);
+        // Filtered by category and that shop is not in the list: nothing on screen changes.
+        if (_category is not null && _home is not null && e.TryGetProperty("shopId", out var id) && id.TryGetGuid(out var shopId)
+            && !_home.Shops.Any(s => s.Id == shopId)) return;
+        _ = InvokeAsync(() => _homeReload?.ScheduleJittered(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(4)));
     }
+
+    private void OnResynced() => _ = InvokeAsync(() => _fullReload?.ScheduleJittered(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(4)));
 
     private async void OnPlantChanged()
     {
@@ -130,6 +152,9 @@
     public void Dispose()
     {
         Realtime.ShopStatusChanged -= OnShopChanged;
+        Realtime.Resynced -= OnResynced;
         Plant.Changed -= OnPlantChanged;
+        _homeReload?.Dispose();
+        _fullReload?.Dispose();
     }
 }
