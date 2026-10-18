@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Hybrid;
 using SmartShop.Contracts.Shops;
 using SmartShop.Infrastructure.Auth;
 using SmartShop.Infrastructure.Media;
@@ -100,7 +101,7 @@ internal static class ShopEndpoints
         });
 
         admin.MapPost("/{id:guid}/suspend", async (Guid id, SuspendRequest req, ICurrentPlant plant, ICurrentUser user,
-            IDbContextOutbox<ShopsDbContext> outbox, CancellationToken ct) =>
+            IDbContextOutbox<ShopsDbContext> outbox, HybridCache cache, CancellationToken ct) =>
         {
             var shop = await outbox.DbContext.Shops.FirstOrDefaultAsync(s => s.Id == id && s.PlantId == plant.PlantId, ct)
                        ?? throw new NotFoundException("Shop", id);
@@ -108,23 +109,25 @@ internal static class ShopEndpoints
             await outbox.PublishAsync(new ShopSuspended(shop.PlantId, shop.Id, user.Id, req.Reason, req.Visible));
             await outbox.PublishAsync(new EvaluateShopStatus(shop.Id));
             await outbox.SaveChangesAndFlushMessagesAsync(ct);
+            await MerchantContext.InvalidateShopAsync(cache, shop.Id, ct);
             return Results.NoContent();
         });
 
         // Show or hide a suspended shop from customers without lifting the suspension.
         admin.MapPut("/{id:guid}/suspension-visibility", async (Guid id, SuspensionVisibilityRequest req, ICurrentPlant plant,
-            IDbContextOutbox<ShopsDbContext> outbox, CancellationToken ct) =>
+            IDbContextOutbox<ShopsDbContext> outbox, HybridCache cache, CancellationToken ct) =>
         {
             var shop = await outbox.DbContext.Shops.FirstOrDefaultAsync(s => s.Id == id && s.PlantId == plant.PlantId, ct)
                        ?? throw new NotFoundException("Shop", id);
             shop.SetVisibleWhileSuspended(req.Visible);
             await outbox.PublishAsync(new ShopProfileUpdated(shop.PlantId, shop.Id));
             await outbox.SaveChangesAndFlushMessagesAsync(ct);
+            await MerchantContext.InvalidateShopAsync(cache, shop.Id, ct);
             return Results.NoContent();
         });
 
         admin.MapPost("/{id:guid}/reinstate", async (Guid id, ICurrentPlant plant, ICurrentUser user,
-            IDbContextOutbox<ShopsDbContext> outbox, CancellationToken ct) =>
+            IDbContextOutbox<ShopsDbContext> outbox, HybridCache cache, CancellationToken ct) =>
         {
             var shop = await outbox.DbContext.Shops.FirstOrDefaultAsync(s => s.Id == id && s.PlantId == plant.PlantId, ct)
                        ?? throw new NotFoundException("Shop", id);
@@ -132,6 +135,7 @@ internal static class ShopEndpoints
             await outbox.PublishAsync(new ShopReinstated(shop.PlantId, shop.Id, user.Id));
             await outbox.PublishAsync(new EvaluateShopStatus(shop.Id));
             await outbox.SaveChangesAndFlushMessagesAsync(ct);
+            await MerchantContext.InvalidateShopAsync(cache, shop.Id, ct);
             return Results.NoContent();
         });
     }

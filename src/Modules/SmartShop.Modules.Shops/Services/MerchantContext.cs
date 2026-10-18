@@ -46,8 +46,12 @@ internal sealed class MerchantContext(
         foreach (var e in events) await outbox.PublishAsync(e);
         if (reevaluate) await outbox.PublishAsync(new EvaluateShopStatus(shop.Id));
         await outbox.SaveChangesAndFlushMessagesAsync(ct);
-        await cache.RemoveAsync(CacheKeys.ShopProfile(shop.Id), ct);
+        await InvalidateShopAsync(cache, shop.Id, ct);
     }
+
+    /// <summary>Drops the cached <see cref="ShopOrderingInfo"/> and member list after any change to the shop.</summary>
+    public static ValueTask InvalidateShopAsync(HybridCache cache, Guid shopId, CancellationToken ct) =>
+        cache.RemoveAsync([CacheKeys.ShopProfile(shopId), CacheKeys.ShopMembers(shopId)], ct);
 
     public ValueTask InvalidateRoleAsync(Guid shopId, Guid userId, CancellationToken ct) =>
         cache.RemoveAsync(CacheKeys.ShopRole(shopId, userId), ct);

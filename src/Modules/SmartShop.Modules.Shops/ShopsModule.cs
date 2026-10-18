@@ -19,7 +19,9 @@ public sealed class ShopsModule : IModule
     public void Register(IHostApplicationBuilder builder)
     {
         var services = builder.Services;
-        services.AddModuleDbContext<ShopsDbContext>(ShopsDbContext.SchemaName);
+        // A shop auto-includes closures, members and payment methods; one JOIN would multiply their rows together.
+        services.AddModuleDbContext<ShopsDbContext>(ShopsDbContext.SchemaName,
+            npgsql => npgsql.UseQuerySplittingBehavior(Microsoft.EntityFrameworkCore.QuerySplittingBehavior.SplitQuery));
         services.AddScoped<IShopDirectory, ShopDirectory>();
         services.AddScoped<MerchantContext>();
         services.AddScoped<ApplicationEndpoints.ReviewCtx>();

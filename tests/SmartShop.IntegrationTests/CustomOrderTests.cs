@@ -133,4 +133,24 @@ public class CustomOrderTests(SmartShopFactory factory)
         (await CheckoutRawAsync(s.Customer, new { fulfillmentType = "Pickup", paymentMethodId = s.CashId, couponCode = "SAVE10" }))
             .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
+
+    /// <summary>The shop's ordering settings are cached; every merchant change must still apply to the very next request.</summary>
+    [Fact]
+    public async Task Shop_setting_changes_apply_to_the_next_cart_and_checkout_despite_caching()
+    {
+        var s = await SetupAsync(acceptsCustom: false);
+        (await s.Customer.PostRawAsync("/api/cart/custom", new { shopId = s.ShopId, text = "ผัดกะเพรา" })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        await s.Owner.PutOkAsync($"/api/merchant/shops/{s.ShopId}/custom-orders", new { enabled = true });
+        await s.Customer.PostOkAsync("/api/cart/custom", new { shopId = s.ShopId, text = "ผัดกะเพรา" });
+
+        await s.Owner.PostOkAsync($"/api/merchant/shops/{s.ShopId}/payment-methods",
+            new { type = "PromptPayQr", displayName = "พร้อมเพย์", promptPayId = "081-234-5678" });
+        await s.Owner.PutOkAsync($"/api/merchant/shops/{s.ShopId}/payment-methods/{s.CashId}", new { type = "Cash", displayName = "เงินสด", enabled = false });
+        (await TestClient.ProblemCodeAsync(await CheckoutRawAsync(s.Customer, new { fulfillmentType = "Pickup", paymentMethodId = s.CashId })))
+            .ShouldBe("payment_method_invalid");
+
+        await s.Owner.PutOkAsync($"/api/merchant/shops/{s.ShopId}/custom-orders", new { enabled = false });
+        (await s.Customer.PostRawAsync("/api/cart/custom", new { shopId = s.ShopId, text = "ต้มยำ" })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
 }
