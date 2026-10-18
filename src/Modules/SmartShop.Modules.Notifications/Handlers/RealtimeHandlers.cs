@@ -14,14 +14,14 @@ public static class RealtimeOrderHandler
 {
     public static async Task Handle(OrderPlaced e, IRealtimePublisher rt, CancellationToken ct)
     {
-        await rt.ToShopAsync(e.ShopId, RealtimeEvents.NewOrder, new { e.OrderId, e.OrderNo, e.Total, items = e.Lines.Sum(l => l.Quantity) }, ct);
-        await rt.ToUserAsync(e.CustomerId, RealtimeEvents.OrderUpdated, new { e.OrderId, status = "PendingAcceptance" }, ct);
+        await rt.ToShopAsync(e.ShopId, RealtimeEvents.NewOrder, new { e.OrderId, e.ShopId, e.OrderNo, e.Total, items = e.Lines.Sum(l => l.Quantity) }, ct);
+        await rt.ToUserAsync(e.CustomerId, RealtimeEvents.OrderUpdated, new { e.OrderId, e.ShopId, status = "PendingAcceptance" }, ct);
     }
 
     public static async Task Handle(OrderAccepted e, IRealtimePublisher rt, CancellationToken ct)
     {
         // Every other device of the shop stops ringing: "accepted by X".
-        await rt.ToShopAsync(e.ShopId, RealtimeEvents.OrderClaimed, new { e.OrderId, e.OrderNo, by = e.ActorId }, ct);
+        await rt.ToShopAsync(e.ShopId, RealtimeEvents.OrderClaimed, new { e.OrderId, e.ShopId, e.OrderNo, by = e.ActorId }, ct);
         await Updated(rt, e.ShopId, e.CustomerId, e.OrderId, OrderStatus.Accepted, ct);
     }
 
@@ -35,7 +35,7 @@ public static class RealtimeOrderHandler
     public static Task Handle(OrderOutForDelivery e, IRealtimePublisher rt, CancellationToken ct) => Updated(rt, e.ShopId, e.CustomerId, e.OrderId, OrderStatus.OutForDelivery, ct);
     public static Task Handle(OrderDelivered e, IRealtimePublisher rt, CancellationToken ct) => Updated(rt, e.ShopId, e.CustomerId, e.OrderId, OrderStatus.Delivered, ct);
     public static Task Handle(OrderCompleted e, IRealtimePublisher rt, CancellationToken ct) => Updated(rt, e.ShopId, e.CustomerId, e.OrderId, OrderStatus.Completed, ct);
-    public static Task Handle(OrderCancellationRequested e, IRealtimePublisher rt, CancellationToken ct) => rt.ToShopAsync(e.ShopId, RealtimeEvents.OrderUpdated, new { e.OrderId, cancelRequested = true }, ct);
+    public static Task Handle(OrderCancellationRequested e, IRealtimePublisher rt, CancellationToken ct) => rt.ToShopAsync(e.ShopId, RealtimeEvents.OrderUpdated, new { e.OrderId, e.ShopId, cancelRequested = true }, ct);
 
     public static async Task Handle(OrderMessagePosted e, IRealtimePublisher rt, CancellationToken ct)
     {
@@ -45,14 +45,14 @@ public static class RealtimeOrderHandler
 
     private static async Task Claimed(IRealtimePublisher rt, Guid shopId, Guid customerId, Guid orderId, string orderNo, OrderStatus status, CancellationToken ct)
     {
-        await rt.ToShopAsync(shopId, RealtimeEvents.OrderClaimed, new { orderId, orderNo, by = (Guid?)null }, ct);
+        await rt.ToShopAsync(shopId, RealtimeEvents.OrderClaimed, new { orderId, shopId, orderNo, by = (Guid?)null }, ct);
         await Updated(rt, shopId, customerId, orderId, status, ct);
     }
 
     private static async Task Updated(IRealtimePublisher rt, Guid shopId, Guid customerId, Guid orderId, OrderStatus status, CancellationToken ct)
     {
-        await rt.ToShopAsync(shopId, RealtimeEvents.OrderUpdated, new { orderId, status = status.ToString() }, ct);
-        await rt.ToUserAsync(customerId, RealtimeEvents.OrderUpdated, new { orderId, status = status.ToString() }, ct);
+        await rt.ToShopAsync(shopId, RealtimeEvents.OrderUpdated, new { orderId, shopId, status = status.ToString() }, ct);
+        await rt.ToUserAsync(customerId, RealtimeEvents.OrderUpdated, new { orderId, shopId, status = status.ToString() }, ct);
     }
 }
 
