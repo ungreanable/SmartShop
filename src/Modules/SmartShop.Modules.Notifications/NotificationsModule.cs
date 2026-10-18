@@ -46,6 +46,7 @@ public sealed class NotificationsModule : IModule
         services.AddHttpClient<ILineMessagingClient, LineMessagingClient>();
         services.AddScoped<NotificationDispatcher>();
         services.AddScoped<INotificationChannelDirectory, ChannelDirectory>();
+        services.AddScoped<SmartShop.Infrastructure.Jobs.IRecurringJob, NotificationRetentionJob>();
     }
 
     public void MapEndpoints(IEndpointRouteBuilder app) => NotificationEndpoints.Map(app);
