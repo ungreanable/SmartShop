@@ -98,7 +98,8 @@
                 <MudText id="@($"cat-{i}")" Typo="Typo.h6" Class="mt-4 ss-section-title" Style="font-weight:700">@Title(c)</MudText>
                 @foreach (var item in c.Items)
                 {
-                    <div class="ss-item @(item.IsOrderable ? "" : "ss-unavailable")" @onclick="@(() => OpenItemAsync(item))">
+                    @* Keyed with the section: recommended dishes are listed twice (top section and their own category). *@
+                    <div @key="(i, item.Id)" class="ss-item @(item.IsOrderable ? "" : "ss-unavailable")" @onclick="@(() => OpenItemAsync(item))">
                         <div style="flex:1; min-width:0">
                             <MudText Typo="Typo.subtitle1" Style="font-weight:600">@item.Name</MudText>
                             @if (item.Description is not null) { <MudText Typo="Typo.caption" Class="ss-muted ss-clamp-2">@item.Description</MudText> }

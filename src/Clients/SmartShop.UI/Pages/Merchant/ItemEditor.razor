@@ -175,11 +175,15 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        _categories = await Api.Get<List<Category>>($"api/merchant/shops/{ShopId}/catalog/categories") ?? [];
-        _rounds = await Api.Get<List<Round>>($"api/merchant/shops/{ShopId}/catalog/rounds", silent: true) ?? [];
+        // Independent lists: ask for them together (one round trip instead of three).
+        var categories = Api.Get<List<Category>>($"api/merchant/shops/{ShopId}/catalog/categories");
+        var rounds = Api.Get<List<Round>>($"api/merchant/shops/{ShopId}/catalog/rounds", silent: true);
+        var allItems = ItemId is null ? null : Api.Get<List<MerchantItem>>($"api/merchant/shops/{ShopId}/catalog/items");
+        _categories = await categories ?? [];
+        _rounds = await rounds ?? [];
         if (ItemId is { } id)
         {
-            var items = await Api.Get<List<MerchantItem>>($"api/merchant/shops/{ShopId}/catalog/items") ?? [];
+            var items = await allItems! ?? [];
             var m = items.FirstOrDefault(x => x.Item.Id == id);
             if (m is null) { Nav.NavigateTo($"/merchant/{ShopId}/menu"); return; }
             var i = m.Item;
