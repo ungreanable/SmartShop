@@ -25,7 +25,7 @@
             </div>
             @foreach (var line in _cart.Lines)
             {
-                <div class="d-flex gap-2 py-2 align-center" style="border-top:1px solid var(--mud-palette-lines-default)">
+                <div @key="line.Id" class="d-flex gap-2 py-2 align-center" style="border-top:1px solid var(--mud-palette-lines-default)">
                     <div style="flex:1; min-width:0">
                         <MudText Typo="Typo.body1">@line.Name</MudText>
                         @if (line.IsCustom) { <MudText Typo="Typo.caption" Color="Color.Secondary">✍️ @L["ตามสั่ง · ร้านใส่ราคาหลังสั่ง", "Custom · the shop prices it after you order"]</MudText> }

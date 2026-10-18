@@ -14,7 +14,16 @@ public sealed class AppState(Api api, Realtime realtime, Session session)
     public void Attach()
     {
         realtime.Notification -= OnNotification;
+        realtime.Resynced -= OnResynced;
         realtime.Notification += OnNotification;
+        realtime.Resynced += OnResynced;
+    }
+
+    // Notifications sent while the connection was down were not counted.
+    private async void OnResynced()
+    {
+        try { await RefreshUnreadAsync(); }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException) { }
     }
 
     public async Task RefreshUnreadAsync()

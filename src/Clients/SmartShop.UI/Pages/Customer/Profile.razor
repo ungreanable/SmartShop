@@ -162,14 +162,16 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _me = await Api.Get<Me>("api/me");
-        _name = _me?.DisplayName;
-        _phone = _me?.Phone;
+        // Profile, channels and settings are independent: one round trip instead of three.
+        var me = Api.Get<Me>("api/me");
         _houseNo = Plant.Current?.HouseNo;
         _soi = Plant.Current?.Soi;
         _pushSupported = await Push.IsSupportedAsync();
         PushEvents.DeviceRegistered += OnDeviceRegistered;
-        await LoadChannelsAsync();
+        await Task.WhenAll(me, LoadChannelsAsync());
+        _me = await me;
+        _name = _me?.DisplayName;
+        _phone = _me?.Phone;
     }
 
     // The app registered this device in the background after the page loaded: show it as on.
@@ -187,10 +189,12 @@
 
     private async Task LoadChannelsAsync()
     {
+        var channels = Api.Get<Channels>("api/notifications/channels", silent: true);
+        var settings = Api.Get<NotificationSettings>("api/notifications/settings", silent: true);
         _currentKey = await Push.CurrentKeyAsync();
         _permission = _pushSupported ? await Push.PermissionAsync() : null;
-        _channels = await Api.Get<Channels>("api/notifications/channels", silent: true);
-        _settings = await Api.Get<NotificationSettings>("api/notifications/settings", silent: true);
+        _channels = await channels;
+        _settings = await settings;
         _quietFrom = _settings?.QuietFrom is { } f ? TimeSpan.Parse(f, System.Globalization.CultureInfo.InvariantCulture) : null;
         _quietTo = _settings?.QuietTo is { } t ? TimeSpan.Parse(t, System.Globalization.CultureInfo.InvariantCulture) : null;
     }

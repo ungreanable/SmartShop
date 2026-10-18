@@ -3,6 +3,7 @@
 @inject Api Api
 @inject IDialogService Dialogs
 @inject ISnackbar Snackbar
+@implements IDisposable
 
 <div class="ss-page">
     <div class="d-flex align-center mb-2">
@@ -30,7 +31,7 @@
         @foreach (var m in Filtered)
         {
             var i = m.Item;
-            <div class="ss-item" style="cursor:default">
+            <div @key="i.Id" class="ss-item" style="cursor:default">
                 @if (i.ThumbnailUrl is not null) { <img class="ss-item-img" src="@i.ThumbnailUrl" alt="" style="width:64px;height:64px" /> }
                 <div style="flex:1; min-width:0">
                     <MudLink Href="@($"/merchant/{ShopId}/menu/{i.Id}")" Typo="Typo.subtitle1" Style="font-weight:600">@i.Name</MudLink>
@@ -112,24 +113,45 @@
 
     private string Base(Guid itemId) => $"api/merchant/shops/{ShopId}/catalog/items/{itemId}";
 
+    // Staff flip many switches in a row (closing time, sold-out rush). Show each change at once from what the API
+    // answered, and refresh only the item list once they pause: the server works out the derived parts (e.g. why an
+    // item cannot be ordered). Categories do not change here, so they are not fetched again.
+    private Reloader? _refresh;
+
+    private void Patch(MerchantItem m, Func<MerchantItem, MerchantItem> change)
+    {
+        var index = _items?.FindIndex(x => x.Item.Id == m.Item.Id) ?? -1;
+        if (index >= 0) _items![index] = change(_items[index]);
+        _refresh ??= new Reloader(async () =>
+        {
+            _items = await Api.Get<List<MerchantItem>>($"api/merchant/shops/{ShopId}/catalog/items", silent: true) ?? _items;
+            StateHasChanged();
+        });
+        _refresh.Schedule(TimeSpan.FromSeconds(2));
+    }
+
+    public void Dispose() => _refresh?.Dispose();
+
     private async Task AvailabilityAsync(MerchantItem m, bool on)
     {
-        if (await Api.Put($"{Base(m.Item.Id)}/availability", new { isAvailable = on })) await LoadAsync();
+        if (await Api.Put($"{Base(m.Item.Id)}/availability", new { isAvailable = on })) Patch(m, x => x with { IsAvailable = on });
     }
 
     private async Task SoldOutAsync(MerchantItem m, bool soldOut)
     {
-        if (await Api.Put($"{Base(m.Item.Id)}/sold-out", new { soldOut })) await LoadAsync();
+        if (await Api.Put($"{Base(m.Item.Id)}/sold-out", new { soldOut })) Patch(m, x => x with { IsSoldOut = soldOut });
     }
 
     private async Task SetStockAsync(MerchantItem m, int onHand)
     {
-        if (await Api.Post<StockResult>($"{Base(m.Item.Id)}/stock", new { action = "set", quantity = onHand }) is not null) await LoadAsync();
+        if (await Api.Post<StockResult>($"{Base(m.Item.Id)}/stock", new { action = "set", quantity = onHand }) is { } stock)
+            Patch(m, x => x with { OnHand = stock.OnHand, Reserved = stock.Reserved });
     }
 
     private async Task AddStockAsync(MerchantItem m, int quantity)
     {
-        if (await Api.Post<StockResult>($"{Base(m.Item.Id)}/stock", new { action = "add", quantity }) is not null) await LoadAsync();
+        if (await Api.Post<StockResult>($"{Base(m.Item.Id)}/stock", new { action = "add", quantity }) is { } stock)
+            Patch(m, x => x with { OnHand = stock.OnHand, Reserved = stock.Reserved });
     }
 
     private async Task RestockAsync(MerchantItem m)

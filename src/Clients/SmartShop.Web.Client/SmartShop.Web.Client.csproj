@@ -1,8 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
   <PropertyGroup>
     <RootNamespace>SmartShop.Web.Client</RootNamespace>
-    <BlazorWebAssemblyLoadAllGlobalizationData>true</BlazorWebAssemblyLoadAllGlobalizationData>
-    <ServiceWorkerAssetsManifest>service-worker-assets.js</ServiceWorkerAssetsManifest>
+    <!-- Only Thai and English are used (Loc.cs); every locale except Chinese/Japanese/Korean is still in it,
+         and it is the same file whatever the phone's language (the default would pick a shard without Thai
+         for English phones). -->
+    <BlazorIcuDataFileName>icudt_no_CJK.dat</BlazorIcuDataFileName>    <ServiceWorkerAssetsManifest>service-worker-assets.js</ServiceWorkerAssetsManifest>
     <StaticWebAssetProjectMode>Default</StaticWebAssetProjectMode>
   </PropertyGroup>
   <ItemGroup>

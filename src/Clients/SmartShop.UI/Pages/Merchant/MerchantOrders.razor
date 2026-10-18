@@ -63,7 +63,7 @@
     {
         @foreach (var o in _orders)
         {
-            <MudPaper Outlined="true" Class="@($"pa-3 mb-2 ss-card {(o.Status == "PendingAcceptance" ? "ss-new-order" : "")}")">
+            <MudPaper @key="o.Id" Outlined="true" Class="@($"pa-3 mb-2 ss-card {(o.Status == "PendingAcceptance" ? "ss-new-order" : "")}")">
                 <div class="d-flex align-center" style="cursor:pointer" @onclick="@(() => Nav.NavigateTo($"/merchant/{ShopId}/orders/{o.Id}"))">
                     <MudText Typo="Typo.h6" Style="font-weight:700">#@o.OrderNo</MudText>
                     <MudText Typo="Typo.caption" Class="ss-muted ms-2">@Fmt.Ago(o.PlacedAt, L)</MudText>
@@ -115,14 +115,27 @@
     private ShopSettings? _settings;
     private static readonly string[] Tabs = ["new", "active", "ready", "done"];
 
+    private static readonly TimeSpan Settle = TimeSpan.FromMilliseconds(400);
+    private Reloader? _reload;
+    // Status this device just set: the server's echo of it needs no second reload.
+    private readonly Dictionary<Guid, string> _ownChanges = [];
+
     protected override async Task OnParametersSetAsync()
     {
+        _reload ??= new Reloader(async () =>
+        {
+            await FetchAsync();
+            StateHasChanged();
+        });
         Realtime.NewOrder -= OnChanged;
         Realtime.OrderUpdated -= OnChanged;
+        Realtime.Resynced -= OnResynced;
         Realtime.NewOrder += OnChanged;
         Realtime.OrderUpdated += OnChanged;
-        _settings = await Api.Get<ShopSettings>($"api/merchant/shops/{ShopId}");
-        await LoadAsync(_tab);
+        Realtime.Resynced += OnResynced;
+        var settings = Api.Get<ShopSettings>($"api/merchant/shops/{ShopId}");
+        await Task.WhenAll(settings, LoadAsync(_tab));
+        _settings = await settings;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -133,19 +146,30 @@
 
     private static object? Badge(int? count) => count is > 0 ? count : null;
 
-    private async Task LoadAsync(int tab)
+    private Task LoadAsync(int tab)
     {
         _tab = tab;
-        var orders = Api.Get<List<OrderSummary>>($"api/merchant/shops/{ShopId}/orders?tab={Tabs[tab]}");
-        var counts = Api.Get<OrderCounts>($"api/merchant/shops/{ShopId}/orders/counts", silent: true);
-        _orders = await orders ?? [];
-        _counts = await counts;
+        return _reload!.RunNowAsync();
+    }
+
+    private async Task FetchAsync()
+    {
+        var (shopId, tab) = (ShopId, _tab);
+        var orders = Api.Get<List<OrderSummary>>($"api/merchant/shops/{shopId}/orders?tab={Tabs[tab]}");
+        var counts = Api.Get<OrderCounts>($"api/merchant/shops/{shopId}/orders/counts", silent: true);
+        var list = await orders ?? [];
+        var c = await counts;
+        // Switched tab or shop meanwhile: the reload queued for the new one shows that instead.
+        if (tab != _tab || shopId != ShopId) return;
+        _orders = list;
+        _counts = c;
     }
 
     private async Task ActAsync(OrderSummary o, string action)
     {
-        if (await Api.Post<Order>($"api/merchant/orders/{o.Id}/{action}") is not null)
+        if (await Api.Post<Order>($"api/merchant/orders/{o.Id}/{action}") is { } updated)
         {
+            _ownChanges[o.Id] = updated.Status;
             await Alarm.Dismiss(o.Id); // stop ringing for this order on this device right away
             await LoadAsync(_tab);
         }
@@ -181,15 +205,27 @@
         await Dialogs.ShowAsync<PrepSummaryDialog>(L["สรุปของที่ต้องทำ", "To prepare"], parameters);
     }
 
-    private async void OnChanged(JsonElement _)
+    // Orders arrive in bursts (a lunch rush, or one change echoed to every staff phone): wait a moment and reload
+    // once. Staff of several shops are in every shop's group, so skip events that name another shop.
+    private void OnChanged(JsonElement e) => _ = InvokeAsync(() =>
     {
-        await LoadAsync(_tab);
-        await InvokeAsync(StateHasChanged);
-    }
+        if (e.TryGetProperty("shopId", out var shop) && shop.TryGetGuid(out var shopId) && shopId != ShopId) return;
+        if (e.TryGetProperty("orderId", out var id) && id.TryGetGuid(out var orderId) && e.TryGetProperty("status", out var status)
+            && _ownChanges.TryGetValue(orderId, out var mine) && mine == status.GetString())
+        {
+            _ownChanges.Remove(orderId); // the list was already reloaded right after this device made the change
+            return;
+        }
+        _reload?.Schedule(Settle);
+    });
+
+    private void OnResynced() => _ = InvokeAsync(() => _reload?.Schedule(Settle));
 
     public void Dispose()
     {
         Realtime.NewOrder -= OnChanged;
         Realtime.OrderUpdated -= OnChanged;
+        Realtime.Resynced -= OnResynced;
+        _reload?.Dispose();
     }
 }

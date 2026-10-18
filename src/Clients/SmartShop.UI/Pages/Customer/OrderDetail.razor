@@ -273,8 +273,10 @@
     {
         Realtime.OrderUpdated -= OnChanged;
         Realtime.PaymentUpdated -= OnPaymentChanged;
+        Realtime.Resynced -= OnResynced;
         Realtime.OrderUpdated += OnChanged;
         Realtime.PaymentUpdated += OnPaymentChanged;
+        Realtime.Resynced += OnResynced;
         await LoadAsync();
     }
 
@@ -442,14 +444,23 @@
     private async void OnPaymentChanged(JsonElement e)
     {
         if (e.TryGetProperty("orderId", out var id) && id.GetGuid() != OrderId) return;
-        if (_payment is not null) await _payment.ReloadAsync();
-        await LoadAsync();
-        await InvokeAsync(StateHasChanged);
+        await InvokeAsync(ReloadAllAsync);
+    }
+
+    // Reconnected after a break: the status may have moved on while this page heard nothing.
+    private async void OnResynced() => await InvokeAsync(ReloadAllAsync);
+
+    private async Task ReloadAllAsync()
+    {
+        // Payment and order are independent requests: one round trip instead of two.
+        await Task.WhenAll(_payment?.ReloadAsync() ?? Task.CompletedTask, LoadAsync());
+        StateHasChanged();
     }
 
     public void Dispose()
     {
         Realtime.OrderUpdated -= OnChanged;
         Realtime.PaymentUpdated -= OnPaymentChanged;
+        Realtime.Resynced -= OnResynced;
     }
 }

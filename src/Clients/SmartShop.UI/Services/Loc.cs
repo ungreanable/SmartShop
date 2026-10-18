@@ -94,7 +94,22 @@ public static class ThaiText
         new[] { "ออเดอร์", "โปรโมชั่น", "สต็อก", "เซิร์ฟเวอร์", "แอดมิน", "ออนไลน์", "เมนู", "สลิป", "คิวอาร์", "ล็อกอิน", "แอป", "ไลน์", "เช็ค" }
             .Select(w => (w, string.Join(Joiner, w.ToCharArray()))).ToArray();
 
+    // L[...] runs on every render, so remember results instead of scanning for every loanword each time.
+    // Bounded because interpolated strings (counts, names) produce endless distinct inputs; ConcurrentDictionary
+    // because the MAUI app may render from more than one thread.
+    private const int CacheLimit = 4096;
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> Cache = new(StringComparer.Ordinal);
+
     public static string KeepLoanwords(string text)
+    {
+        if (Cache.TryGetValue(text, out var cached)) return cached;
+        var result = Join(text);
+        if (Cache.Count >= CacheLimit) Cache.Clear();
+        Cache[text] = result;
+        return result;
+    }
+
+    private static string Join(string text)
     {
         foreach (var (word, joined) in Loanwords)
             if (text.Contains(word, StringComparison.Ordinal)) text = text.Replace(word, joined, StringComparison.Ordinal);

@@ -44,7 +44,8 @@ window.smartshop = (() => {
   const liff = {
     isLineBrowser,
     init: async (liffId) => {
-      if (!liffId) return { ready: false };
+      // The SDK is a sizeable extra download and only logs in silently inside LINE; other browsers log in with the OAuth redirect.
+      if (!liffId || !isLineBrowser()) return { ready: false };
       await loadScript('https://static.line-scdn.net/liff/edge/2/sdk.js');
       await window.liff.init({ liffId });
       return { ready: true, inClient: window.liff.isInClient(), loggedIn: window.liff.isLoggedIn() };
@@ -119,6 +120,48 @@ window.smartshop = (() => {
     },
   };
 
+  // ---------- app updates (web only; the service worker is registered by index.html) ----------
+  // A new version's worker waits instead of taking over mid-session (that reloaded the page under the user's
+  // fingers). The app offers "reload" instead; ignored, the new version starts on the next launch.
+  const sw = (() => {
+    let waiting = null, listener = null, lastCheck = Date.now();
+    const announce = () => { if (waiting && listener) listener.invokeMethodAsync('OnUpdateAvailable').catch(() => { }); };
+    const found = (worker) => { waiting = worker; announce(); };
+    const register = (url) => {
+      if (!('serviceWorker' in navigator)) return;
+      // Files already loaded by the old version (like this one) must not mix with the new app: once the new worker
+      // takes over (after "reload" here or in another tab), reload. Not on first install: nothing to mix with.
+      const hadController = !!navigator.serviceWorker.controller;
+      let reloading = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!hadController || reloading) return;
+        reloading = true;
+        location.reload();
+      });
+      navigator.serviceWorker.register(url).then(reg => {
+        if (reg.waiting && navigator.serviceWorker.controller) found(reg.waiting);
+        reg.addEventListener('updatefound', () => {
+          const worker = reg.installing;
+          worker?.addEventListener('statechange', () => {
+            if (worker.state === 'installed' && navigator.serviceWorker.controller) found(worker);
+          });
+        });
+        // An app left open for days (a shop's order board) still hears about new versions: check when it comes
+        // back to the front, at most once an hour.
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState !== 'visible' || Date.now() - lastCheck < 3600000) return;
+          lastCheck = Date.now();
+          reg.update().catch(() => { });
+        });
+      }).catch(() => { });
+    };
+    return {
+      register,
+      onUpdate: (dotnet) => { listener = dotnet; announce(); },
+      apply: () => { if (waiting) waiting.postMessage('SKIP_WAITING'); else location.reload(); },
+    };
+  })();
+
   // ---------- misc ----------
   const copy = async (text) => { try { await navigator.clipboard.writeText(text); return true; } catch { return false; } };
   const share = async (title, text, url) => {
@@ -167,6 +210,13 @@ window.smartshop = (() => {
   };
   const scrollTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   const hasFocus = () => document.hasFocus();
+  // Tells .NET when the app is back in front or the network returns, so real time reconnects right away
+  // instead of waiting out its back-off (phones drop connections whenever the screen turns off).
+  const onPageVisible = (dotnet) => {
+    const notify = () => { if (document.visibilityState === 'visible') dotnet.invokeMethodAsync('OnPageVisible').catch(() => { }); };
+    document.addEventListener('visibilitychange', notify);
+    window.addEventListener('online', notify);
+  };
   const setBadge = (count) => { try { count > 0 ? navigator.setAppBadge?.(count) : navigator.clearAppBadge?.(); } catch { } };
   const deviceLabel = () => {
     const ua = navigator.userAgent;
@@ -175,5 +225,5 @@ window.smartshop = (() => {
     return `${browser} · ${os}`;
   };
 
-  return { storage, alarm, liff, lineLogin, takeLoginState, push, copy, share, shareFile, saveImage, download, scrollTo, setBadge, deviceLabel, hasFocus };
+  return { storage, alarm, liff, lineLogin, takeLoginState, push, copy, share, shareFile, saveImage, download, scrollTo, setBadge, deviceLabel, hasFocus, onPageVisible, sw };
 })();
