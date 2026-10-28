@@ -6,5 +6,6 @@
     <ProjectReference Include="..\..\src\Modules\SmartShop.Modules.Catalog\SmartShop.Modules.Catalog.csproj" />
     <ProjectReference Include="..\..\src\Modules\SmartShop.Modules.Promotions\SmartShop.Modules.Promotions.csproj" />
     <ProjectReference Include="..\..\src\Modules\SmartShop.Modules.Integrations\SmartShop.Modules.Integrations.csproj" />
+    <ProjectReference Include="..\..\src\Modules\SmartShop.Modules.Analytics\SmartShop.Modules.Analytics.csproj" />
   </ItemGroup>
 </Project>

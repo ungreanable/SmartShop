@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Caching.Hybrid;
+using Microsoft.Extensions.Caching.StackExchangeRedis;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using StackExchange.Redis;
 
 namespace SmartShop.Infrastructure.Caching;
 
@@ -39,11 +41,17 @@ public static class CachingSetup
         var redis = configuration.GetConnectionString("cache");
         if (!string.IsNullOrWhiteSpace(redis))
         {
-            services.AddStackExchangeRedisCache(o =>
+            // One connection shared by the cache and modules that use Valkey directly (shop presence counters), instead of
+            // a second socket per process. Connects on first use; AbortOnConnectFail=false keeps retrying in the background.
+            services.AddSingleton<IConnectionMultiplexer>(_ =>
             {
-                o.Configuration = redis;
-                o.InstanceName = "smartshop:";
+                var options = ConfigurationOptions.Parse(redis);
+                options.AbortOnConnectFail = false;
+                return ConnectionMultiplexer.Connect(options);
             });
+            services.AddStackExchangeRedisCache(o => o.InstanceName = "smartshop:");
+            services.AddOptions<RedisCacheOptions>().Configure<IServiceProvider>((o, sp) =>
+                o.ConnectionMultiplexerFactory = () => Task.FromResult(sp.GetRequiredService<IConnectionMultiplexer>()));
         }
 
         services.AddHybridCache(o =>

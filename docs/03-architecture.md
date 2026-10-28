@@ -62,6 +62,7 @@ flowchart LR
 | **Promotions** | Coupon / Automatic promotion, Redemption (จองสิทธิ์ใน Transaction ของ Checkout) | `promotions` |
 | **Audit** | บันทึกการกระทำของ Admin/ร้าน สร้างจาก Integration Event | `audit` |
 | **Integrations** | API Keys, Public API v1, Webhook Endpoints + Deliveries | `integrations` |
+| **Analytics** | สถิติร้านแบบไม่ระบุตัวตน: Raw Event (เก็บ 90 วัน, Visitor Key = HMAC รายวัน), Daily/Item/Hourly Aggregate (เก็บถาวร), คนกำลังดูร้าน (Presence ใน Valkey) | `analytics` |
 | **Notifications** | Inbox, Preferences, Recipient Fan-out, Device Registry, LINE Friendship (Webhook), Channel Dispatch + Fallback, Quota Guard | `notifications` |
 | **Media** | Upload, Resize/Thumbnail, Presigned URL, Access Control | `media` |
 | **Search** | Read Model สำหรับหน้า Home/ค้นหา (Denormalized จาก Event) | `search` |
@@ -131,7 +132,7 @@ SmartShop/
 │  ├─ Modules/                       # 1 Project = 1 Module = 1 Schema
 │  │  ├─ SmartShop.Modules.Identity/   Plants/  Shops/  Catalog/  Ordering/  Payments/
 │  │  ├─ SmartShop.Modules.Notifications/  Media/  Search/
-│  │  └─ SmartShop.Modules.Reviews/  Promotions/  Audit/  Integrations/
+│  │  └─ SmartShop.Modules.Reviews/  Promotions/  Audit/  Integrations/  Analytics/
 │  ├─ Hosts/
 │  │  ├─ SmartShop.Bootstrap/        # รวม Module (ModuleCatalog), Middleware, migrate / vapid commands
 │  │  ├─ SmartShop.Api/              # Endpoints ทุก Module + SignalR Hub (Messaging role: Api)
