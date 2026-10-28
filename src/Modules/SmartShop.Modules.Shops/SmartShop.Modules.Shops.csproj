@@ -2,4 +2,7 @@
   <PropertyGroup>
     <RootNamespace>SmartShop.Modules.Shops</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="MessagePack" />
+  </ItemGroup>
 </Project>
