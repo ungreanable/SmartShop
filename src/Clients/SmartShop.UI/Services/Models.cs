@@ -143,3 +143,14 @@ public sealed record Promotion(Guid Id, string? Code, string Title, string Type,
     DateTimeOffset? StartsAt, DateTimeOffset? EndsAt, int? UsageLimit, int? PerUserLimit, int UsedCount, bool AutoApply, bool Active);
 public sealed record PromotionBadge(Guid Id, string Title, string Description, decimal? MinOrder, DateTimeOffset? EndsAt);
 public sealed record DiscountPreview(Guid PromotionId, string? Code, decimal Discount, string Description);
+
+// Shop statistics: anonymous totals only (see the Analytics module).
+public sealed record PresenceCount(int Count);
+public sealed record AnalyticsTotals(int Visitors, int ShopViews, int ItemViewers, int CartAdders, int CartViewers, int Buyers,
+    int Orders, decimal Revenue, int CompletedOrders, decimal CompletedRevenue, int LostOrders, int AbandonedCarts, int RepeatOrders);
+public sealed record AnalyticsDay(DateOnly Day, int Visitors, int Orders, decimal Revenue);
+public sealed record AnalyticsItem(Guid ItemId, string Name, int Views, int Viewers, int AddToCart, int Buyers, int OrderedQuantity,
+    decimal Conversion, bool LowConversion);
+/// <param name="Heatmap">Shop-page views as [day of week, Sunday = 0][hour], Bangkok time.</param>
+public sealed record AnalyticsDashboard(DateOnly From, DateOnly To, AnalyticsTotals Totals, List<AnalyticsDay> Daily,
+    List<AnalyticsItem> Items, int[][] Heatmap, DateTimeOffset? UpdatedAt);

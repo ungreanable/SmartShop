@@ -6,6 +6,7 @@
 
 <div class="ss-page">
     <MudText Typo="Typo.h5" Class="mb-2" Style="font-weight:700">@L["ยอดขาย", "Sales"]</MudText>
+    <MudButton Href="@($"/merchant/{ShopId}/sales/analytics")" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Class="mb-2">📊 @L["สถิติร้าน", "Shop statistics"]</MudButton>
     <div class="ss-grid-2 mb-3">
         <MudButton Href="@($"/merchant/{ShopId}/promotions")" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.LocalOffer" FullWidth="true">@L["โปรโมชั่น", "Promotions"]</MudButton>
         <MudButton Href="@($"/merchant/{ShopId}/reviews")" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Star" FullWidth="true">@L["รีวิว", "Reviews"]</MudButton>

@@ -100,6 +100,33 @@ public sealed class Api(HttpClient http, Session session, PlantContextAccessor p
         }
     }
 
+    /// <summary>
+    /// Background calls (usage statistics, heartbeats): never shows a message, never signs out or redirects, and leaves
+    /// <see cref="LastProblem"/> alone so it cannot race with a page that is reading it. Null on any failure.
+    /// </summary>
+    public async Task<T?> QuietAsync<T>(HttpMethod method, string url, object? body = null)
+    {
+        HttpRequestMessage Build()
+        {
+            var request = new HttpRequestMessage(method, url);
+            if (body is not null) request.Content = JsonContent.Create(body, options: ApiJson.Options);
+            return request;
+        }
+
+        try
+        {
+            if (!session.IsAuthenticated || plant.PlantId is null) return default;
+            using var response = await ExecuteAsync(Build(), Build);
+            if (!response.IsSuccessStatusCode || response.StatusCode == HttpStatusCode.NoContent) return default;
+            var json = await response.Content.ReadAsStringAsync();
+            return string.IsNullOrWhiteSpace(json) ? default : JsonSerializer.Deserialize<T>(json, ApiJson.Options);
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException)
+        {
+            return default;
+        }
+    }
+
     public async Task<byte[]?> DownloadAsync(string url)
     {
         using var response = await ExecuteAsync(new HttpRequestMessage(HttpMethod.Get, url), () => new HttpRequestMessage(HttpMethod.Get, url));

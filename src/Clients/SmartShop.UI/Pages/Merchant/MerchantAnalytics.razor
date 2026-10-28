@@ -1,0 +1,200 @@
+@page "/merchant/{ShopId:guid}/sales/analytics"
+@layout MerchantLayout
+@inject Api Api
+@* Under /sales so the "ยอดขาย" tab stays highlighted. Anonymous totals only: the shop never sees who did what. *@
+
+<div class="ss-page">
+    <div class="d-flex align-center gap-1 mb-2">
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="@($"/merchant/{ShopId}/sales")" aria-label="@L["กลับ", "Back"]" />
+        <MudText Typo="Typo.h5" Style="font-weight:700">📊 @L["สถิติร้าน", "Shop statistics"]</MudText>
+    </div>
+
+    @* Plain buttons: MudButtonGroup forces one variant on all of them, hiding which range is selected. *@
+    <div class="d-flex gap-2 mb-3">
+        @foreach (var d in new[] { 7, 30, 90 })
+        {
+            <MudButton Style="flex:1" Color="Color.Primary" Variant="@(d == _days ? Variant.Filled : Variant.Outlined)" OnClick="@(() => RangeAsync(d))">@L[$"{d} วัน", $"{d} days"]</MudButton>
+        }
+    </div>
+
+    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+        @L["ตัวเลขทั้งหมดเป็นยอดรวมแบบไม่ระบุตัวตน ร้านจะไม่เห็นว่าใครดูหรือกดอะไร นับคนแบบไม่ซ้ำในแต่ละวัน (คนเดิมมาหลายวันนับทุกวัน) ไม่นับคนในร้านเอง และอัปเดตทุกประมาณ 10 นาที",
+           "All numbers are anonymous totals: the shop never sees who viewed or did what. People are counted once per day (someone who comes on several days counts on each), your own staff are not counted, and figures update about every 10 minutes."]
+    </MudAlert>
+
+    @if (_data is null) { <Loading Rows="4" /> }
+    else
+    {
+        var t = _data.Totals;
+
+        <MudText Typo="Typo.subtitle1" Style="font-weight:600">@L["จากคนเข้าร้าน ถึงการสั่งซื้อ", "From visit to order"]</MudText>
+        <MudPaper Outlined="true" Class="pa-3 mb-3 ss-card">
+            @foreach (var (label, value, previous) in Funnel(t))
+            {
+                <div class="my-1">
+                    <div class="d-flex justify-space-between">
+                        <MudText Typo="Typo.body2">@label</MudText>
+                        <MudText Typo="Typo.body2" Style="font-weight:600">
+                            @value @L["คน", "people"]
+                            @if (previous is { } p) { <span class="ss-muted" style="font-weight:400"> · @Percent(value, p)</span> }
+                        </MudText>
+                    </div>
+                    <div class="ss-an-track" title="@($"{label}: {value}")"><div class="ss-an-fill" style="width:@Width(value, t.Visitors)"></div></div>
+                </div>
+            }
+            <MudText Typo="Typo.caption" Class="ss-muted">@L["% คือสัดส่วนจากขั้นก่อนหน้า", "% is the share of the step before"]</MudText>
+        </MudPaper>
+
+        <div class="ss-grid-2 mb-3">
+            <MudPaper Outlined="true" Class="pa-3 ss-card"><MudText Typo="Typo.caption" Class="ss-muted">@L["ออเดอร์", "Orders"]</MudText><MudText Typo="Typo.h5">@t.Orders</MudText></MudPaper>
+            <MudPaper Outlined="true" Class="pa-3 ss-card"><MudText Typo="Typo.caption" Class="ss-muted">@L["ยอดสั่ง (ประมาณ)", "Ordered (estimate)"]</MudText><MudText Typo="Typo.h5">@Fmt.Baht(t.Revenue)</MudText></MudPaper>
+            <MudPaper Outlined="true" Class="pa-3 ss-card">
+                <MudText Typo="Typo.caption" Class="ss-muted">@L["ใส่ตะกร้าแต่ไม่สั่ง", "Abandoned carts"]</MudText>
+                <MudText Typo="Typo.h5">@Percent(t.AbandonedCarts, t.CartAdders)</MudText>
+                <MudText Typo="Typo.caption" Class="ss-muted">@L[$"{t.AbandonedCarts} จาก {t.CartAdders} คน", $"{t.AbandonedCarts} of {t.CartAdders} people"]</MudText>
+            </MudPaper>
+            <MudPaper Outlined="true" Class="pa-3 ss-card">
+                <MudText Typo="Typo.caption" Class="ss-muted">@L["ออเดอร์จากลูกค้าเก่า", "Orders from returning customers"]</MudText>
+                <MudText Typo="Typo.h5">@Percent(t.RepeatOrders, t.Orders)</MudText>
+                <MudText Typo="Typo.caption" Class="ss-muted">@L[$"{t.RepeatOrders} จาก {t.Orders} ออเดอร์", $"{t.RepeatOrders} of {t.Orders} orders"]</MudText>
+            </MudPaper>
+            <MudPaper Outlined="true" Class="pa-3 ss-card"><MudText Typo="Typo.caption" Class="ss-muted">@L["ส่งสำเร็จ", "Completed"]</MudText><MudText Typo="Typo.h5">@Fmt.Baht(t.CompletedRevenue)</MudText><MudText Typo="Typo.caption" Class="ss-muted">@t.CompletedOrders @L["ออเดอร์", "orders"]</MudText></MudPaper>
+            <MudPaper Outlined="true" Class="pa-3 ss-card"><MudText Typo="Typo.caption" Class="ss-muted">@L["ยกเลิก/ปฏิเสธ/หมดเวลา", "Cancelled / rejected / expired"]</MudText><MudText Typo="Typo.h5">@t.LostOrders</MudText></MudPaper>
+        </div>
+
+        @* Two charts instead of one with two scales: visitors outnumber orders many times over. *@
+        <MudText Typo="Typo.subtitle1" Style="font-weight:600">@L["คนเข้าร้านรายวัน", "Visitors per day"]</MudText>
+        @Bars(_data.Daily.Select(d => (d.Day, d.Visitors)).ToList())
+        <MudText Typo="Typo.subtitle1" Class="mt-2" Style="font-weight:600">@L["ออเดอร์รายวัน", "Orders per day"]</MudText>
+        @Bars(_data.Daily.Select(d => (d.Day, d.Orders)).ToList())
+
+        <MudText Typo="Typo.subtitle1" Class="mt-3" Style="font-weight:600">@L["เมนูที่คนดู", "Items people look at"]</MudText>
+        @if (_data.Items.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Class="ss-muted">@L["ยังไม่มีข้อมูล", "No data yet"]</MudText>
+        }
+        else
+        {
+            <div style="overflow-x:auto">
+                <MudSimpleTable Dense="true" Elevation="0">
+                    <thead>
+                        <tr><th>@L["เมนู", "Item"]</th><th style="text-align:right">@L["คนดู", "Viewers"]</th><th style="text-align:right">@L["ใส่ตะกร้า", "Added"]</th><th style="text-align:right">@L["สั่ง (ชิ้น)", "Ordered"]</th><th style="text-align:right">@L["ดู→สั่ง", "View→order"]</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var i in _data.Items)
+                        {
+                            <tr>
+                                <td style="@(i.LowConversion ? "border-left:3px solid var(--mud-palette-warning)" : "")">
+                                    @i.Name
+                                    @if (i.LowConversion) { <br /><MudText Typo="Typo.caption" Color="Color.Warning">⚠️ @L["ดูเยอะแต่สั่งน้อย", "Viewed a lot, ordered little"]</MudText> }
+                                </td>
+                                <td style="text-align:right">@i.Viewers</td>
+                                <td style="text-align:right">@i.AddToCart</td>
+                                <td style="text-align:right">@i.OrderedQuantity</td>
+                                <td style="text-align:right">@(i.Viewers == 0 ? "–" : i.Conversion.ToString("P0", System.Globalization.CultureInfo.InvariantCulture))</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </div>
+            @if (_data.Items.Any(i => i.LowConversion))
+            {
+                <MudText Typo="Typo.caption" Class="ss-muted">@L["เมนูที่คนดูเยอะแต่สั่งน้อย ลองดูรูป ราคา หรือคำอธิบายอีกครั้ง", "Items viewed a lot but rarely ordered: check the photo, price or description."]</MudText>
+            }
+        }
+
+        <MudText Typo="Typo.subtitle1" Class="mt-3" Style="font-weight:600">@L["ช่วงเวลาที่คนเข้าร้าน", "When people visit"]</MudText>
+        <div class="ss-an-heat" role="table" aria-label="@L["จำนวนครั้งที่เปิดหน้าร้าน ตามวันและชั่วโมง", "Shop page views by day and hour"]">
+            <span></span>
+            @for (var h = 0; h < 24; h++) { <span class="ss-an-hour">@(h % 6 == 0 ? h.ToString() : "")</span> }
+            @foreach (var dow in new[] { 1, 2, 3, 4, 5, 6, 0 })
+            {
+                <span class="ss-an-dow">@DayName(dow)</span>
+                @for (var h = 0; h < 24; h++)
+                {
+                    var views = _data.Heatmap[dow][h];
+                    <span class="ss-an-cell" title="@($"{DayName(dow)} {h:00}:00 · {views}")">
+                        @if (views > 0) { <span class="ss-an-cell-fill" style="opacity:@Opacity(views)"></span> }
+                    </span>
+                }
+            }
+        </div>
+        <MudText Typo="Typo.caption" Class="ss-muted">@L["สีเข้ม = คนเปิดหน้าร้านเยอะ (เวลาไทย) ใช้วางแผนเวลาเปิดร้านหรือทำของล่วงหน้า", "Darker = more shop visits (Thai time). Use it to plan opening hours or prepare ahead."]</MudText>
+
+        @if (_data.UpdatedAt is { } updated)
+        {
+            <MudText Typo="Typo.caption" Class="ss-muted d-block mt-3">@L["อัปเดตล่าสุด", "Last updated"] @Fmt.DateTime(updated)</MudText>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public Guid ShopId { get; set; }
+
+    private int _days = 7;
+    private AnalyticsDashboard? _data;
+    private int _heatMax = 1;
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task RangeAsync(int days)
+    {
+        _days = days;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _data = null;
+        _data = await Api.Get<AnalyticsDashboard>($"api/merchant/shops/{ShopId}/analytics?days={_days}");
+        _heatMax = Math.Max(1, _data?.Heatmap.SelectMany(r => r).DefaultIfEmpty(0).Max() ?? 1);
+    }
+
+    // Each step is distinct people per day, summed over the range; later steps are a subset in practice, but a person
+    // who ordered without the app reporting their visit (e.g. offline) can push a share past 100 %, so it is capped.
+    private IEnumerable<(string Label, int Value, int? Previous)> Funnel(AnalyticsTotals t)
+    {
+        yield return (L["เข้าร้าน", "Visited"], t.Visitors, null);
+        yield return (L["ดูเมนู", "Viewed an item"], t.ItemViewers, t.Visitors);
+        yield return (L["ใส่ตะกร้า", "Added to cart"], t.CartAdders, t.ItemViewers);
+        yield return (L["สั่งซื้อ", "Ordered"], t.Buyers, t.CartAdders);
+    }
+
+    private static string Percent(int part, int whole) =>
+        whole <= 0 ? "–" : Math.Min(1m, (decimal)part / whole).ToString("P0", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static string Width(int value, int max) =>
+        max <= 0 ? "0%" : string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{Math.Min(100, value * 100.0 / max):0.#}%");
+
+    private string Opacity(int views) => string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{0.15 + (0.85 * views / _heatMax):0.##}");
+
+    private string DayName(int dow) => dow switch
+    {
+        0 => L["อา", "Su"],
+        1 => L["จ", "Mo"],
+        2 => L["อ", "Tu"],
+        3 => L["พ", "We"],
+        4 => L["พฤ", "Th"],
+        5 => L["ศ", "Fr"],
+        _ => L["ส", "Sa"],
+    };
+
+    /// <summary>One thin column per day on a zero baseline, the value on hover/tap; first and last dates underneath.</summary>
+    private RenderFragment Bars(List<(DateOnly Day, int Value)> days) => __builder =>
+    {
+        var max = Math.Max(1, days.Max(d => d.Value));
+        <div class="ss-an-bars">
+            @foreach (var (day, value) in days)
+            {
+                <div class="ss-an-col" title="@($"{day:d MMM} · {value}")">
+                    <div class="ss-an-bar" style="height:@Width(value, max)"></div>
+                </div>
+            }
+        </div>
+        <div class="d-flex justify-space-between">
+            <MudText Typo="Typo.caption" Class="ss-muted">@days[0].Day.ToString("d MMM")</MudText>
+            <MudText Typo="Typo.caption" Class="ss-muted">@L["สูงสุด", "max"] @max</MudText>
+            <MudText Typo="Typo.caption" Class="ss-muted">@days[^1].Day.ToString("d MMM")</MudText>
+        </div>
+    };
+}

@@ -20,5 +20,6 @@ internal static class ModuleCatalog
         new Modules.Promotions.PromotionsModule(),
         new Modules.Audit.AuditModule(),
         new Modules.Integrations.IntegrationsModule(),
+        new Modules.Analytics.AnalyticsModule(),
     ];
 }
