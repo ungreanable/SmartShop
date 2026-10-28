@@ -9,12 +9,13 @@
         <MudText Typo="Typo.h5" Style="font-weight:700">📊 @L["สถิติร้าน", "Shop statistics"]</MudText>
     </div>
 
-    <MudButtonGroup Variant="Variant.Outlined" Color="Color.Primary" Class="mb-3" Style="width:100%">
+    @* Plain buttons: MudButtonGroup forces one variant on all of them, hiding which range is selected. *@
+    <div class="d-flex gap-2 mb-3">
         @foreach (var d in new[] { 7, 30, 90 })
         {
-            <MudButton Style="flex:1" Variant="@(d == _days ? Variant.Filled : Variant.Outlined)" OnClick="@(() => RangeAsync(d))">@L[$"{d} วัน", $"{d} days"]</MudButton>
+            <MudButton Style="flex:1" Color="Color.Primary" Variant="@(d == _days ? Variant.Filled : Variant.Outlined)" OnClick="@(() => RangeAsync(d))">@L[$"{d} วัน", $"{d} days"]</MudButton>
         }
-    </MudButtonGroup>
+    </div>
 
     <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
         @L["ตัวเลขทั้งหมดเป็นยอดรวมแบบไม่ระบุตัวตน ร้านจะไม่เห็นว่าใครดูหรือกดอะไร นับคนแบบไม่ซ้ำในแต่ละวัน (คนเดิมมาหลายวันนับทุกวัน) ไม่นับคนในร้านเอง และอัปเดตทุกประมาณ 10 นาที",
