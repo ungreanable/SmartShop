@@ -4,6 +4,7 @@
 @inject NavigationManager Nav
 @inject IDialogService Dialogs
 @inject PushPrompt PushPrompt
+@inject Analytics Analytics
 
 <div class="ss-page">
     <MudText Typo="Typo.h5" Class="mb-3" Style="font-weight:700">@L["ตะกร้า & ชำระเงิน", "Cart & checkout"]</MudText>
@@ -151,6 +152,7 @@
     {
         _cart = await Api.Get<Cart>("api/cart");
         if (_cart?.ShopId is not { } shopId || _cart.Lines.Count == 0) return;
+        Analytics.CartView(shopId);
         var shop = Api.Get<ShopDetails>($"api/shops/{shopId}");
         var windows = Api.Get<List<TimeWindow>>($"api/shops/{shopId}/windows?days=3", silent: true);
         var menu = Api.Get<Menu>($"api/shops/{shopId}/menu", silent: true);

@@ -1,6 +1,7 @@
 @* "ตามสั่ง": the customer writes the dish in their own words; the shop prices it before cooking. *@
 @inject Api Api
 @inject IDialogService Dialogs
+@inject Analytics Analytics
 
 <MudDialog>
     <DialogContent>
@@ -50,7 +51,9 @@
             {
                 await Dialogs.ShowMessageBoxAsync(L["เพิ่มไม่ได้", "Cannot add"], problem.Message, yesText: "OK");
             }
-            if (cart is not null) Dialog.Close(DialogResult.Ok(cart));
+            if (cart is null) return;
+            Analytics.AddToCart(ShopId, null, _qty, custom: true);
+            Dialog.Close(DialogResult.Ok(cart));
         }
         finally { _busy = false; }
     }

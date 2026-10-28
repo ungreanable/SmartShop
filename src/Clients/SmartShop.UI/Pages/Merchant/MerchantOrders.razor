@@ -7,6 +7,7 @@
 @inject IDialogService Dialogs
 @inject NavigationManager Nav
 @inject PushPrompt PushPrompt
+@inject Analytics Analytics
 
 <div class="ss-page">
     @if (_settings is not null)
@@ -44,6 +45,10 @@
                 }
                 <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Checklist" OnClick="PrepSummaryAsync">@L["สรุปของที่ต้องทำ", "To prepare"]</MudButton>
             </div>
+            @if (_live > 0)
+            {
+                <MudText Typo="Typo.body2" Class="mt-1">👀 @L[$"กำลังดูร้านอยู่ {_live} คน", $"{_live} people viewing your shop"]</MudText>
+            }
         </MudPaper>
     }
 
@@ -133,6 +138,7 @@
         Realtime.NewOrder += OnChanged;
         Realtime.OrderUpdated += OnChanged;
         Realtime.Resynced += OnResynced;
+        StartLive();
         var settings = Api.Get<ShopSettings>($"api/merchant/shops/{ShopId}");
         await Task.WhenAll(settings, LoadAsync(_tab));
         _settings = await settings;
@@ -142,6 +148,32 @@
     {
         // Shop staff need alerts most: offer once on this page (our own explanation first, see PushPrompt).
         if (firstRender) await PushPrompt.OfferAsync(L["รับแจ้งเตือนเมื่อมีออเดอร์ใหม่ แม้ปิดหน้าเว็บอยู่", "Get new-order alerts even when this page is closed"]);
+    }
+
+    // People on the shop page right now (a count only). Polled, not pushed: cheap, and a minute late is fine.
+    private static readonly TimeSpan LiveEvery = TimeSpan.FromSeconds(45);
+    private Timer? _liveTimer;
+    private Guid _liveShop;
+    private int _live;
+
+    private void StartLive()
+    {
+        if (_liveShop == ShopId && _liveTimer is not null) return;
+        _liveShop = ShopId;
+        _live = 0;
+        _liveTimer?.Dispose();
+        _liveTimer = new Timer(_ => _ = InvokeAsync(RefreshLiveAsync), null, TimeSpan.Zero, LiveEvery);
+        _ = Analytics.WatchVisibilityAsync();
+    }
+
+    private async Task RefreshLiveAsync()
+    {
+        if (!Analytics.Visible) return;
+        var shopId = ShopId;
+        var count = await Analytics.LiveAsync(shopId) ?? 0;
+        if (shopId != ShopId || count == _live) return;
+        _live = count;
+        StateHasChanged();
     }
 
     private static object? Badge(int? count) => count is > 0 ? count : null;
@@ -223,6 +255,7 @@
 
     public void Dispose()
     {
+        _liveTimer?.Dispose();
         Realtime.NewOrder -= OnChanged;
         Realtime.OrderUpdated -= OnChanged;
         Realtime.Resynced -= OnResynced;

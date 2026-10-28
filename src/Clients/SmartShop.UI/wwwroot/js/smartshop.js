@@ -217,6 +217,14 @@ window.smartshop = (() => {
     document.addEventListener('visibilitychange', notify);
     window.addEventListener('online', notify);
   };
+  // Usage statistics: queued events are sent when the page goes to the background (it may never come back), and
+  // "people viewing" heartbeats pause while nobody is looking.
+  const onVisibility = (dotnet) => {
+    const notify = (visible) => dotnet.invokeMethodAsync('OnVisibilityChanged', visible).catch(() => { });
+    document.addEventListener('visibilitychange', () => notify(document.visibilityState === 'visible'));
+    window.addEventListener('pagehide', () => notify(false));
+    if (document.visibilityState !== 'visible') notify(false);
+  };
   const setBadge = (count) => { try { count > 0 ? navigator.setAppBadge?.(count) : navigator.clearAppBadge?.(); } catch { } };
   const deviceLabel = () => {
     const ua = navigator.userAgent;
@@ -225,5 +233,5 @@ window.smartshop = (() => {
     return `${browser} · ${os}`;
   };
 
-  return { storage, alarm, liff, lineLogin, takeLoginState, push, copy, share, shareFile, saveImage, download, scrollTo, setBadge, deviceLabel, hasFocus, onPageVisible, sw };
+  return { storage, alarm, liff, lineLogin, takeLoginState, push, copy, share, shareFile, saveImage, download, scrollTo, setBadge, deviceLabel, hasFocus, onPageVisible, onVisibility, sw };
 })();

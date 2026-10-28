@@ -80,6 +80,7 @@ public static class UiSetup
         services.AddScoped<Browser>();
         services.AddScoped<AppState>();
         services.AddScoped<OrderAlarm>();
+        services.AddScoped<Analytics>();
         return services;
     }
 

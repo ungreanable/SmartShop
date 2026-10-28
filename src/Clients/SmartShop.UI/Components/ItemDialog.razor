@@ -1,6 +1,7 @@
 @* Item bottom sheet: options, quantity, note and (for services) time slot, like delivery apps. *@
 @inject Api Api
 @inject IDialogService Dialogs
+@inject Analytics Analytics
 
 <MudDialog>
     <DialogContent>
@@ -93,6 +94,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        Analytics.ItemView(ShopId, Item.Id);
         // Pre-select the only option of mandatory single-choice groups.
         foreach (var g in Item.ModifierGroups.Where(g => g.MinSelect == 1 && g.MaxSelect == 1))
             if (g.Options.FirstOrDefault(o => o.IsAvailable) is { } first) _selected.Add(first.Id);
@@ -137,6 +139,8 @@
             await Dialogs.ShowMessageBoxAsync(L["เพิ่มไม่ได้", "Cannot add"], problem.Message, yesText: "OK");
         }
         _busy = false;
-        if (cart is not null) Dialog.Close(DialogResult.Ok(cart));
+        if (cart is null) return;
+        Analytics.AddToCart(ShopId, Item.Id, _qty, custom: false);
+        Dialog.Close(DialogResult.Ok(cart));
     }
 }

@@ -163,3 +163,14 @@ body { overscroll-behavior-y: contain; }
 .ss-uploader { display: inline-flex; flex-direction: column; align-items: flex-start; max-width: 100%; min-width: 0; }
 .ss-upload-status { display: flex; align-items: center; gap: 6px; margin-top: 4px; max-width: 100%; font-size: .8rem; color: var(--mud-palette-text-secondary); }
 .ss-upload-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; max-width: 220px; }
+
+/* ---------- shop statistics (MerchantAnalytics): plain CSS, no chart library to download on low-end phones ---------- */
+.ss-an-track { height: 10px; border-radius: 5px; background: var(--mud-palette-lines-default); }
+.ss-an-fill { height: 10px; border-radius: 5px; background: var(--mud-palette-primary); min-width: 2px; }
+.ss-an-bars { display: flex; align-items: flex-end; gap: 2px; height: 96px; border-bottom: 1px solid var(--mud-palette-lines-default); }
+.ss-an-col { flex: 1; height: 100%; display: flex; align-items: flex-end; min-width: 0; }
+.ss-an-bar { width: 100%; max-width: 24px; margin: 0 auto; background: var(--mud-palette-primary); border-radius: 4px 4px 0 0; }
+.ss-an-heat { display: grid; grid-template-columns: 22px repeat(24, minmax(0, 1fr)); gap: 2px; align-items: center; font-size: 0.75rem; }
+.ss-an-hour, .ss-an-dow { color: var(--mud-palette-text-secondary); }
+.ss-an-cell { position: relative; aspect-ratio: 1; border-radius: 3px; background: var(--mud-palette-lines-default); overflow: hidden; }
+.ss-an-cell-fill { position: absolute; inset: 0; background: var(--mud-palette-primary); }

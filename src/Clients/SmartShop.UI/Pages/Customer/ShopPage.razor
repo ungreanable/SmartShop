@@ -6,6 +6,7 @@
 @inject IDialogService Dialogs
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
+@inject Analytics Analytics
 
 <div class="ss-page @(CartHere ? "ss-has-cart" : "")">
     @if (_shop is null)
@@ -38,6 +39,8 @@
                 <StatusBadge Status="_shop.Status" AcceptsPreorders="_shop.Status.AcceptsPreorders" />
                 @if (_shop.DeliveryEnabled) { <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">🛵 @L["ร้านไปส่ง (ไม่มีค่าส่ง)", "Shop delivers (free)"]</MudChip> }
                 @if (_shop.PickupEnabled) { <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">🏠 @L["รับที่ร้าน", "Pickup"]</MudChip> }
+                @* Only from two: "1" would be the customer themselves. A count, never who. *@
+                @if (_viewers >= 2) { <MudText Typo="Typo.caption" Class="ss-muted ss-nowrap">👀 @L[$"{_viewers} คนกำลังดูร้านนี้", $"{_viewers} people viewing this shop"]</MudText> }
             </div>
             @foreach (var promo in _promotions)
             {
@@ -155,6 +158,7 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        if (_presenceShop != ShopId) StartPresence();
         Realtime.MenuChanged -= OnMenuChanged;
         Realtime.ShopStatusChanged -= OnMenuChanged;
         Realtime.MenuChanged += OnMenuChanged;
@@ -174,6 +178,40 @@
         _cart = await cart;
         if (_shop is null) Nav.NavigateTo("/");
     }
+
+    // ---- usage statistics and "people viewing now" (anonymous counts) ----
+    private static readonly TimeSpan HeartbeatEvery = TimeSpan.FromSeconds(30);
+    private Guid? _presenceShop;
+    private Timer? _heartbeat;
+    private int _viewers;
+
+    private void StartPresence()
+    {
+        if (_presenceShop is { } previous) _ = Analytics.LeaveAsync(previous);
+        _presenceShop = ShopId;
+        _viewers = 0;
+        Analytics.ShopView(ShopId);
+        Analytics.VisibilityChanged -= OnVisibilityChanged;
+        Analytics.VisibilityChanged += OnVisibilityChanged;
+        _heartbeat?.Dispose();
+        _heartbeat = new Timer(_ => _ = InvokeAsync(BeatAsync), null, TimeSpan.Zero, HeartbeatEvery);
+    }
+
+    private async Task BeatAsync()
+    {
+        // In the background nobody is "viewing": skip, and the server forgets us after its TTL.
+        if (!Analytics.Visible || _presenceShop is not { } shopId) return;
+        var count = await Analytics.HeartbeatAsync(shopId) ?? 0;
+        if (count == _viewers || shopId != _presenceShop) return;
+        _viewers = count;
+        StateHasChanged();
+    }
+
+    private void OnVisibilityChanged(bool visible) => _ = InvokeAsync(async () =>
+    {
+        if (visible) await BeatAsync();
+        else if (_presenceShop is { } shopId) await Analytics.LeaveAsync(shopId);
+    });
 
     private string Title(MenuCategory c) => c.Name switch
     {
@@ -242,6 +280,9 @@
 
     public void Dispose()
     {
+        _heartbeat?.Dispose();
+        Analytics.VisibilityChanged -= OnVisibilityChanged;
+        if (_presenceShop is { } shopId) _ = Analytics.LeaveAsync(shopId);
         Realtime.MenuChanged -= OnMenuChanged;
         Realtime.ShopStatusChanged -= OnMenuChanged;
     }
