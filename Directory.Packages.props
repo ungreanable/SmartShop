@@ -5,7 +5,7 @@
     <AspNetVersion>10.0.13</AspNetVersion>
     <EfVersion>10.0.13</EfVersion>
     <AspireVersion>13.6.1</AspireVersion>
-    <WolverineVersion>6.51.0</WolverineVersion>
+    <WolverineVersion>6.53.0</WolverineVersion>
     <OtelVersion>1.20.0</OtelVersion>
     <OtelInstrVersion>1.20.0</OtelInstrVersion>
     <ExtVersion>10.11.0</ExtVersion>
