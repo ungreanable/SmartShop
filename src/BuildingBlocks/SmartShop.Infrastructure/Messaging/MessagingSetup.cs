@@ -70,6 +70,9 @@ public static class MessagingSetup
             opts.UseEntityFrameworkCoreTransactions();
             opts.Policies.AutoApplyTransactions();
             opts.Policies.UseDurableLocalQueues();
+            // Every handler has its own local queue; at Wolverine's default parallelism one busy event (an order fans
+            // out to many modules) could take most of the shared connection pool. Two at a time per queue is plenty here.
+            opts.Policies.AllLocalQueues(q => q.MaximumParallelMessages(2));
             opts.Policies.UseDurableOutboxOnAllSendingEndpoints();
             opts.Policies.UseDurableInboxOnAllListeners();
 

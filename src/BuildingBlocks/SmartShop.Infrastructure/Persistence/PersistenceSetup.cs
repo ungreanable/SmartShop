@@ -17,8 +17,12 @@ public static class PersistenceSetup
         configuration.GetConnectionString(ConnectionStringName)
         ?? throw new InvalidOperationException($"Connection string '{ConnectionStringName}' is not configured.");
 
-    /// <summary>Pool cap used when the connection string does not set one (Npgsql's own default is 100).</summary>
-    public const int DefaultMaxPoolSize = 20;
+    /// <summary>
+    /// Pool cap used when the connection string does not set one (Npgsql's own default is 100). 30 leaves headroom under
+    /// the small profile's max_connections=40 (3 reserved for superusers, the migrator has exited by then); 20 ran dry
+    /// when one order event fanned out to many module handlers at once.
+    /// </summary>
+    public const int DefaultMaxPoolSize = 30;
 
     /// <summary>
     /// Registers the single <see cref="NpgsqlDataSource"/> (one connection pool) shared by every module DbContext and by
