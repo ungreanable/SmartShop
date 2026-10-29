@@ -1,0 +1,34 @@
+# Two servers on one Hetzner private network: THIS file is for the DATA server (PostgreSQL, Valkey, SeaweedFS).
+# The app (Caddy + web + api) runs on the other server with docker-compose.split-app.yml. Guide: docs/09-two-servers.md
+#
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.behind-proxy.yml:docker-compose.small.yml:docker-compose.split-data.yml
+#   DATA_PRIVATE_IP=10.0.0.3   (this server's private address)   VALKEY_PASSWORD=<long random>
+#
+# Ports are published on the private address only. Never publish them as "5432:5432": Docker writes its own iptables
+# rules, so ufw would not stop the database from being reachable from the internet.
+
+services:
+  postgres:
+    ports: ["${DATA_PRIVATE_IP:?set DATA_PRIVATE_IP}:5432:5432"]
+
+  valkey:
+    # Same limits as the small profile, plus a password now that it is reachable over the network.
+    command: ["valkey-server", "--save", "60", "1", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru",
+              "--requirepass", "${VALKEY_PASSWORD:?set VALKEY_PASSWORD}"]
+    environment:
+      REDISCLI_AUTH: "${VALKEY_PASSWORD}"   # used by valkey-cli in the healthcheck
+    ports: ["${DATA_PRIVATE_IP}:6379:6379"]
+
+  seaweedfs:
+    ports: ["${DATA_PRIVATE_IP}:8333:8333"]   # S3 gateway only; it accepts signed requests from the .env keys
+    mem_limit: 256m
+
+  # The app runs on the other server.
+  caddy:
+    profiles: ["app"]
+  web:
+    profiles: ["app"]
+  api:
+    profiles: ["app"]
+  migrator:
+    profiles: ["app"]

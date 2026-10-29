@@ -1,0 +1,38 @@
+# Two servers on one Hetzner private network: THIS file is for the APP server (Caddy + web + api, ~1 GB RAM is enough).
+# PostgreSQL, Valkey and SeaweedFS run on the data server with docker-compose.split-data.yml. Guide: docs/09-two-servers.md
+#
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.behind-proxy.yml:docker-compose.small.yml:docker-compose.split-app.yml
+#   APP_PRIVATE_IP=10.0.0.2   DATA_PRIVATE_IP=10.0.0.3   VALKEY_PASSWORD=<same as the data server>
+#
+# The rest of .env must be identical on both servers (keys, passwords, LINE, VAPID, TAG).
+
+x-split-data: &split-data
+  ConnectionStrings__smartshop: "Host=${DATA_PRIVATE_IP:?set DATA_PRIVATE_IP};Database=smartshop;Username=smartshop;Password=${POSTGRES_PASSWORD}"
+  ConnectionStrings__cache: "${DATA_PRIVATE_IP}:6379,password=${VALKEY_PASSWORD:?set VALKEY_PASSWORD},abortConnect=false"
+  Storage__ServiceUrl: "http://${DATA_PRIVATE_IP}:8333"
+
+services:
+  caddy:
+    # Nginx on the data server proxies to this address over the private network; nothing is published publicly.
+    ports: !override
+      - "${APP_PRIVATE_IP:?set APP_PRIVATE_IP}:${SMARTSHOP_HTTP_PORT:-8088}:80"
+    mem_limit: 64m
+
+  api:
+    environment:
+      <<: *split-data
+    depends_on: !override
+      migrator: { condition: service_completed_successfully }
+
+  migrator:
+    environment:
+      <<: *split-data
+    depends_on: !reset {}
+
+  # These run on the data server.
+  postgres:
+    profiles: ["data"]
+  valkey:
+    profiles: ["data"]
+  seaweedfs:
+    profiles: ["data"]
