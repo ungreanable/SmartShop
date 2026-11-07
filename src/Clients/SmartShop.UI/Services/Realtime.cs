@@ -35,8 +35,14 @@ public sealed class Realtime(Session session, AppConfig config, IJSRuntime js) :
     public event Action<JsonElement>? OrderMessage;
     /// <summary>Connected again after a break: events may have been missed, reload what the page shows.</summary>
     public event Action? Resynced;
+    /// <summary>The connection or the network came or went (see <see cref="Healthy"/>).</summary>
+    public event Action? ConnectionChanged;
 
     public bool Connected => _hub?.State == HubConnectionState.Connected;
+    /// <summary>What the browser says about the network (<c>navigator.onLine</c>).</summary>
+    public bool Online { get; private set; } = true;
+    /// <summary>False while offline or while live updates are down; not started (signed out) counts as fine.</summary>
+    public bool Healthy => Online && (_stopped || Connected);
 
     public async Task StartAsync()
     {
@@ -69,6 +75,7 @@ public sealed class Realtime(Session session, AppConfig config, IJSRuntime js) :
         if (_hub is not null) await _hub.StopAsync();
         _plant = null;
         _shops.Clear();
+        ConnectionChanged?.Invoke();
     }
 
     /// <summary>Called from smartshop.js when the app comes back to the front or the network returns.</summary>
@@ -77,6 +84,15 @@ public sealed class Realtime(Session session, AppConfig config, IJSRuntime js) :
     {
         // Skip the rest of the back-off wait: the user is looking at the app now.
         if (!_stopped && _hub is { State: HubConnectionState.Disconnected }) _retryWait?.Cancel();
+    }
+
+    /// <summary>Called from smartshop.js on the browser's online/offline events.</summary>
+    [JSInvokable]
+    public void OnOnlineChanged(bool online)
+    {
+        Online = online;
+        ConnectionChanged?.Invoke();
+        if (online) OnPageVisible();
     }
 
     private HubConnection Build()
@@ -94,14 +110,21 @@ public sealed class Realtime(Session session, AppConfig config, IJSRuntime js) :
         hub.On<JsonElement>("shop.status", e => ShopStatusChanged?.Invoke(e));
         hub.On<JsonElement>("shop.menu", e => MenuChanged?.Invoke(e));
         hub.On<JsonElement>("order.message", e => OrderMessage?.Invoke(e));
+        hub.Reconnecting += _ =>
+        {
+            ConnectionChanged?.Invoke();
+            return Task.CompletedTask;
+        };
         hub.Reconnected += async _ =>
         {
+            ConnectionChanged?.Invoke();
             await RejoinAsync();
             Resynced?.Invoke();
         };
         // The automatic reconnect above gives up after about 40 s; keep trying with a slower pace from here on.
         hub.Closed += error =>
         {
+            ConnectionChanged?.Invoke();
             if (!_stopped) _ = RestartLoopAsync();
             return Task.CompletedTask;
         };
@@ -113,6 +136,7 @@ public sealed class Realtime(Session session, AppConfig config, IJSRuntime js) :
         try
         {
             await _hub!.StartAsync();
+            ConnectionChanged?.Invoke();
             await RejoinAsync();
             return true;
         }

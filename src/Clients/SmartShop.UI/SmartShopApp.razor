@@ -12,8 +12,10 @@
 @inject IPushRegistrar Push
 @inject PushEvents PushEvents
 @inject Api Api
+@inject ThemeSettings ThemeChoice
 
-<MudThemeProvider Theme="UiSetup.Theme" @bind-IsDarkMode="_dark" ObserveSystemDarkModeChange="true" />
+@* Light/dark is decided by ThemeSettings (the user's choice, or the phone's setting it watches itself). *@
+<MudThemeProvider Theme="UiSetup.Theme" IsDarkMode="ThemeChoice.IsDark" ObserveSystemDarkModeChange="false" />
 <MudPopoverProvider />
 <MudDialogProvider FullWidth="true" MaxWidth="MaxWidth.Small" CloseButton="true" />
 <MudSnackbarProvider />
@@ -48,10 +50,12 @@ else
     [Parameter] public IEnumerable<System.Reflection.Assembly> AdditionalAssemblies { get; set; } = [];
 
     private bool _ready;
-    private bool _dark;
 
     protected override async Task OnInitializedAsync()
     {
+        // First, before anything else is drawn: no light flash for people who use dark mode.
+        await ThemeChoice.InitializeAsync();
+        ThemeChoice.Changed += Refresh;
         await L.InitializeAsync();
         await Session.InitializeAsync();
         L.Changed += Refresh;
@@ -198,6 +202,7 @@ else
     {
         _self?.Dispose();
         L.Changed -= Refresh;
+        ThemeChoice.Changed -= Refresh;
         Session.Changed -= OnSessionChanged;
         Realtime.Notification -= OnNotification;
     }
