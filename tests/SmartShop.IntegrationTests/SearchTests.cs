@@ -4,7 +4,7 @@ namespace SmartShop.IntegrationTests;
 
 public sealed record StatusLiteDto(string State, string Reason, bool AcceptingOrders);
 public sealed record ShopCardDto(Guid Id, string Name, string? Category, StatusLiteDto Status, bool AcceptsPreorders, bool IsNew);
-public sealed record HomeDto(List<string> Categories, List<ShopCardDto> OpenNow, List<ShopCardDto> Shops);
+public sealed record HomeDto(List<string> Categories, List<ShopCardDto> Shops, int OpenCount, int Total, bool HasMore);
 public sealed record ItemHitDto(Guid ItemId, Guid ShopId, string ShopName, string Name, decimal Price, bool IsSoldOut);
 public sealed record SearchResultDto(List<ShopCardDto> Shops, List<ItemHitDto> Items);
 
@@ -34,7 +34,7 @@ public class SearchTests(SmartShopFactory factory)
             var home = await member.GetAsync<HomeDto>("/api/home");
             home.Shops.Count.ShouldBe(2);
             home.Shops[0].Id.ShouldBe(openShop);
-            home.OpenNow.Select(s => s.Id).ShouldBe([openShop]);
+            home.OpenCount.ShouldBe(1);
             home.Categories.ShouldBe(["ขนม", "อาหาร"]);
             home.Shops.ShouldAllBe(s => s.IsNew);
         });

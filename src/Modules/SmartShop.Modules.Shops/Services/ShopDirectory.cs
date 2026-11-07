@@ -80,9 +80,14 @@ internal sealed class ShopDirectory(ShopsDbContext db, HybridCache cache, ICurre
             ? null
             : new ShopListingSnapshot(s.Id, s.PlantId, s.Name, s.Description, s.Category, s.LogoId, s.CoverId, s.HouseNo,
                 s.PickupEnabled, s.DeliveryEnabled, s.AllowPreorderWhenClosed, s.PrepTimeMinutes,
-                s.RatingAverage, s.RatingCount, s.IsListed, s.ToSchedule(), s.CreatedAt);
+                s.RatingAverage, s.RatingCount, s.IsListed, s.ToSchedule(), s.CreatedAt, s.DisplayOrder);
     }
 
     public async Task<IReadOnlyList<Guid>> GetFavoritersAsync(Guid shopId, CancellationToken ct = default) =>
         await db.Favorites.AsNoTracking().Where(f => f.ShopId == shopId).Select(f => f.UserId).ToListAsync(ct);
+
+    public async Task<IReadOnlyDictionary<Guid, int?>> GetDisplayOrderAsync(Guid plantId, CancellationToken ct = default) =>
+        await db.Shops.AsNoTracking().Where(s => s.PlantId == plantId)
+            .Select(s => new { s.Id, s.DisplayOrder })
+            .ToDictionaryAsync(s => s.Id, s => s.DisplayOrder, ct);
 }

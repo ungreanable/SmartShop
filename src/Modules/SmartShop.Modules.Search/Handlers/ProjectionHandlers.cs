@@ -42,12 +42,23 @@ public static class ShopProjectionHandler
         listing.RatingAverage = snapshot.RatingAverage;
         listing.RatingCount = snapshot.RatingCount;
         listing.IsActive = snapshot.IsActive;
+        listing.DisplayOrder = snapshot.DisplayOrder;
         listing.Schedule = snapshot.Schedule;
         listing.UpdatedAt = clock.GetUtcNow();
 
         var itemNames = await db.Items.Where(i => i.ShopId == shopId && i.IsVisible).Select(i => i.Name).ToListAsync(ct);
         listing.SearchText = SearchText(listing, itemNames);
         await cache.RemoveAsync(CacheKeys.PlantFeed(snapshot.PlantId), ct);
+    }
+
+    /// <summary>One event for the whole village: renumber every listing from one query instead of a snapshot per shop.</summary>
+    public static async Task Handle(ShopsReordered e, SearchDbContext db, IShopDirectory shops, HybridCache cache, CancellationToken ct)
+    {
+        var order = await shops.GetDisplayOrderAsync(e.PlantId, ct);
+        foreach (var listing in await db.Shops.Where(s => s.PlantId == e.PlantId).ToListAsync(ct))
+            listing.DisplayOrder = order.GetValueOrDefault(listing.ShopId);
+        await db.SaveChangesAsync(ct);
+        await cache.RemoveAsync(CacheKeys.PlantFeed(e.PlantId), ct);
     }
 
     internal static string SearchText(ShopListing l, IEnumerable<string> itemNames)

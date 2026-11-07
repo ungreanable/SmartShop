@@ -34,6 +34,10 @@ public sealed class ShopListing
     public decimal RatingAverage { get; set; }
     public int RatingCount { get; set; }
     public bool IsActive { get; set; }
+
+    /// <summary>The village admin's position for the shop; null (not arranged yet) sorts after every arranged shop.</summary>
+    public int? DisplayOrder { get; set; }
+
     public ShopScheduleSnapshot Schedule { get; set; } = new("Asia/Bangkok", [], []);
 
     /// <summary>Lower-case name, description, category and item names for trigram search (works for Thai).</summary>
@@ -100,7 +104,11 @@ public sealed record StatusLiteDto(ShopOpenState State, ShopClosedReason Reason,
 public sealed record ShopCardDto(Guid Id, string Name, string? Category, string? Description, string? LogoUrl, string? CoverUrl, string? HouseNo,
     StatusLiteDto Status, bool PickupEnabled, bool DeliveryEnabled, bool AcceptsPreorders, int PrepTimeMinutes,
     decimal RatingAverage, int RatingCount, bool IsNew);
-public sealed record HomeDto(List<string> Categories, List<ShopCardDto> OpenNow, List<ShopCardDto> Shops);
+/// <summary>
+/// One page of the village shop list: shops taking orders first (<see cref="OpenCount"/> of them across all pages), then the closed
+/// ones, each part in the village admin's order. The open part is therefore complete before the first closed shop arrives.
+/// </summary>
+public sealed record HomeDto(List<string> Categories, List<ShopCardDto> Shops, int OpenCount, int Total, bool HasMore);
 public sealed record ItemHitDto(Guid ItemId, Guid ShopId, string ShopName, string Name, decimal Price, string? ThumbnailUrl, bool IsSoldOut);
 public sealed record SearchResultDto(List<ShopCardDto> Shops, List<ItemHitDto> Items);
 
@@ -117,9 +125,10 @@ public sealed class SearchModule : IModule
     {
         var group = app.MapGroup("/").WithTags("Home & search").RequirePlantMember();
 
-        // Listing data is cached per plant; open/closed is evaluated per request because it depends on "now".
-        group.MapGet("/home", async (string? category, ICurrentPlant plant, SearchDbContext db, HybridCache cache, IMediaUrls media,
-            TimeProvider clock, CancellationToken ct) =>
+        // Listing data is cached per plant (one entry whatever the page or category); open/closed is evaluated per request because
+        // it depends on "now", then the ordered list is sliced. A village has tens of shops, so sorting them all per request is cheap.
+        group.MapGet("/home", async (string? category, int? page, int? size, ICurrentPlant plant, SearchDbContext db, HybridCache cache,
+            IMediaUrls media, TimeProvider clock, CancellationToken ct) =>
         {
             var listings = await cache.GetOrCreateAsync(CacheKeys.PlantFeed(plant.PlantId),
                 async token => await db.Shops.AsNoTracking().Where(s => s.PlantId == plant.PlantId && s.IsActive).ToListAsync(token),
@@ -127,14 +136,25 @@ public sealed class SearchModule : IModule
                 cancellationToken: ct);
 
             var now = clock.GetUtcNow();
-            var cards = listings
+            // Cards are built for the requested page only; ordering needs just the status, position and rating.
+            var ordered = listings
                 .Where(l => category is null || l.Category == category)
-                .Select(l => Card(l, now, media))
-                .Where(c => c.Status.Reason != ShopClosedReason.Vacation) // vacation hides the shop from the feed
-                .OrderBy(Rank).ThenBy(c => c.Status.NextOpenAt ?? DateTimeOffset.MaxValue).ThenByDescending(c => c.RatingAverage)
+                .Select(l => (Listing: l, Status: ShopScheduleEvaluator.Evaluate(l.Schedule, now)))
+                .Where(x => x.Status.Reason != ShopClosedReason.Vacation) // vacation hides the shop from the feed
+                .OrderBy(x => x.Status.AcceptingOrders ? 0 : 1)
+                .ThenBy(x => x.Listing.DisplayOrder ?? int.MaxValue)
+                .ThenBy(x => Rank(x.Status.State, PreorderBadge(x.Listing, x.Status)))
+                .ThenBy(x => x.Status.NextOpenAt ?? DateTimeOffset.MaxValue)
+                .ThenByDescending(x => x.Listing.RatingAverage)
+                .ThenBy(x => x.Listing.ShopId) // stable across requests, so pages neither repeat nor skip a shop
                 .ToList();
+
+            var pageSize = Math.Clamp(size ?? 20, 1, 100);
+            var pageNumber = Math.Clamp(page ?? 1, 1, 10_000); // bounded so page * size cannot overflow
+            var cards = ordered.Skip((pageNumber - 1) * pageSize).Take(pageSize).Select(x => Card(x.Listing, x.Status, now, media)).ToList();
             var categories = listings.Where(l => l.Category is not null).Select(l => l.Category!).Distinct().Order().ToList();
-            return new HomeDto(categories, cards.Where(c => c.Status.AcceptingOrders).Take(10).ToList(), cards);
+            return new HomeDto(categories, cards, ordered.Count(x => x.Status.AcceptingOrders), ordered.Count,
+                pageNumber * pageSize < ordered.Count);
         });
 
         group.MapGet("/search", async (string q, ICurrentPlant plant, SearchDbContext db, IMediaUrls media, TimeProvider clock, CancellationToken ct) =>
@@ -157,28 +177,29 @@ public sealed class SearchModule : IModule
 
             var now = clock.GetUtcNow();
             return new SearchResultDto(
-                shops.Select(s => Card(s, now, media)).OrderBy(Rank).ToList(),
+                shops.Select(s => Card(s, ShopScheduleEvaluator.Evaluate(s.Schedule, now), now, media))
+                    .OrderBy(c => Rank(c.Status.State, c.AcceptsPreorders)).ToList(),
                 items.Where(i => shopNames.ContainsKey(i.ShopId))
                     .Select(i => new ItemHitDto(i.ItemId, i.ShopId, shopNames[i.ShopId], i.Name, i.Price, media.For(i.ImageId, MediaVariant.Small), i.IsSoldOut))
                     .ToList());
         });
     }
 
-    private static int Rank(ShopCardDto c) => c.Status.State switch
+    private static int Rank(ShopOpenState state, bool acceptsPreorders) => state switch
     {
         ShopOpenState.Open => 0,
         ShopOpenState.Busy => 1,
-        _ when c.AcceptsPreorders => 2,
+        _ when acceptsPreorders => 2,
         _ => 3,
     };
 
-    private static ShopCardDto Card(ShopListing l, DateTimeOffset now, IMediaUrls media)
-    {
-        var s = ShopScheduleEvaluator.Evaluate(l.Schedule, now);
-        return new ShopCardDto(l.ShopId, l.Name, l.Category, l.Description, media.For(l.LogoId, MediaVariant.Small), media.For(l.CoverId),
+    private static bool PreorderBadge(ShopListing l, ShopStatus s) =>
+        !s.AcceptingOrders && l.AllowPreorder && s.State == ShopOpenState.Closed
+        && s.Reason is not (ShopClosedReason.Suspended or ShopClosedReason.Vacation);
+
+    private static ShopCardDto Card(ShopListing l, ShopStatus s, DateTimeOffset now, IMediaUrls media) =>
+        new(l.ShopId, l.Name, l.Category, l.Description, media.For(l.LogoId, MediaVariant.Small), media.For(l.CoverId),
             l.HouseNo, new StatusLiteDto(s.State, s.Reason, s.Until, s.NextOpenAt, s.AcceptingOrders),
-            l.PickupEnabled, l.DeliveryEnabled, !s.AcceptingOrders && l.AllowPreorder && s.State == ShopOpenState.Closed
-                && s.Reason is not (ShopClosedReason.Suspended or ShopClosedReason.Vacation),
+            l.PickupEnabled, l.DeliveryEnabled, PreorderBadge(l, s),
             l.PrepTimeMinutes, l.RatingAverage, l.RatingCount, now - l.CreatedAt < TimeSpan.FromDays(14));
-    }
 }

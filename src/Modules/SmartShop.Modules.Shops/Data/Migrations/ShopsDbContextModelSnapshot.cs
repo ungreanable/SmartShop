@@ -19,7 +19,7 @@ namespace SmartShop.Modules.Shops.Data.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasDefaultSchema("shops")
-                .HasAnnotation("ProductVersion", "10.0.12")
+                .HasAnnotation("ProductVersion", "10.0.13")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63)
                 .HasAnnotation("WolverineEnabled", "true");
 
@@ -172,6 +172,10 @@ namespace SmartShop.Modules.Shops.Data.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)")
                         .HasColumnName("description");
+
+                    b.Property<int?>("DisplayOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("display_order");
 
                     b.Property<string>("HouseNo")
                         .HasMaxLength(30)

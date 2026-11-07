@@ -225,6 +225,18 @@ window.smartshop = (() => {
     window.addEventListener('pagehide', () => notify(false));
     if (document.visibilityState !== 'visible') notify(false);
   };
+  // Long lists: tells .NET when the end of the list comes within 400px of the screen, so the next page is already on its
+  // way when the thumb gets there. IntersectionObserver works in the LINE in-app browser (Android WebView, iOS 12.2+);
+  // where it is missing this returns null and the page keeps its "load more" button.
+  const observeEnd = (el, dotnet) => {
+    if (!el || !('IntersectionObserver' in window)) return null;
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some(e => e.isIntersecting)) dotnet.invokeMethodAsync('OnListEndVisible').catch(() => { });
+    }, { rootMargin: '0px 0px 400px 0px' });
+    io.observe(el);
+    // A short page leaves the end on screen and the observer only reports changes: observing again reports it once more.
+    return { recheck: () => { io.unobserve(el); io.observe(el); }, dispose: () => io.disconnect() };
+  };
   const setBadge = (count) => { try { count > 0 ? navigator.setAppBadge?.(count) : navigator.clearAppBadge?.(); } catch { } };
   const deviceLabel = () => {
     const ua = navigator.userAgent;
@@ -233,5 +245,5 @@ window.smartshop = (() => {
     return `${browser} · ${os}`;
   };
 
-  return { storage, alarm, liff, lineLogin, takeLoginState, push, copy, share, shareFile, saveImage, download, scrollTo, setBadge, deviceLabel, hasFocus, onPageVisible, onVisibility, sw };
+  return { storage, alarm, liff, lineLogin, takeLoginState, push, copy, share, shareFile, saveImage, download, scrollTo, setBadge, deviceLabel, hasFocus, onPageVisible, onVisibility, observeEnd, sw };
 })();
