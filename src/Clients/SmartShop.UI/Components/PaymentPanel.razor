@@ -5,7 +5,14 @@
 @inject ISnackbar Snackbar
 
 <MudPaper Outlined="true" Class="pa-3 mb-3 ss-card">
-    @if (_payment is null)
+    @if (_payment is null && _gaveUp)
+    {
+        <div class="d-flex align-center gap-2 flex-wrap">
+            <MudText Typo="Typo.body2" Style="flex:1 1 180px">@L["ยังโหลดข้อมูลการชำระเงินไม่ได้", "Could not load the payment details"]</MudText>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh" Disabled="_loading" OnClick="ReloadAsync">@L["ลองใหม่", "Try again"]</MudButton>
+        </div>
+    }
+    else if (_payment is null)
     {
         <MudText Typo="Typo.body2" Class="ss-muted">@L["กำลังเตรียมข้อมูลการชำระเงิน...", "Preparing payment..."]</MudText>
     }
@@ -45,7 +52,7 @@
                     <MudText Typo="Typo.body2">@_payment.BankName · @_payment.AccountName</MudText>
                     <div class="d-flex align-center">
                         <MudText Typo="Typo.h6">@_payment.AccountNumber</MudText>
-                        <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" OnClick="CopyAsync" />
+                        <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" OnClick="CopyAsync" aria-label="@L["คัดลอกเลขบัญชี", "Copy account number"]" />
                     </div>
                     <MudText Typo="Typo.body2" Style="font-weight:600">@L["ยอดที่ต้องโอน", "Amount"] @Fmt.Baht(_payment.Amount)</MudText>
                 </MudPaper>
@@ -135,7 +142,7 @@
     [Parameter] public bool AsShop { get; set; }
 
     private Payment? _payment;
-    private int _attempts;
+    private bool _loading, _gaveUp;
 
     private Color StatusColor => _payment?.Status switch
     {
@@ -145,17 +152,32 @@
         _ => Color.Default,
     };
 
-    protected override async Task OnParametersSetAsync() => await ReloadAsync();
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_payment?.OrderId != OrderId) _payment = null; // another order: never show the previous one's payment
+        await ReloadAsync();
+    }
 
     public async Task ReloadAsync()
     {
-        _payment = await Api.Get<Payment>($"api/orders/{OrderId}/payment{(AsShop ? "?as=shop" : "")}", silent: true);
-        // The payment is created asynchronously right after the order (event-driven); retry briefly.
-        while (_payment is null && _attempts++ < 5)
+        var url = $"api/orders/{OrderId}/payment{(AsShop ? "?as=shop" : "")}";
+        _loading = true;
+        _gaveUp = false;
+        try
         {
-            await Task.Delay(800);
-            _payment = await Api.Get<Payment>($"api/orders/{OrderId}/payment{(AsShop ? "?as=shop" : "")}", silent: true);
+            var payment = await Api.Get<Payment>(url, silent: true);
+            // The payment is created asynchronously right after the order (event-driven); retry briefly. The count
+            // starts again on every reload, so a later reload (or "try again") is never skipped.
+            for (var attempt = 0; payment is null && _payment is null && attempt < 5; attempt++)
+            {
+                await Task.Delay(800);
+                payment = await Api.Get<Payment>(url, silent: true);
+            }
+            // A failed refresh keeps what is on screen rather than going back to "preparing".
+            _payment = payment ?? _payment;
+            _gaveUp = _payment is null;
         }
+        finally { _loading = false; }
         StateHasChanged();
     }
 

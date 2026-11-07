@@ -10,9 +10,11 @@
 @inject Session Session
 
 <div class="ss-page">
-    @if (_order is null) { <Loading Rows="4" /> }
+    @if (_order is null && _problem is not null) { <LoadError Problem="_problem" OnRetry="ReloadAllAsync" /> }
+    else if (_order is null) { <Loading Rows="4" /> }
     else
     {
+        @if (_problem is not null) { <LoadError Inline="true" Problem="_problem" OnRetry="ReloadAllAsync" /> }
         <div class="d-flex align-center mb-1">
             <MudText Typo="Typo.h5" Style="font-weight:700">#@_order.OrderNo</MudText>
             <MudSpacer />
@@ -283,7 +285,15 @@
     // Opened from the merchant screens (ShopId set): ask for the shop view, even if I placed this order myself.
     private string AsShop => ShopId is null ? "" : "?as=shop";
 
-    private async Task LoadAsync() => _order = await Api.Get<Order>($"api/orders/{OrderId}{AsShop}");
+    private ApiProblem? _problem;
+
+    // A failed refresh keeps the order on screen (with a retry row) instead of falling back to the skeleton.
+    private async Task LoadAsync()
+    {
+        var loaded = await Api.Load<Order>($"api/orders/{OrderId}{AsShop}");
+        _problem = loaded.Problem;
+        if (loaded.Value is not null || _order?.Id != OrderId) _order = loaded.Value;
+    }
 
     // Guards every order action against double taps on slow connections.
     private bool _busy;

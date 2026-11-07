@@ -40,7 +40,7 @@
                     {
                         <div style="position:relative">
                             <img src="@img.ThumbnailUrl" alt="" style="width:80px;height:80px;object-fit:cover;border-radius:8px" />
-                            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Style="position:absolute;top:-8px;right:-8px;background:#fff" OnClick="@(() => _images.Remove(img))" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Style="position:absolute;top:-8px;right:-8px;background:#fff" OnClick="@(() => _images.Remove(img))" aria-label="@L["ลบรูปนี้", "Remove this picture"]" />
                         </div>
                     }
                 </div>

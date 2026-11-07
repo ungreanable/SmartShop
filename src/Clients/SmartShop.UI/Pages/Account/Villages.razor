@@ -10,7 +10,7 @@
     <div class="d-flex align-center mb-3">
         <MudText Typo="Typo.h5" Style="font-weight:700">@L["หมู่บ้านของฉัน", "My villages"]</MudText>
         <MudSpacer />
-        <MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="RefreshAsync" />
+        <MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="RefreshAsync" aria-label="@L["โหลดใหม่", "Refresh"]" />
     </div>
 
     @if (Plant.Memberships.Count == 0)
