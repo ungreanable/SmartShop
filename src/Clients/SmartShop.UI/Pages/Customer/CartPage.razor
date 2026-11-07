@@ -3,13 +3,15 @@
 @inject PlantContext Plant
 @inject NavigationManager Nav
 @inject IDialogService Dialogs
+@inject ISnackbar Snackbar
 @inject PushPrompt PushPrompt
 @inject Analytics Analytics
 
 <div class="ss-page">
     <MudText Typo="Typo.h5" Class="mb-3" Style="font-weight:700">@L["ตะกร้า & ชำระเงิน", "Cart & checkout"]</MudText>
 
-    @if (_cart is null) { <Loading /> }
+    @if (_problem is not null && (_cart is null || _shop is null)) { <LoadError Problem="_problem" OnRetry="LoadAsync" /> }
+    else if (_cart is null) { <Loading /> }
     else if (_cart.Lines.Count == 0)
     {
         <EmptyState Icon="@Icons.Material.Outlined.ShoppingCart" Title="@L["ตะกร้าว่าง", "Your cart is empty"]">
@@ -26,24 +28,32 @@
             </div>
             @foreach (var line in _cart.Lines)
             {
-                <div @key="line.Id" class="d-flex gap-2 py-2 align-center" style="border-top:1px solid var(--mud-palette-lines-default)">
-                    <div style="flex:1; min-width:0">
-                        <MudText Typo="Typo.body1">@line.Name</MudText>
-                        @if (line.IsCustom) { <MudText Typo="Typo.caption" Color="Color.Secondary">✍️ @L["ตามสั่ง · ร้านใส่ราคาหลังสั่ง", "Custom · the shop prices it after you order"]</MudText> }
-                        @if (line.Options.Count > 0) { <MudText Typo="Typo.caption" Class="ss-muted">@string.Join(", ", line.Options.Select(o => o.Name))</MudText> }
-                        @if (line.SlotStart is { } s) { <MudText Typo="Typo.caption" Color="Color.Info">⏰ @Fmt.Day(s) @Fmt.Time(s)</MudText> }
-                        @if (line.Note is not null && !line.IsCustom) { <MudText Typo="Typo.caption" Class="ss-muted">📝 @line.Note</MudText> }
-                        @if (!line.IsOrderable) { <MudText Typo="Typo.caption" Color="Color.Error">⚠️ @Problem(line.Problem)</MudText> }
+                @* Name and price on top, controls underneath: room for full-size (44 px) buttons on a 360 px phone. *@
+                <div @key="line.Id" class="py-2" style="border-top:1px solid var(--mud-palette-lines-default)">
+                    <div class="d-flex gap-2">
+                        <div style="flex:1; min-width:0">
+                            <MudText Typo="Typo.body1">@line.Name</MudText>
+                            @if (line.IsCustom) { <MudText Typo="Typo.caption" Color="Color.Secondary">✍️ @L["ตามสั่ง · ร้านใส่ราคาหลังสั่ง", "Custom · the shop prices it after you order"]</MudText> }
+                            @if (line.Options.Count > 0) { <MudText Typo="Typo.caption" Class="ss-muted">@string.Join(", ", line.Options.Select(o => o.Name))</MudText> }
+                            @if (line.SlotStart is { } s) { <MudText Typo="Typo.caption" Color="Color.Info">⏰ @Fmt.Day(s) @Fmt.Time(s)</MudText> }
+                            @if (line.Note is not null && !line.IsCustom) { <MudText Typo="Typo.caption" Class="ss-muted">📝 @line.Note</MudText> }
+                            @if (!line.IsOrderable) { <MudText Typo="Typo.caption" Color="Color.Error">⚠️ @Problem(line.Problem)</MudText> }
+                        </div>
+                        <MudText Style="text-align:right" Class="@(line.IsCustom ? "ss-muted ss-nowrap" : "ss-nowrap")">@(line.IsCustom ? L["รอราคา", "TBD"] : Fmt.Baht(line.LineTotal))</MudText>
                     </div>
-                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error" OnClick="@(() => ChangeAsync(line, -line.Quantity))"
-                                   aria-label="@L["ลบออกจากตะกร้า", "Remove from cart"]" />
-                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Remove" Disabled="@(line.Quantity <= 1)" OnClick="@(() => ChangeAsync(line, -1))" />
-                    <MudText Style="min-width:16px; text-align:center">@line.Quantity</MudText>
-                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Add" OnClick="@(() => ChangeAsync(line, 1))" />
-                    <MudText Style="min-width:64px; text-align:right" Class="@(line.IsCustom ? "ss-muted" : null)">@(line.IsCustom ? L["รอราคา", "TBD"] : Fmt.Baht(line.LineTotal))</MudText>
+                    <div class="d-flex align-center gap-1 mt-1">
+                        <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.DeleteOutline" Disabled="_changing"
+                                   OnClick="@(() => RemoveAsync(line))">@L["ลบ", "Remove"]</MudButton>
+                        <MudSpacer />
+                        <MudIconButton Icon="@Icons.Material.Filled.Remove" Variant="Variant.Outlined" Disabled="@(line.Quantity <= 1 || _changing)"
+                                       OnClick="@(() => ChangeAsync(line, -1))" aria-label="@L["ลดจำนวน", "Decrease quantity"]" />
+                        <MudText Typo="Typo.subtitle1" Style="min-width:36px; text-align:center; font-weight:600">@line.Quantity</MudText>
+                        <MudIconButton Icon="@Icons.Material.Filled.Add" Variant="Variant.Outlined" Disabled="_changing"
+                                       OnClick="@(() => ChangeAsync(line, 1))" aria-label="@L["เพิ่มจำนวน", "Increase quantity"]" />
+                    </div>
                 </div>
             }
-            <MudButton Href="@($"/shops/{_shop.Id}")" StartIcon="@Icons.Material.Filled.Add" Size="Size.Small" Variant="Variant.Text">@L["เพิ่มรายการ", "Add more"]</MudButton>
+            <MudButton Href="@($"/shops/{_shop.Id}")" StartIcon="@Icons.Material.Filled.Add" Variant="Variant.Text">@L["เพิ่มรายการ", "Add more"]</MudButton>
         </MudPaper>
 
         <MudText Typo="Typo.subtitle1" Class="mb-1" Style="font-weight:600">@L["รับสินค้าอย่างไร", "How to receive"]</MudText>
@@ -56,7 +66,10 @@
         {
             <MudText Typo="Typo.caption" Class="ss-muted d-block mb-1">@L["ส่งในหมู่บ้าน ไม่มีค่าส่ง", "Delivery inside the village is free"] @(_shop.DeliveryZoneNote is null ? "" : $"· {_shop.DeliveryZoneNote}")</MudText>
             <div class="ss-grid-2">
-                <MudTextField @bind-Value="_houseNo" Label="@L["บ้านเลขที่", "House no."]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                @* Marked as soon as it is empty: the order button stays off without it, and the reason should be right here. *@
+                <MudTextField @bind-Value="_houseNo" Label="@L["บ้านเลขที่", "House no."]" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true"
+                              Required="true" RequiredError="@L["ต้องใส่บ้านเลขที่", "House number is required"]"
+                              Error="@string.IsNullOrWhiteSpace(_houseNo)" ErrorText="@L["ต้องใส่บ้านเลขที่", "House number is required"]" />
                 <MudTextField @bind-Value="_soi" Label="@L["ซอย", "Soi"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
             </div>
             <MudTextField @bind-Value="_addressNote" Label="@L["จุดสังเกต / วางไว้ที่", "Landmark / leave at"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2" />
@@ -77,7 +90,7 @@
             </MudRadioGroup>
             @if (_scheduled)
             {
-                @if (_windows.Count == 0) { <MudText Typo="Typo.caption" Color="Color.Warning">@L["ไม่มีช่วงเวลาที่เลือกได้", "No available time windows"]</MudText> }
+                @if (_windows.Count == 0) { <MudText Typo="Typo.caption" Class="ss-warn-text">@L["ไม่มีช่วงเวลาที่เลือกได้", "No available time windows"]</MudText> }
                 else
                 {
                     <MudSelect T="TimeWindow" @bind-Value="_window" Label="@L["ช่วงเวลา", "Time window"]" Variant="Variant.Outlined" Margin="Margin.Dense"
@@ -99,8 +112,17 @@
         @* Custom dishes are priced after ordering, so discounts cannot be worked out: no coupon on such orders. *@
         @if (!_cart.NeedsQuote)
         {
-            <MudTextField @bind-Value="_coupon" Label="@L["โค้ดส่วนลด (ถ้ามี)", "Coupon code (optional)"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3"
-                          Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.LocalOffer" OnBlur="PreviewDiscountAsync" />
+            @* An explicit button: a check that only ran when the field lost focus left people unsure whether the code worked. *@
+            <div class="ss-code-row mt-3">
+                <MudTextField @bind-Value="_coupon" Label="@L["โค้ดส่วนลด (ถ้ามี)", "Coupon code (optional)"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                              Class="ss-coupon-input" Immediate="true" OnKeyUp="@(async e => { if (e.Key == "Enter") await ApplyCouponAsync(); })" />
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="@(string.IsNullOrWhiteSpace(_coupon) || _applying)" OnClick="ApplyCouponAsync">@L["ใช้โค้ด", "Apply"]</MudButton>
+            </div>
+            @if (CouponShown)
+            {
+                @if (_couponError is not null) { <MudText Typo="Typo.body2" Color="Color.Error" Class="mt-1">⚠️ @_couponError</MudText> }
+                else if (_discount is not null) { <MudText Typo="Typo.body2" Color="Color.Success" Class="mt-1">✓ @L["ใช้โค้ดแล้ว", "Code applied"]: @_discount.Description (-@Fmt.Baht(_discount.Discount))</MudText> }
+            }
         }
         <MudTextField @bind-Value="_note" Label="@L["หมายเหตุถึงร้าน", "Note for the shop"]" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" Class="mt-2" />
 
@@ -125,6 +147,11 @@
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true" Class="mt-4" Disabled="@(!CanOrder || _busy)" OnClick="PlaceAsync">
             @(_busy ? L["กำลังสั่ง...", "Placing order..."] : _cart.NeedsQuote ? L["ส่งให้ร้านใส่ราคา", "Ask the shop for prices"] : L["สั่งเลย", "Place order"])
         </MudButton>
+        @* A greyed-out button alone does not say why; older users would just wait. *@
+        @if (!CanOrder && !_busy)
+        {
+            <MudText Typo="Typo.body2" Align="Align.Center" Class="ss-warn-text mt-2">⚠️ @L["ยังสั่งไม่ได้", "Cannot order yet"]: @string.Join(" · ", Missing())</MudText>
+        }
     }
 </div>
 
@@ -133,6 +160,7 @@
     private ShopDetails? _shop;
     private Menu? _menu;
     private Round? _round;
+    private ApiProblem? _problem;
     private List<TimeWindow> _windows = [];
     private string _fulfillment = "Pickup";
     private bool _scheduled;
@@ -140,25 +168,46 @@
     private Guid _paymentMethodId;
     private string? _houseNo, _soi, _addressNote, _note, _coupon;
     private DiscountPreview? _discount;
-    private bool _busy;
+    private string? _couponError, _checkedCoupon;
+    private bool _busy, _changing, _applying;
     private readonly string _idempotencyKey = Guid.NewGuid().ToString("N");
 
-    private bool CanOrder => _cart is { CanCheckout: true } && _paymentMethodId != Guid.Empty
-        && (_round is not null || !_scheduled || _window is not null)
-        && (_scheduled || _round is not null || _shop?.Status.AcceptingOrders == true)
-        && (_fulfillment != "Delivery" || !string.IsNullOrWhiteSpace(_houseNo));
+    private bool CanOrder => !Missing().Any();
 
-    protected override async Task OnInitializedAsync()
+    /// <summary>What still stops the order, in the words shown under the disabled button.</summary>
+    private IEnumerable<string> Missing()
     {
-        _cart = await Api.Get<Cart>("api/cart");
-        if (_cart?.ShopId is not { } shopId || _cart.Lines.Count == 0) return;
+        if (_cart is not { CanCheckout: true })
+            yield return _cart?.Lines.Any(l => !l.IsOrderable) == true
+                ? L["บางรายการสั่งไม่ได้ (ดู ⚠️ ด้านบน)", "some items cannot be ordered (see ⚠️ above)"]
+                : L["ร้านนี้ยังรับออเดอร์ไม่ได้", "this shop cannot take orders right now"];
+        if (_fulfillment == "Delivery" && string.IsNullOrWhiteSpace(_houseNo))
+            yield return L["ใส่บ้านเลขที่", "enter your house number"];
+        if (_round is null && !_scheduled && _shop?.Status.AcceptingOrders != true)
+            yield return L["ร้านปิดอยู่ กด \"เลือกเวลา\" เพื่อสั่งล่วงหน้า", "the shop is closed, choose a time to pre-order"];
+        if (_round is null && _scheduled && _window is null)
+            yield return _windows.Count == 0 ? L["ไม่มีช่วงเวลาให้เลือก", "no time windows available"] : L["เลือกช่วงเวลา", "choose a time window"];
+        if (_paymentMethodId == Guid.Empty)
+            yield return _shop?.PaymentMethods.Count == 0 ? L["ร้านยังไม่ได้ตั้งวิธีชำระเงิน", "the shop has no payment method yet"] : L["เลือกวิธีชำระเงิน", "choose how to pay"];
+    }
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var cart = await Api.Load<Cart>("api/cart");
+        _problem = cart.Problem;
+        if (cart.Failed) return;
+        _cart = cart.Value ?? new Cart(null, null, [], 0, 0, false);
+        if (_cart.ShopId is not { } shopId || _cart.Lines.Count == 0) return;
         Analytics.CartView(shopId);
-        var shop = Api.Get<ShopDetails>($"api/shops/{shopId}");
+        var shop = Api.Load<ShopDetails>($"api/shops/{shopId}");
         var windows = Api.Get<List<TimeWindow>>($"api/shops/{shopId}/windows?days=3", silent: true);
         var menu = Api.Get<Menu>($"api/shops/{shopId}/menu", silent: true);
-        _shop = await shop;
+        var loadedShop = await shop;
         _windows = await windows ?? [];
         _menu = await menu;
+        (_shop, _problem) = (loadedShop.Value, loadedShop.Problem);
         if (_shop is null) return;
 
         _fulfillment = _shop.PickupEnabled ? "Pickup" : "Delivery";
@@ -173,20 +222,72 @@
 
     private async Task ChangeAsync(CartLine line, int delta)
     {
-        var quantity = line.Quantity + delta;
-        _cart = quantity <= 0
-            ? await Api.Send<Cart>(HttpMethod.Delete, $"api/cart/items/{line.Id}", null)
-            : await Api.Put<Cart>($"api/cart/items/{line.Id}", new { quantity, optionIds = line.OptionIds, note = line.Note });
+        _changing = true;
+        try
+        {
+            if (await Api.Put<Cart>($"api/cart/items/{line.Id}", new { quantity = line.Quantity + delta, optionIds = line.OptionIds, note = line.Note }) is { } cart)
+            {
+                _cart = cart;
+                await PreviewDiscountAsync();
+            }
+        }
+        finally { _changing = false; }
+    }
+
+    // Removing is one tap with no "are you sure?": the snackbar's undo puts the same line back.
+    private async Task RemoveAsync(CartLine line)
+    {
+        _changing = true;
+        try
+        {
+            if (await Api.Send<Cart>(HttpMethod.Delete, $"api/cart/items/{line.Id}", null) is not { } cart) return;
+            _cart = cart;
+            await PreviewDiscountAsync();
+        }
+        finally { _changing = false; }
+        var shopId = _shop!.Id;
+        Snackbar.Add(L[$"ลบ {line.Name} แล้ว", $"Removed {line.Name}"], Severity.Normal, o =>
+        {
+            o.Action = L["เลิกทำ", "Undo"];
+            o.ActionColor = Color.Primary;
+            o.OnClick = _ => InvokeAsync(() => UndoRemoveAsync(shopId, line));
+        });
+    }
+
+    private async Task UndoRemoveAsync(Guid shopId, CartLine line)
+    {
+        var cart = line.IsCustom
+            ? await Api.Post<Cart>("api/cart/custom", new { shopId, text = line.Name, quantity = line.Quantity, replaceCart = false })
+            : await Api.Post<Cart>("api/cart/items", new { shopId, itemId = line.ItemId, quantity = line.Quantity, optionIds = line.OptionIds, note = line.Note, slotStart = line.SlotStart, replaceCart = false });
+        if (cart is null) return;
+        _cart = cart;
         await PreviewDiscountAsync();
+        StateHasChanged();
+    }
+
+    private bool CouponShown => _checkedCoupon is not null && _checkedCoupon == _coupon?.Trim();
+
+    private async Task ApplyCouponAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_coupon)) return;
+        _applying = true;
+        try { await PreviewDiscountAsync(); }
+        finally { _applying = false; }
     }
 
     private async Task PreviewDiscountAsync()
     {
         // Without a code the server returns the best automatic promotion (or nothing), exactly as checkout will apply it.
         _discount = null;
+        _couponError = null;
+        _checkedCoupon = null;
         if (_cart?.ShopId is not { } shopId || _cart.Lines.Count == 0 || _cart.NeedsQuote) return;
         var code = string.IsNullOrWhiteSpace(_coupon) ? null : _coupon.Trim();
-        _discount = await Api.Post<DiscountPreview>($"api/shops/{shopId}/promotions/preview", new { code, subtotal = _cart.Subtotal }, silent: code is null);
+        // Silent: a bad code is explained next to the field, not in a snackbar on every quantity change.
+        _discount = await Api.Post<DiscountPreview>($"api/shops/{shopId}/promotions/preview", new { code, subtotal = _cart.Subtotal }, silent: true);
+        if (code is null) return;
+        _checkedCoupon = code;
+        if (_discount is null) _couponError = Api.LastProblem?.Message ?? L["ใช้โค้ดนี้ไม่ได้", "This code cannot be used"];
     }
 
     private async Task PlaceAsync()
@@ -213,7 +314,7 @@
         }
         if (Api.LastProblem is { } p)
             await Dialogs.ShowMessageBoxAsync(L["สั่งไม่สำเร็จ", "Could not place order"], p.Message, yesText: "OK");
-        _cart = await Api.Get<Cart>("api/cart");
+        _cart = await Api.Get<Cart>("api/cart") ?? _cart;
     }
 
     private string Problem(string? code) => code switch

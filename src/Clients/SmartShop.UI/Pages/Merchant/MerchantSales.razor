@@ -16,7 +16,8 @@
         <MudDatePicker Date="_to" DateChanged="@(d => DateAsync(d, false))" Label="@L["ถึง", "To"]" Variant="Variant.Outlined" Margin="Margin.Dense" DateFormat="d MMM yyyy" />
     </div>
 
-    @if (_report is null) { <Loading Rows="2" /> }
+    @if (_problem is not null) { <LoadError Problem="_problem" OnRetry="LoadAsync" /> }
+    else if (_report is null) { <Loading Rows="2" /> }
     else
     {
         <div class="ss-grid-2 mb-3">
@@ -76,7 +77,14 @@
     // Invariant culture: the Thai UI culture uses the Buddhist calendar, which would send 2569-10-06 to the API.
     private string Range => string.Create(CultureInfo.InvariantCulture, $"from={_from:yyyy-MM-dd}&to={_to:yyyy-MM-dd}");
 
-    private async Task LoadAsync() => _report = await Api.Get<SalesReport>($"api/merchant/shops/{ShopId}/orders/report?{Range}");
+    private ApiProblem? _problem;
+
+    private async Task LoadAsync()
+    {
+        var report = await Api.Load<SalesReport>($"api/merchant/shops/{ShopId}/orders/report?{Range}");
+        // Old figures under new dates would be wrong: a failure replaces them with the retry message.
+        (_report, _problem) = (report.Value, report.Problem);
+    }
 
     private async Task ExportAsync()
     {

@@ -27,14 +27,17 @@
               Placeholder="@L["เช่น ไข่เยี่ยวม้าหมด เปลี่ยนเป็นไข่ดาวได้ไหม", "e.g. Out of century eggs, fried egg instead?"]"
               Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" MaxLength="300" Class="mt-2" />
 
-<div class="d-flex align-center mt-2">
-    <MudText Typo="Typo.subtitle1">@L["ยอดรวมที่ลูกค้าจะเห็น", "Total the customer will see"]</MudText>
-    <MudSpacer />
-    <MudText Typo="Typo.subtitle1" Style="font-weight:700">@Fmt.Baht(Total)</MudText>
+@* Sticky: with several dishes the total and the send button would otherwise scroll off a phone screen. *@
+<div class="ss-quote-footer">
+    <div class="d-flex align-center">
+        <MudText Typo="Typo.subtitle1">@L["ยอดรวมที่ลูกค้าจะเห็น", "Total the customer will see"]</MudText>
+        <MudSpacer />
+        <MudText Typo="Typo.subtitle1" Style="font-weight:700">@Fmt.Baht(Total)</MudText>
+    </div>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true" Class="mt-1" Disabled="@(Busy || !Complete)"
+               OnClick="SubmitAsync">@L["ส่งราคาให้ลูกค้า", "Send prices to the customer"]</MudButton>
+    @if (!Complete) { <MudText Typo="Typo.caption" Class="ss-muted d-block">@L["ใส่ราคาทุกรายการ หรือเลือก \"ทำไม่ได้\"", "Price every dish or mark it as not possible"]</MudText> }
 </div>
-<MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true" Class="mt-2" Disabled="@(Busy || !Complete)"
-           OnClick="SubmitAsync">@L["ส่งราคาให้ลูกค้า", "Send prices to the customer"]</MudButton>
-@if (!Complete) { <MudText Typo="Typo.caption" Class="ss-muted">@L["ใส่ราคาทุกรายการ หรือเลือก \"ทำไม่ได้\"", "Price every dish or mark it as not possible"]</MudText> }
 
 @code {
     [Parameter, EditorRequired] public Order Order { get; set; } = default!;

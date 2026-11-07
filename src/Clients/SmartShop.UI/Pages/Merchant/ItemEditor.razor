@@ -86,7 +86,7 @@
                             </MudSelect>
                             <TimeField @bind-Value="w.From" Label="@L["ตั้งแต่", "From"]" />
                             <TimeField @bind-Value="w.To" Label="@L["ถึง", "To"]" />
-                            <MudIconButton Icon="@Icons.Material.Filled.Delete" OnClick="@(() => _windows.Remove(w))" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" OnClick="@(() => _windows.Remove(w))" aria-label="@L["ลบช่วงเวลานี้", "Remove this time"]" />
                         </div>
                     }
                     <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => _windows.Add(new WindowForm()))">@L["เพิ่มช่วงเวลา", "Add window"]</MudButton>
@@ -111,7 +111,7 @@
                                     <MudTextField @bind-Value="o.Name" Label="@L["ตัวเลือก", "Option"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
                                     <MudNumericField T="decimal" @bind-Value="o.PriceDelta" Label="+฿" Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:100px" />
                                     <MudCheckBox T="bool" @bind-Value="o.IsAvailable" Dense="true" />
-                                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="@(() => g.Options.Remove(o))" />
+                                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="@(() => g.Options.Remove(o))" aria-label="@L["ลบตัวเลือกนี้", "Remove this option"]" />
                                 </div>
                             }
                             <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => g.Options.Add(new OptionForm()))">@L["เพิ่มตัวเลือก", "Add option"]</MudButton>

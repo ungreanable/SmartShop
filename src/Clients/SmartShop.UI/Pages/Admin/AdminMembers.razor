@@ -3,11 +3,12 @@
 @inject Api Api
 @inject Session Session
 @inject IDialogService Dialogs
+@inject AppState State
 
 <div class="ss-page">
     <MudText Typo="Typo.h5" Class="mb-2" Style="font-weight:700">@L["สมาชิกหมู่บ้าน", "Members"]</MudText>
     <MudTabs @bind-ActivePanelIndex="_tab" MinimumTabWidth="0px" Class="ss-tabs-fill" Elevation="0" Color="Color.Transparent" SliderColor="Color.Primary" ApplyEffectsToContainer="true">
-        <MudTabPanel Text="@L["รออนุมัติ", "Pending"]" OnClick="@(() => LoadAsync(0))" />
+        <MudTabPanel Text="@L["รออนุมัติ", "Pending"]" BadgeData="@(State.PendingMembers is > 0 and var n ? n : null)" BadgeColor="Color.Error" OnClick="@(() => LoadAsync(0))" />
         <MudTabPanel Text="@L["สมาชิก", "Active"]" OnClick="@(() => LoadAsync(1))" />
         <MudTabPanel Text="@L["ระงับ", "Suspended"]" OnClick="@(() => LoadAsync(2))" />
     </MudTabs>
@@ -15,7 +16,8 @@
                   Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Clearable="true" Immediate="true"
                   DebounceInterval="400" OnDebounceIntervalElapsed="@(_ => LoadAsync(_tab))" OnClearButtonClick="@(_ => LoadAsync(_tab))" Class="mb-2" />
 
-    @if (_rows is null) { <Loading /> }
+    @if (_problem is not null) { <LoadError Problem="_problem" OnRetry="@(() => LoadAsync(_tab))" /> }
+    else if (_rows is null) { <Loading /> }
     else if (_rows.Count == 0) { <EmptyState Title="@L["ไม่มีรายการ", "Nothing here"]" Icon="@Icons.Material.Outlined.People" /> }
     else
     {
@@ -35,8 +37,14 @@
                     @switch (m.Status)
                     {
                         case "Pending":
-                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => DecideAsync(m, "reject", true))">@L["ไม่อนุมัติ", "Reject"]</MudButton>
-                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => DecideAsync(m, "approve", false))">@L["อนุมัติ", "Approve"]</MudButton>
+                            @* Approve is the big, obvious one; reject is a smaller text button on the far side (it asks for a reason). *@
+                            <div class="d-flex flex-column" style="width:100%">
+                                <MudButton Size="Size.Large" FullWidth="true" Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy.Contains(m.MembershipId)"
+                                           StartIcon="@Icons.Material.Filled.Check" OnClick="@(() => DecideAsync(m, "approve", false))">@L["อนุมัติ", "Approve"]</MudButton>
+                                <div class="d-flex justify-end mt-1">
+                                    <MudButton Variant="Variant.Text" Color="Color.Error" Disabled="_busy.Contains(m.MembershipId)" OnClick="@(() => DecideAsync(m, "reject", true))">@L["ไม่อนุมัติ...", "Reject..."]</MudButton>
+                                </div>
+                            </div>
                             break;
                         case "Active" when m.UserId != Session.User?.Id:
                             <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => RoleAsync(m))">@(m.Role == "PlantAdmin" ? L["ถอดผู้ดูแล", "Remove admin"] : L["ตั้งเป็นผู้ดูแล", "Make admin"])</MudButton>
@@ -61,16 +69,25 @@
 
     protected override async Task OnInitializedAsync() => await LoadAsync(0);
 
+    private ApiProblem? _problem;
+    private readonly HashSet<Guid> _busy = [];
+
     private async Task LoadAsync(int tab)
     {
         _tab = tab;
-        _rows = null;
+        (_rows, _problem) = (null, null);
         var q = string.IsNullOrWhiteSpace(_q) ? "" : $"&q={Uri.EscapeDataString(_q)}";
-        _rows = (await Api.Get<PagedResult<MemberRow>>($"api/plant/admin/members?status={Statuses[tab]}{q}&pageSize=200"))?.Items ?? [];
+        var page = await Api.Load<PagedResult<MemberRow>>($"api/plant/admin/members?status={Statuses[tab]}{q}&pageSize=200");
+        if (tab != _tab) return;
+        (_rows, _problem) = (page.Failed ? null : page.Value?.Items ?? [], page.Problem);
+        // The unfiltered pending list is the count itself: no extra request for the badges.
+        if (tab == 0 && q == "" && page.Value is { } p) State.SetPendingMembers(p.Total);
+        else if (tab != 0) _ = State.RefreshPendingMembersAsync();
     }
 
     private async Task DecideAsync(MemberRow m, string action, bool askReason)
     {
+        if (_busy.Contains(m.MembershipId)) return;
         string? reason = null;
         if (askReason)
         {
@@ -79,7 +96,12 @@
             if (result is not { Canceled: false, Data: string text }) return;
             reason = text;
         }
-        if (await Api.Post($"api/plant/admin/members/{m.MembershipId}/{action}", new { reason })) await LoadAsync(_tab);
+        _busy.Add(m.MembershipId);
+        try
+        {
+            if (await Api.Post($"api/plant/admin/members/{m.MembershipId}/{action}", new { reason })) await LoadAsync(_tab);
+        }
+        finally { _busy.Remove(m.MembershipId); }
     }
 
     private async Task RoleAsync(MemberRow m)

@@ -7,7 +7,7 @@
         <div class="d-flex align-center mb-1">
             <MudText Typo="Typo.subtitle1" Style="font-weight:600">🔔 @L["การแจ้งเตือนออเดอร์ใหม่", "New-order alerts"]</MudText>
             <MudSpacer />
-            <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" OnClick="LoadAsync" />
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" OnClick="LoadAsync" aria-label="@L["ตรวจสอบอีกครั้ง", "Check again"]" />
         </div>
         @if (!_health.AnyRecipientHasPush)
         {

@@ -216,6 +216,11 @@ window.smartshop = (() => {
     const notify = () => { if (document.visibilityState === 'visible') dotnet.invokeMethodAsync('OnPageVisible').catch(() => { }); };
     document.addEventListener('visibilitychange', notify);
     window.addEventListener('online', notify);
+    // The "offline" banner: the browser knows the network is gone before any request fails.
+    const online = () => dotnet.invokeMethodAsync('OnOnlineChanged', navigator.onLine).catch(() => { });
+    window.addEventListener('online', online);
+    window.addEventListener('offline', online);
+    if (!navigator.onLine) online();
   };
   // Usage statistics: queued events are sent when the page goes to the background (it may never come back), and
   // "people viewing" heartbeats pause while nobody is looking.
@@ -244,6 +249,21 @@ window.smartshop = (() => {
     const browser = /Line\//.test(ua) ? 'LINE' : /Edg\//.test(ua) ? 'Edge' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : /Firefox\//.test(ua) ? 'Firefox' : 'Browser';
     return `${browser} · ${os}`;
   };
+  // ---------- theme ----------
+  // Returns the phone's light/dark setting now and reports later changes (the "follow the system" theme choice).
+  const watchDarkMode = (dotnet) => {
+    const query = window.matchMedia?.('(prefers-color-scheme: dark)');
+    if (!query) return false;
+    query.addEventListener?.('change', (e) => dotnet.invokeMethodAsync('OnSystemDarkChanged', e.matches).catch(() => { }));
+    return query.matches;
+  };
+  const setThemeColor = (color, dark) => {
+    let meta = document.querySelector('meta[name="theme-color"]');
+    if (!meta) { meta = document.createElement('meta'); meta.name = 'theme-color'; document.head.appendChild(meta); }
+    meta.content = color;
+    document.documentElement.style.colorScheme = dark ? 'dark' : 'light'; // native scrollbars, date pickers
+    document.documentElement.classList.remove('ss-boot-dark'); // index.html's pre-start guess: the app's theme rules now
+  };
 
-  return { storage, alarm, liff, lineLogin, takeLoginState, push, copy, share, shareFile, saveImage, download, scrollTo, setBadge, deviceLabel, hasFocus, onPageVisible, onVisibility, observeEnd, sw };
+  return { storage, alarm, liff, lineLogin, takeLoginState, push, copy, share, shareFile, saveImage, download, scrollTo, setBadge, deviceLabel, hasFocus, onPageVisible, onVisibility, observeEnd, sw, watchDarkMode, setThemeColor };
 })();

@@ -11,16 +11,22 @@
         <MudTabPanel Text="@L["ประวัติ", "History"]" OnClick="@(() => LoadAsync(1))" />
     </MudTabs>
 
-    @if (_orders is null) { <Loading /> }
-    else if (_orders.Count == 0)
-    {
-        <EmptyState Icon="@Icons.Material.Outlined.ReceiptLong" Title="@L["ยังไม่มีออเดอร์", "No orders yet"]" />
-    }
+    @if (_orders is null && _problem is not null) { <LoadError Problem="_problem" OnRetry="@(() => LoadAsync(_tab))" /> }
+    else if (_orders is null) { <Loading /> }
     else
     {
-        @foreach (var o in _orders)
+        @if (_problem is not null) { <LoadError Inline="true" Problem="_problem" OnRetry="@(() => _reload!.RunNowAsync())" /> }
+        @if (_orders.Count == 0)
         {
-            <MudPaper @key="o.Id" Outlined="true" Class="pa-3 mb-2 ss-card" Style="cursor:pointer" @onclick="@(() => Nav.NavigateTo($"/orders/{o.Id}"))">
+            <EmptyState Icon="@Icons.Material.Outlined.ReceiptLong" Title="@L["ยังไม่มีออเดอร์", "No orders yet"]">
+                <MudButton Href="/" Variant="Variant.Filled" Color="Color.Primary">@L["ไปเลือกร้าน", "Browse shops"]</MudButton>
+            </EmptyState>
+        }
+        @* Orders waiting for me come first, with the one thing to do on them: otherwise they expire unnoticed. *@
+        @foreach (var o in _orders.OrderBy(o => Action(o) is null))
+        {
+            var action = Action(o);
+            <MudPaper @key="o.Id" Outlined="true" Class="@($"pa-3 mb-2 ss-card {(action is null ? "" : "ss-needs-me")}")" Style="cursor:pointer" @onclick="@(() => Open(o))">
                 <div class="d-flex align-center">
                     <MudText Typo="Typo.subtitle1" Style="font-weight:600">@o.ShopName</MudText>
                     <MudSpacer />
@@ -32,6 +38,11 @@
                     <MudSpacer />
                     <MudText Typo="Typo.body2" Style="font-weight:600">@Fmt.Baht(o.Total)</MudText>
                 </div>
+                @if (action is { } a)
+                {
+                    @if (a.Hint is not null) { <MudText Typo="Typo.body2" Class="ss-warn-text mt-1">⏳ @a.Hint</MudText> }
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true" Class="mt-2" OnClick="@(() => Open(o))">@a.Label</MudButton>
+                }
             </MudPaper>
         }
     }
@@ -40,8 +51,24 @@
 @code {
     private int _tab;
     private List<OrderSummary>? _orders;
+    private ApiProblem? _problem;
 
     private Reloader? _reload;
+
+    private sealed record CustomerAction(string Label, string? Hint);
+
+    /// <summary>What the customer has to do on this order now, if anything (from the summary alone, no extra calls).</summary>
+    private CustomerAction? Action(OrderSummary o) => o switch
+    {
+        { Status: "AwaitingPriceApproval" } => new(L["ยืนยันราคา", "Confirm the price"],
+            o.ExpiresAt is { } until ? L[$"ร้านใส่ราคาแล้ว ยืนยันก่อน {Fmt.Time(until)}", $"The shop sent prices, answer before {Fmt.Time(until)}"] : null),
+        { Status: "Delivered" } => new(L["ยืนยันรับของ", "Confirm you received it"], null),
+        { PaymentStatus: "Rejected", Status: not ("Cancelled" or "Rejected" or "Expired" or "Completed") } =>
+            new(L["แนบสลิปใหม่", "Attach a new slip"], L["ร้านแจ้งว่าสลิปไม่ถูกต้อง", "The shop could not accept your slip"]),
+        _ => null,
+    };
+
+    private void Open(OrderSummary o) => Nav.NavigateTo($"/orders/{o.Id}");
 
     protected override async Task OnInitializedAsync()
     {
@@ -59,14 +86,18 @@
     {
         _tab = tab;
         _orders = null;
+        _problem = null;
         await _reload!.RunNowAsync();
     }
 
     private async Task FetchAsync()
     {
         var tab = _tab;
-        var page = await Api.Get<PagedResult<OrderSummary>>($"api/orders?scope={(tab == 0 ? "active" : "history")}");
-        if (tab == _tab) _orders = page?.Items ?? _orders ?? []; // switched tabs meanwhile: the queued reload shows that one
+        var page = await Api.Load<PagedResult<OrderSummary>>($"api/orders?scope={(tab == 0 ? "active" : "history")}");
+        if (tab != _tab) return; // switched tabs meanwhile: the queued reload shows that one
+        _problem = page.Problem;
+        // A failed refresh keeps the list on screen; only a first load with nothing to show becomes the error page.
+        if (!page.Failed) _orders = page.Value?.Items ?? [];
     }
 
     // One order step often sends a few events in a row: reload once, in place (no loading flash).

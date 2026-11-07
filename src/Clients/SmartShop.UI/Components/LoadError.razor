@@ -1,0 +1,43 @@
+@* A page's data could not be loaded (weak signal, server down): say so and offer a retry, instead of an endless
+   spinner or an empty list that looks like "nothing here". Inline: a slim row above content that is still shown. *@
+
+@if (Inline)
+{
+    <div class="ss-load-error-inline" role="alert">
+        <MudIcon Icon="@Icons.Material.Filled.CloudOff" Size="Size.Small" />
+        <MudText Typo="Typo.body2" Style="flex:1; min-width:0">@L["อัปเดตไม่สำเร็จ", "Could not update"] · @Hint</MudText>
+        <MudButton Variant="Variant.Text" Color="Color.Primary" Disabled="_retrying" OnClick="RetryAsync">@L["ลองใหม่", "Retry"]</MudButton>
+    </div>
+}
+else
+{
+    <div class="d-flex flex-column align-center justify-center pa-8 gap-2" style="text-align:center" role="alert">
+        <MudIcon Icon="@Icons.Material.Outlined.CloudOff" Size="Size.Large" Style="opacity:.6" />
+        <MudText Typo="Typo.subtitle1" Style="font-weight:600">@L["โหลดไม่สำเร็จ", "Could not load"]</MudText>
+        <MudText Typo="Typo.body2" Class="ss-muted">@Hint</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Class="mt-2" Disabled="_retrying"
+                   StartIcon="@Icons.Material.Filled.Refresh" OnClick="RetryAsync">
+            @(_retrying ? L["กำลังลองใหม่...", "Retrying..."] : L["ลองใหม่", "Try again"])
+        </MudButton>
+    </div>
+}
+
+@code {
+    [Parameter] public ApiProblem? Problem { get; set; }
+    [Parameter] public EventCallback OnRetry { get; set; }
+    [Parameter] public bool Inline { get; set; }
+
+    private bool _retrying;
+
+    // Offline and server errors: nothing the user did wrong, so a plain hint. Other answers (e.g. "not found") say why.
+    private string Hint => Problem is null or { Status: 0 or >= 500 }
+        ? L["ตรวจสอบอินเทอร์เน็ต แล้วกดลองใหม่", "Check your internet connection and try again"]
+        : Problem.Message;
+
+    private async Task RetryAsync()
+    {
+        _retrying = true;
+        try { await OnRetry.InvokeAsync(); }
+        finally { _retrying = false; }
+    }
+}

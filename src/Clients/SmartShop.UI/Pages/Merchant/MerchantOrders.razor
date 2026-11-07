@@ -59,7 +59,10 @@
         <MudTabPanel Text="@L["เสร็จแล้ว", "Done"]" OnClick="@(() => LoadAsync(3))" />
     </MudTabs>
 
-    @if (_orders is null) { <Loading /> }
+    @* A failure must never look like "no new orders": the list stays as it was, with a retry row above it. *@
+    @if (_problem is not null && _orders is not null) { <LoadError Inline="true" Problem="_problem" OnRetry="@(() => LoadAsync(_tab))" /> }
+    @if (_orders is null && _problem is not null) { <LoadError Problem="_problem" OnRetry="@(() => LoadAsync(_tab))" /> }
+    else if (_orders is null) { <Loading /> }
     else if (_orders.Count == 0)
     {
         <EmptyState Icon="@Icons.Material.Outlined.Inbox" Title="@(_tab == 0 ? L["ยังไม่มีออเดอร์ใหม่", "No new orders"] : L["ไม่มีรายการ", "Nothing here"])" />
@@ -68,6 +71,7 @@
     {
         @foreach (var o in _orders)
         {
+            var busy = _acting.Contains(o.Id);
             <MudPaper @key="o.Id" Outlined="true" Class="@($"pa-3 mb-2 ss-card {(o.Status == "PendingAcceptance" ? "ss-new-order" : "")}")">
                 <div class="d-flex align-center" style="cursor:pointer" @onclick="@(() => Nav.NavigateTo($"/merchant/{ShopId}/orders/{o.Id}"))">
                     <MudText Typo="Typo.h6" Style="font-weight:700">#@o.OrderNo</MudText>
@@ -79,33 +83,36 @@
                 <MudText Typo="Typo.body2">👤 @o.CustomerName @(o.CustomerHouseNo is null ? "" : $"· {L["บ้าน", "house"]} {o.CustomerHouseNo}")</MudText>
                 <MudText Typo="Typo.body2">@(o.FulfillmentType == "Delivery" ? "🛵" : "🏠") @(o.ScheduledFrom is { } f && o.ScheduledTo is { } t ? Fmt.Window(f, t) : L["เร็วที่สุด", "ASAP"])</MudText>
                 <MudText Typo="Typo.body2" Class="ss-clamp-2">🧾 @o.ItemsPreview</MudText>
-                <div class="d-flex align-center gap-2 mt-1">
+                <div class="d-flex align-center gap-2 mt-1 flex-wrap">
                     <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@CartPage.PaymentIcon(o.PaymentMethodType) @OrderStatusChip.PaymentText(o.PaymentStatus, L)</MudChip>
                     @if (o.CancelRequested) { <MudChip T="string" Size="Size.Small" Color="Color.Error">@L["ขอยกเลิก", "Cancel requested"]</MudChip> }
-                    <MudSpacer />
-                    @switch (o.Status)
-                    {
-                        case "PendingAcceptance" when o.NeedsQuote:
-                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Href="@($"/merchant/{ShopId}/orders/{o.Id}")">✍️ @L["ใส่ราคา", "Set prices"]</MudButton>
-                            break;
-                        case "PendingAcceptance":
-                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" Href="@($"/merchant/{ShopId}/orders/{o.Id}")">@L["ปฏิเสธ", "Reject"]</MudButton>
-                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => ActAsync(o, "accept"))">@L["รับออเดอร์", "Accept"]</MudButton>
-                            break;
-                        case "Accepted":
-                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => ActAsync(o, "start"))">@L["เริ่มทำ", "Start"]</MudButton>
-                            break;
-                        case "Preparing":
-                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => ActAsync(o, "ready"))">@L["พร้อมแล้ว", "Ready"]</MudButton>
-                            break;
-                        case "Ready" or "OutForDelivery":
-                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Href="@($"/merchant/{ShopId}/orders/{o.Id}")">@L["ส่งมอบ", "Hand over"]</MudButton>
-                            break;
-                        default:
-                            <OrderStatusChip Status="@o.Status" />
-                            break;
-                    }
+                    @if (o.Status is not ("PendingAcceptance" or "Accepted" or "Preparing" or "Ready" or "OutForDelivery")) { <MudSpacer /><OrderStatusChip Status="@o.Status" /> }
                 </div>
+                @* One big next step per card (busy cards disabled: a double tap on a slow line must not act twice). Rejecting
+                   is a small text link to the detail page, well away from "accept", where the reason is asked anyway. *@
+                @switch (o.Status)
+                {
+                    case "PendingAcceptance" when o.NeedsQuote:
+                        <MudButton Size="Size.Large" FullWidth="true" Class="mt-2" Variant="Variant.Filled" Color="Color.Primary" Href="@($"/merchant/{ShopId}/orders/{o.Id}")">✍️ @L["ใส่ราคา", "Set prices"]</MudButton>
+                        break;
+                    case "PendingAcceptance":
+                        <MudButton Size="Size.Large" FullWidth="true" Class="mt-2" Variant="Variant.Filled" Color="Color.Primary" Disabled="busy" OnClick="@(() => ActAsync(o, "accept"))">
+                            @(busy ? L["กำลังรับ...", "Accepting..."] : L["รับออเดอร์", "Accept"])
+                        </MudButton>
+                        <div class="d-flex justify-end mt-1">
+                            <MudButton Variant="Variant.Text" Color="Color.Error" Disabled="busy" Href="@($"/merchant/{ShopId}/orders/{o.Id}")">@L["ปฏิเสธ...", "Reject..."]</MudButton>
+                        </div>
+                        break;
+                    case "Accepted":
+                        <MudButton Size="Size.Large" FullWidth="true" Class="mt-2" Variant="Variant.Filled" Color="Color.Primary" Disabled="busy" OnClick="@(() => ActAsync(o, "start"))">@L["เริ่มทำ", "Start"]</MudButton>
+                        break;
+                    case "Preparing":
+                        <MudButton Size="Size.Large" FullWidth="true" Class="mt-2" Variant="Variant.Filled" Color="Color.Primary" Disabled="busy" OnClick="@(() => ActAsync(o, "ready"))">@L["พร้อมแล้ว", "Ready"]</MudButton>
+                        break;
+                    case "Ready" or "OutForDelivery":
+                        <MudButton Size="Size.Large" FullWidth="true" Class="mt-2" Variant="Variant.Filled" Color="Color.Primary" Href="@($"/merchant/{ShopId}/orders/{o.Id}")">@L["ส่งมอบ", "Hand over"]</MudButton>
+                        break;
+                }
             </MudPaper>
         }
     }
@@ -139,9 +146,9 @@
         Realtime.OrderUpdated += OnChanged;
         Realtime.Resynced += OnResynced;
         StartLive();
-        var settings = Api.Get<ShopSettings>($"api/merchant/shops/{ShopId}");
+        var settings = Api.Get<ShopSettings>($"api/merchant/shops/{ShopId}", silent: true);
         await Task.WhenAll(settings, LoadAsync(_tab));
-        _settings = await settings;
+        _settings = await settings ?? (_settings?.Shop.Id == ShopId ? _settings : null);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -187,24 +194,41 @@
     private async Task FetchAsync()
     {
         var (shopId, tab) = (ShopId, _tab);
-        var orders = Api.Get<List<OrderSummary>>($"api/merchant/shops/{shopId}/orders?tab={Tabs[tab]}");
+        var orders = Api.Load<List<OrderSummary>>($"api/merchant/shops/{shopId}/orders?tab={Tabs[tab]}");
         var counts = Api.Get<OrderCounts>($"api/merchant/shops/{shopId}/orders/counts", silent: true);
-        var list = await orders ?? [];
+        var list = await orders;
         var c = await counts;
         // Switched tab or shop meanwhile: the reload queued for the new one shows that instead.
         if (tab != _tab || shopId != ShopId) return;
-        _orders = list;
-        _counts = c;
+        _problem = list.Problem;
+        if (list.Failed)
+        {
+            // Keep the last list of this tab (never an empty "no new orders"); another tab's list would be wrong here.
+            if (_loaded != (shopId, tab)) _orders = null;
+            return;
+        }
+        (_orders, _loaded) = (list.Value ?? [], (shopId, tab));
+        _counts = c ?? _counts;
     }
+
+    private ApiProblem? _problem;
+    private (Guid Shop, int Tab) _loaded = (Guid.Empty, -1);
+    // Orders with a request in flight: their buttons stay disabled until the answer comes back.
+    private readonly HashSet<Guid> _acting = [];
 
     private async Task ActAsync(OrderSummary o, string action)
     {
-        if (await Api.Post<Order>($"api/merchant/orders/{o.Id}/{action}") is { } updated)
+        if (!_acting.Add(o.Id)) return;
+        try
         {
-            _ownChanges[o.Id] = updated.Status;
-            await Alarm.Dismiss(o.Id); // stop ringing for this order on this device right away
-            await LoadAsync(_tab);
+            if (await Api.Post<Order>($"api/merchant/orders/{o.Id}/{action}") is { } updated)
+            {
+                _ownChanges[o.Id] = updated.Status;
+                await Alarm.Dismiss(o.Id); // stop ringing for this order on this device right away
+                await LoadAsync(_tab);
+            }
         }
+        finally { _acting.Remove(o.Id); }
     }
 
     private async Task ToggleAsync(bool open)

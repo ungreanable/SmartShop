@@ -16,16 +16,17 @@
         @if (Plant.MyShops.Count > 0)
         {
             <MudTooltip Text="@L["โหมดร้านค้า", "Merchant mode"]">
-                <MudIconButton Icon="@Icons.Material.Filled.Storefront" Href="@($"/merchant/{Plant.MyShops[0].Id}")" />
+                <MudIconButton Icon="@Icons.Material.Filled.Storefront" Href="@($"/merchant/{Plant.MyShops[0].Id}")" aria-label="@L["โหมดร้านค้า", "Merchant mode"]" />
             </MudTooltip>
         }
         @if (Plant.IsAdmin)
         {
             <MudTooltip Text="@L["ผู้ดูแลหมู่บ้าน", "Village admin"]">
-                <MudIconButton Icon="@Icons.Material.Filled.AdminPanelSettings" Href="/admin" />
+                <MudIconButton Icon="@Icons.Material.Filled.AdminPanelSettings" Href="/admin" aria-label="@L["ผู้ดูแลหมู่บ้าน", "Village admin"]" />
             </MudTooltip>
         }
     </MudAppBar>
+    <ConnectionBanner />
     <MudMainContent Style="padding-top:48px">
         <AppGuard>
             @Body

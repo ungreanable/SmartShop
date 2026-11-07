@@ -14,7 +14,7 @@
     <MudAlert Severity="Severity.Warning" Class="my-2">
         @L["คัดลอกเก็บไว้ตอนนี้ จะไม่แสดงอีก", "Copy it now, it will not be shown again"]:
         <code style="word-break:break-all">@_newSecret</code>
-        <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" OnClick="@(() => Browser.CopyAsync(_newSecret))" />
+        <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" OnClick="@(() => Browser.CopyAsync(_newSecret))" aria-label="@L["คัดลอก", "Copy"]" />
     </MudAlert>
 }
 @foreach (var k in _keys)
