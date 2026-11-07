@@ -136,8 +136,8 @@ public sealed record Channels(bool LineConfigured, bool LineFriend, string? Line
 public sealed record NotificationSettings(string PushMode, List<string> LineMuted, List<string> PushMuted, string? QuietFrom, string? QuietTo);
 
 // ---- reviews / promotions (phase 2/3) ----
-public sealed record Review(Guid Id, Guid OrderId, Guid CustomerId, string CustomerName, string? CustomerPictureUrl, int Rating, string? Comment,
-    string? Reply, DateTimeOffset CreatedAt, DateTimeOffset? RepliedAt, bool Hidden);
+public sealed record Review(Guid Id, Guid? OrderId, Guid? CustomerId, string CustomerName, string? CustomerPictureUrl, int Rating, string? Comment,
+    string? Reply, DateTimeOffset CreatedAt, DateTimeOffset? RepliedAt, bool Hidden, bool Anonymous, bool Mine);
 public sealed record ReviewSummary(decimal Average, int Count, Dictionary<int, int> Distribution, List<Review> Reviews);
 public sealed record Promotion(Guid Id, string? Code, string Title, string Type, decimal Value, decimal? MinOrder, decimal? MaxDiscount,
     DateTimeOffset? StartsAt, DateTimeOffset? EndsAt, int? UsageLimit, int? PerUserLimit, int UsedCount, bool AutoApply, bool Active);

@@ -3,8 +3,8 @@ using SmartShop.IntegrationTests.Infrastructure;
 
 namespace SmartShop.IntegrationTests;
 
-public sealed record ReviewDto(Guid Id, Guid OrderId, Guid CustomerId, string CustomerName, string? CustomerPictureUrl, int Rating, string? Comment,
-    string? Reply, DateTimeOffset CreatedAt, DateTimeOffset? RepliedAt, bool Hidden);
+public sealed record ReviewDto(Guid Id, Guid? OrderId, Guid? CustomerId, string CustomerName, string? CustomerPictureUrl, int Rating, string? Comment,
+    string? Reply, DateTimeOffset CreatedAt, DateTimeOffset? RepliedAt, bool Hidden, bool Anonymous, bool Mine);
 public sealed record ReviewSummaryDto(decimal Average, int Count, Dictionary<int, int> Distribution, List<ReviewDto> Reviews);
 
 public class ReviewTests(SmartShopFactory factory)
@@ -58,6 +58,9 @@ public class ReviewTests(SmartShopFactory factory)
         summary.Average.ShouldBe(4);
         summary.Distribution[4].ShouldBe(1);
         summary.Reviews.Single().CustomerName.ShouldBe(customer.DisplayName);
+        summary.Reviews.Single().CustomerId.ShouldBe(customer.UserId);
+        summary.Reviews.Single().Mine.ShouldBeTrue();
+        (await owner.GetAsync<ReviewSummaryDto>($"/api/shops/{shopId}/reviews")).Reviews.Single().Mine.ShouldBeFalse();
 
         await FactoryExtensions.EventuallyAsync(async () =>
         {
@@ -85,6 +88,54 @@ public class ReviewTests(SmartShopFactory factory)
             .ShouldBe("already_replied");
 
         (await customer.GetAsync<ReviewSummaryDto>($"/api/shops/{shopId}/reviews")).Reviews.Single().Reply.ShouldBe("ขอบคุณครับ");
+    }
+
+    [Fact]
+    public async Task Anonymous_review_never_reveals_the_reviewer_except_to_the_author()
+    {
+        var (plant, admin, owner, shopId, customer, orderId) = await CompletedOrderAsync();
+        await CompleteAsync(owner, customer, orderId);
+        await customer.PostOkAsync($"/api/orders/{orderId}/review", new { rating = 2, comment = "รอนานไปหน่อย", anonymous = true });
+        var reviewId = (await owner.GetAsync<ReviewSummaryDto>($"/api/shops/{shopId}/reviews")).Reviews.Single().Id;
+        await owner.PostOkAsync($"/api/merchant/reviews/{reviewId}/reply", new { reply = "ขออภัยครับ" });
+
+        // The shop, another villager and the village admin (moderation view, hidden reviews included) get no trace of who wrote it.
+        var neighbour = await factory.JoinAsync(plant, admin, "เพื่อนบ้าน");
+        foreach (var viewer in new[] { owner, neighbour, admin })
+        {
+            var raw = await (await viewer.GetRawAsync($"/api/shops/{shopId}/reviews")).Content.ReadAsStringAsync();
+            raw.ShouldNotContain(customer.UserId.ToString(), Case.Insensitive);
+            raw.ShouldNotContain(customer.DisplayName);
+            raw.ShouldNotContain(orderId.ToString(), Case.Insensitive); // the shop could look the order up and see the customer
+
+            var review = (await viewer.GetAsync<ReviewSummaryDto>($"/api/shops/{shopId}/reviews")).Reviews.Single();
+            review.Anonymous.ShouldBeTrue();
+            review.Mine.ShouldBeFalse();
+            review.CustomerId.ShouldBeNull();
+            review.OrderId.ShouldBeNull();
+            review.CustomerName.ShouldBe("ลูกค้าในหมู่บ้าน");
+            review.CustomerPictureUrl.ShouldBeNull();
+            review.Comment.ShouldBe("รอนานไปหน่อย");
+            review.Reply.ShouldBe("ขออภัยครับ");
+        }
+
+        // The author still recognises it as theirs.
+        var mine = (await customer.GetAsync<ReviewSummaryDto>($"/api/shops/{shopId}/reviews")).Reviews.Single();
+        mine.Mine.ShouldBeTrue();
+        mine.Anonymous.ShouldBeTrue();
+        mine.OrderId.ShouldBe(orderId);
+
+        // The "new review" notification to the shop does not name the reviewer either.
+        await FactoryExtensions.EventuallyAsync(async () =>
+        {
+            var notes = (await owner.GetAsync<PagedDto<NotificationDto>>("/api/notifications")).Items.Where(n => n.Type == "review.new").ToList();
+            notes.ShouldNotBeEmpty();
+            notes.ShouldAllBe(n => !n.Title.Contains(customer.DisplayName) && !n.Body.Contains(customer.DisplayName));
+        });
+
+        // Still one review per order: anonymity does not open a second one.
+        (await TestClient.ProblemCodeAsync(await customer.PostRawAsync($"/api/orders/{orderId}/review", new { rating = 5, anonymous = true })))
+            .ShouldBe("already_reviewed");
     }
 
     [Fact]

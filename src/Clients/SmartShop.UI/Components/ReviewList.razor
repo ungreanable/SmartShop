@@ -30,8 +30,16 @@ else
     {
         <MudPaper Outlined="true" Class="@($"pa-3 mb-2 ss-card {(r.Hidden ? "ss-muted" : "")}")">
             <div class="d-flex align-center gap-2">
-                <MudAvatar Size="Size.Small">@if (r.CustomerPictureUrl is not null) { <MudImage Src="@r.CustomerPictureUrl" /> } else { @r.CustomerName[..1] }</MudAvatar>
-                <MudText Typo="Typo.subtitle2">@r.CustomerName</MudText>
+                @if (r.Anonymous)
+                {
+                    <MudAvatar Size="Size.Small"><MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" /></MudAvatar>
+                    <MudText Typo="Typo.subtitle2">@(r.Mine ? L["รีวิวของคุณ (ไม่แสดงชื่อ)", "Your review (name hidden)"] : L["ลูกค้าในหมู่บ้าน", "A villager"])</MudText>
+                }
+                else
+                {
+                    <MudAvatar Size="Size.Small">@if (r.CustomerPictureUrl is not null) { <MudImage Src="@r.CustomerPictureUrl" /> } else { @r.CustomerName[..1] }</MudAvatar>
+                    <MudText Typo="Typo.subtitle2">@r.CustomerName@if (r.Mine) { <span class="ss-muted"> · @L["รีวิวของคุณ", "your review"]</span> }</MudText>
+                }
                 @if (r.Hidden) { <MudChip T="string" Size="Size.Small" Color="Color.Default">@L["ซ่อนอยู่", "Hidden"]</MudChip> }
                 <MudSpacer />
                 <MudRating SelectedValue="r.Rating" ReadOnly="true" Size="Size.Small" />
@@ -71,7 +79,8 @@ else
     private async Task ReplyAsync(Review r)
     {
         var parameters = new DialogParameters<TextPromptDialog> { { x => x.Label, L["ข้อความตอบกลับ", "Your reply"] } };
-        var result = await (await Dialogs.ShowAsync<TextPromptDialog>(r.CustomerName, parameters)).Result;
+        var title = r.Anonymous ? L["ลูกค้าในหมู่บ้าน", "A villager"] : r.CustomerName;
+        var result = await (await Dialogs.ShowAsync<TextPromptDialog>(title, parameters)).Result;
         if (result is { Canceled: false, Data: string reply } && await Api.Post($"api/merchant/reviews/{r.Id}/reply", new { reply }))
             await LoadAsync();
     }
