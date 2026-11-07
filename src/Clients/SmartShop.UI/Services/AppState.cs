@@ -111,7 +111,7 @@ public static class UiSetup
             Primary = "#00803E",
             PrimaryDarken = "#006B34",
             PrimaryLighten = "#00A851",
-            Secondary = "#FF6A13",
+            Secondary = "#C2410C", // white text 5.2:1 (the brighter #FF6A13 was 2.9:1)
             Tertiary = "#2E7DFF",
             Success = "#00803E",
             Warning = "#F59F00",
@@ -137,6 +137,7 @@ public static class UiSetup
             WarningDarken = "#FFB545",
             WarningContrastText = "#111315",
             Secondary = "#FF8A45",
+            SecondaryContrastText = "#111315", // dark text on the light orange: 7.9:1
             Tertiary = "#5C9BFF",
             Background = "#111315",
             Surface = "#1A1D20",
