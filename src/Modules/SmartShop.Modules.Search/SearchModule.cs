@@ -108,7 +108,12 @@ public sealed record ShopCardDto(Guid Id, string Name, string? Category, string?
 /// One page of the village shop list: shops taking orders first (<see cref="OpenCount"/> of them across all pages), then the closed
 /// ones, each part in the village admin's order. The open part is therefore complete before the first closed shop arrives.
 /// </summary>
-public sealed record HomeDto(List<string> Categories, List<ShopCardDto> Shops, int OpenCount, int Total, bool HasMore);
+/// <remarks><paramref name="OpenNow"/> is always empty: it only keeps app versions released before paging (still cached on
+/// phones until the update prompt is accepted) from failing on a missing list. Remove a few releases later.</remarks>
+public sealed record HomeDto(List<string> Categories, List<ShopCardDto> Shops, int OpenCount, int Total, bool HasMore)
+{
+    public List<ShopCardDto> OpenNow { get; } = [];
+}
 public sealed record ItemHitDto(Guid ItemId, Guid ShopId, string ShopName, string Name, decimal Price, string? ThumbnailUrl, bool IsSoldOut);
 public sealed record SearchResultDto(List<ShopCardDto> Shops, List<ItemHitDto> Items);
 

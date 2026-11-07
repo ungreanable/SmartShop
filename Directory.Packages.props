@@ -2,8 +2,8 @@
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <CentralPackageTransitivePinningEnabled>false</CentralPackageTransitivePinningEnabled>
-    <AspNetVersion>10.0.13</AspNetVersion>
-    <EfVersion>10.0.13</EfVersion>
+    <AspNetVersion>10.0.14</AspNetVersion>
+    <EfVersion>10.0.14</EfVersion>
     <AspireVersion>13.6.1</AspireVersion>
     <WolverineVersion>6.51.0</WolverineVersion>
     <OtelVersion>1.20.0</OtelVersion>
