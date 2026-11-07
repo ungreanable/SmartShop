@@ -287,8 +287,17 @@
         _discount = await Api.Post<DiscountPreview>($"api/shops/{shopId}/promotions/preview", new { code, subtotal = _cart.Subtotal }, silent: true);
         if (code is null) return;
         _checkedCoupon = code;
-        if (_discount is null) _couponError = Api.LastProblem?.Message ?? L["ใช้โค้ดนี้ไม่ได้", "This code cannot be used"];
+        if (_discount is null) _couponError = CouponProblem(Api.LastProblem?.Code);
     }
+
+    // The server explains in English; customers read it next to the field in their own language.
+    private string CouponProblem(string? code) => code switch
+    {
+        "coupon_used" => L["คุณใช้โค้ดนี้ไปแล้ว", "You have already used this code"],
+        "coupon_exhausted" => L["โค้ดนี้ถูกใช้ครบจำนวนแล้ว", "This code has been fully used"],
+        "coupon_custom" => L["ใช้โค้ดกับออเดอร์ที่มีรายการตามสั่งไม่ได้", "Codes can't be used with custom dishes"],
+        _ => L["ใช้โค้ดนี้ไม่ได้ (โค้ดไม่ถูกต้อง หมดอายุ หรือยอดยังไม่ถึงขั้นต่ำ)", "This code can't be used (wrong, expired or below the minimum)"],
+    };
 
     private async Task PlaceAsync()
     {
