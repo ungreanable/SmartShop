@@ -212,7 +212,8 @@ public class ShopTests(SmartShopFactory factory)
         {
             var home = await customer.GetAsync<HomeDto>("/api/home");
             home.Shops.Single(s => s.Id == shopId).Status.Reason.ShouldBe("Suspended");
-            home.OpenNow.ShouldNotContain(s => s.Id == shopId);
+            home.Shops.Single(s => s.Id == shopId).Status.AcceptingOrders.ShouldBeFalse();
+            home.OpenCount.ShouldBe(0);
         });
 
         await admin.PutOkAsync($"/api/plant/admin/shops/{shopId}/suspension-visibility", new { visible = false });

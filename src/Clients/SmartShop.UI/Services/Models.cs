@@ -49,7 +49,7 @@ public sealed record ShopApplication(Guid Id, string Name, string? Category, str
     DateTimeOffset? ReviewedAt, Guid? ShopId, Guid ApplicantId, string? ApplicantName, string? ApplicantPictureUrl);
 public sealed record SuspendShopResult(string Reason, bool Visible);
 public sealed record AdminShopRow(Guid Id, string Name, string Code, string? LogoUrl, string Lifecycle, string? SuspendReason, bool VisibleWhileSuspended, ShopStatus Status,
-    Guid OwnerId, int MemberCount, decimal RatingAverage, int RatingCount, DateTimeOffset CreatedAt);
+    Guid OwnerId, int MemberCount, decimal RatingAverage, int RatingCount, DateTimeOffset CreatedAt, int? DisplayOrder);
 public sealed record ShopMember(Guid UserId, string DisplayName, string? PictureUrl, string Role, bool ReceiveOrderNotifications, string? DisplayLabel, DateTimeOffset JoinedAt);
 public sealed record Invite(string Code, string Role, DateTimeOffset ExpiresAt, string Url);
 public sealed record AcceptedInvite(Guid ShopId, string ShopName, string Role);
@@ -60,7 +60,7 @@ public sealed record NotificationHealth(string Requirement, bool AnyRecipientHas
 // ---- home / search ----
 public sealed record ShopCard(Guid Id, string Name, string? Category, string? Description, string? LogoUrl, string? CoverUrl, string? HouseNo,
     ShopStatus Status, bool PickupEnabled, bool DeliveryEnabled, bool AcceptsPreorders, int PrepTimeMinutes, decimal RatingAverage, int RatingCount, bool IsNew);
-public sealed record HomeFeed(List<string> Categories, List<ShopCard> OpenNow, List<ShopCard> Shops);
+public sealed record HomeFeed(List<string> Categories, List<ShopCard> Shops, int OpenCount, int Total, bool HasMore);
 public sealed record ItemHit(Guid ItemId, Guid ShopId, string ShopName, string Name, decimal Price, string? ThumbnailUrl, bool IsSoldOut);
 public sealed record SearchResult(List<ShopCard> Shops, List<ItemHit> Items);
 
@@ -136,8 +136,8 @@ public sealed record Channels(bool LineConfigured, bool LineFriend, string? Line
 public sealed record NotificationSettings(string PushMode, List<string> LineMuted, List<string> PushMuted, string? QuietFrom, string? QuietTo);
 
 // ---- reviews / promotions (phase 2/3) ----
-public sealed record Review(Guid Id, Guid OrderId, Guid CustomerId, string CustomerName, string? CustomerPictureUrl, int Rating, string? Comment,
-    string? Reply, DateTimeOffset CreatedAt, DateTimeOffset? RepliedAt, bool Hidden);
+public sealed record Review(Guid Id, Guid? OrderId, Guid? CustomerId, string CustomerName, string? CustomerPictureUrl, int Rating, string? Comment,
+    string? Reply, DateTimeOffset CreatedAt, DateTimeOffset? RepliedAt, bool Hidden, bool Anonymous, bool Mine);
 public sealed record ReviewSummary(decimal Average, int Count, Dictionary<int, int> Distribution, List<Review> Reviews);
 public sealed record Promotion(Guid Id, string? Code, string Title, string Type, decimal Value, decimal? MinOrder, decimal? MaxDiscount,
     DateTimeOffset? StartsAt, DateTimeOffset? EndsAt, int? UsageLimit, int? PerUserLimit, int UsedCount, bool AutoApply, bool Active);

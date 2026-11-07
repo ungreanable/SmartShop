@@ -5,6 +5,9 @@
     <DialogContent>
         <div class="d-flex justify-center"><MudRating @bind-SelectedValue="_rating" Size="Size.Large" /></div>
         <MudTextField @bind-Value="_comment" Label="@L["ความคิดเห็น (ไม่บังคับ)", "Comment (optional)"]" Variant="Variant.Outlined" Lines="3" MaxLength="1000" Class="mt-2" />
+        @* In a village everyone knows everyone: let people be honest without the shop owner seeing who wrote it. *@
+        <MudCheckBox T="bool" @bind-Value="_anonymous" Color="Color.Primary" Class="mt-1"
+                     Label="@L["ไม่แสดงชื่อ (รีวิวแบบไม่เปิดเผยตัวตน)", "Don't show my name (anonymous review)"]" />
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="@(() => Dialog.Cancel())">@L["ไว้ทีหลัง", "Later"]</MudButton>
@@ -18,12 +21,13 @@
 
     private int _rating;
     private string? _comment;
+    private bool _anonymous;
     private bool _busy;
 
     private async Task SubmitAsync()
     {
         _busy = true;
-        if (await Api.Post($"api/orders/{OrderId}/review", new { rating = _rating, comment = _comment }))
+        if (await Api.Post($"api/orders/{OrderId}/review", new { rating = _rating, comment = _comment, anonymous = _anonymous }))
         {
             Snackbar.Add(L["ขอบคุณสำหรับรีวิว", "Thanks for your review"], Severity.Success);
             Dialog.Close();

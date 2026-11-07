@@ -19,7 +19,11 @@ namespace SmartShop.Modules.Shops.Endpoints;
 public sealed record WindowDto(DateTimeOffset Start, DateTimeOffset End);
 
 public sealed record AdminShopRow(Guid Id, string Name, string Code, string? LogoUrl, ShopLifecycle Lifecycle, string? SuspendReason,
-    bool VisibleWhileSuspended, ShopStatusDto Status, Guid OwnerId, int MemberCount, decimal RatingAverage, int RatingCount, DateTimeOffset CreatedAt);
+    bool VisibleWhileSuspended, ShopStatusDto Status, Guid OwnerId, int MemberCount, decimal RatingAverage, int RatingCount, DateTimeOffset CreatedAt,
+    int? DisplayOrder);
+
+/// <summary>The village's shops from the top of the list down; shops left out go to the end.</summary>
+public sealed record ShopOrderRequest(List<Guid> ShopIds);
 
 public sealed record SuspendRequest(string? Reason, bool Visible = false);
 public sealed record SuspensionVisibilityRequest(bool Visible);
@@ -95,9 +99,27 @@ internal static class ShopEndpoints
         admin.MapGet("/", async (ICurrentPlant plant, ShopsDbContext db, IMediaUrls media, TimeProvider clock, CancellationToken ct) =>
         {
             var now = clock.GetUtcNow();
-            var all = await db.Shops.AsNoTracking().Where(s => s.PlantId == plant.PlantId).OrderBy(s => s.Name).ToListAsync(ct);
+            // In the order customers see them (arranged shops first), so the same list serves as the arrange screen.
+            var all = await db.Shops.AsNoTracking().Where(s => s.PlantId == plant.PlantId)
+                .OrderBy(s => s.DisplayOrder == null).ThenBy(s => s.DisplayOrder).ThenBy(s => s.Name).ToListAsync(ct);
             return all.Select(s => new AdminShopRow(s.Id, s.Name, s.Code, media.For(s.LogoId, MediaVariant.Small), s.Status, s.SuspendReason,
-                s.VisibleWhileSuspended, ShopMapper.Status(s, now), s.OwnerId, s.Members.Count, s.RatingAverage, s.RatingCount, s.CreatedAt)).ToList();
+                s.VisibleWhileSuspended, ShopMapper.Status(s, now), s.OwnerId, s.Members.Count, s.RatingAverage, s.RatingCount, s.CreatedAt,
+                s.DisplayOrder)).ToList();
+        });
+
+        // The position lives on the shop row rather than in a plant-level list: Search already re-reads a shop's snapshot on
+        // every shop event, so the position travels with the rest of the listing, and a new shop simply has none (= last).
+        admin.MapPut("/order", async (ShopOrderRequest req, ICurrentPlant plant, ICurrentUser user, IDbContextOutbox<ShopsDbContext> outbox,
+            CancellationToken ct) =>
+        {
+            if (req.ShopIds.Count > 1000) throw new DomainException("too_many_shops", "Too many shops in one request.");
+            var position = req.ShopIds.Distinct().Select((id, i) => (id, i)).ToDictionary(x => x.id, x => x.i);
+            // Scalars only: members, payment methods and closures are not needed to renumber a shop.
+            var shops = await outbox.DbContext.Shops.IgnoreAutoIncludes().Where(s => s.PlantId == plant.PlantId).ToListAsync(ct);
+            foreach (var shop in shops) shop.SetDisplayOrder(position.TryGetValue(shop.Id, out var i) ? i : null);
+            await outbox.PublishAsync(new ShopsReordered(plant.PlantId, user.Id));
+            await outbox.SaveChangesAndFlushMessagesAsync(ct);
+            return Results.NoContent();
         });
 
         admin.MapPost("/{id:guid}/suspend", async (Guid id, SuspendRequest req, ICurrentPlant plant, ICurrentUser user,

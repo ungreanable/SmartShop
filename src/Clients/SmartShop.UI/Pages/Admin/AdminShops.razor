@@ -2,11 +2,48 @@
 @layout AdminLayout
 @inject Api Api
 @inject IDialogService Dialogs
+@inject ISnackbar Snackbar
 
 <div class="ss-page">
-    <MudText Typo="Typo.h5" Class="mb-2" Style="font-weight:700">@L["ร้านค้าในหมู่บ้าน", "Village shops"]</MudText>
+    <div class="d-flex align-center mb-2">
+        <MudText Typo="Typo.h5" Style="font-weight:700">@L["ร้านค้าในหมู่บ้าน", "Village shops"]</MudText>
+        <MudSpacer />
+        @if (_shops is { Count: > 1 } && _arranging is null)
+        {
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.SwapVert"
+                       OnClick="@(() => _arranging = [.. _shops])">@L["จัดลำดับร้าน", "Arrange"]</MudButton>
+        }
+    </div>
     @if (_shops is null) { <Loading /> }
     else if (_shops.Count == 0) { <EmptyState Title="@L["ยังไม่มีร้าน", "No shops yet"]" Icon="@Icons.Material.Outlined.Store" /> }
+    else if (_arranging is not null)
+    {
+        @* Buttons rather than drag and drop: dragging is fiddly on small phones and inside the LINE browser. *@
+        <MudText Typo="Typo.body2" Class="ss-muted mb-2">
+            @L["ลำดับนี้ใช้ในหน้าแรกของลูกค้า (ร้านที่เปิดอยู่จะขึ้นก่อนร้านที่ปิดเสมอ) ร้านใหม่จะต่อท้ายจนกว่าจะจัดลำดับอีกครั้ง",
+               "Customers see shops in this order on the home page (open shops always come before closed ones). New shops go to the end until you arrange again."]
+        </MudText>
+        @for (var i = 0; i < _arranging.Count; i++)
+        {
+            // Copy the loop variable: the click handlers run after the loop has finished.
+            var index = i;
+            var s = _arranging[index];
+            <MudPaper @key="s.Id" Outlined="true" Class="pa-2 mb-1 ss-card d-flex align-center gap-1">
+                <MudText Typo="Typo.body2" Class="ss-muted" Style="min-width:24px; text-align:right">@(index + 1).</MudText>
+                <MudText Typo="Typo.subtitle2" Class="ss-ellipsis" Style="flex:1; min-width:0">@s.Name</MudText>
+                <MudIconButton Icon="@Icons.Material.Filled.VerticalAlignTop" Size="Size.Small" Disabled="@(index == 0)"
+                               aria-label="@L["ไว้บนสุด", "Move to top"]" OnClick="@(() => Move(index, 0))" />
+                <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" Disabled="@(index == 0)"
+                               aria-label="@L["ขึ้น", "Up"]" OnClick="@(() => Move(index, index - 1))" />
+                <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small" Disabled="@(index == _arranging.Count - 1)"
+                               aria-label="@L["ลง", "Down"]" OnClick="@(() => Move(index, index + 1))" />
+            </MudPaper>
+        }
+        <div class="d-flex justify-end gap-2 mt-3">
+            <MudButton Variant="Variant.Text" OnClick="@(() => _arranging = null)">@L["ยกเลิก", "Cancel"]</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving" OnClick="SaveOrderAsync">@L["บันทึกลำดับ", "Save order"]</MudButton>
+        </div>
+    }
     else
     {
         @foreach (var s in _shops)
@@ -48,10 +85,31 @@
 
 @code {
     private List<AdminShopRow>? _shops;
+    private List<AdminShopRow>? _arranging;
+    private bool _saving;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
     private async Task LoadAsync() => _shops = await Api.Get<List<AdminShopRow>>("api/plant/admin/shops") ?? [];
+
+    private void Move(int from, int to)
+    {
+        var shop = _arranging![from];
+        _arranging.RemoveAt(from);
+        _arranging.Insert(to, shop);
+    }
+
+    private async Task SaveOrderAsync()
+    {
+        _saving = true;
+        if (await Api.Put("api/plant/admin/shops/order", new { shopIds = _arranging!.Select(s => s.Id).ToList() }))
+        {
+            Snackbar.Add(L["บันทึกลำดับร้านแล้ว", "Shop order saved"], Severity.Success);
+            _arranging = null;
+            await LoadAsync();
+        }
+        _saving = false;
+    }
 
     private async Task SuspendAsync(AdminShopRow s)
     {

@@ -32,7 +32,14 @@
             "TemporaryClosed" => Status.Until is { } t ? L[$"ปิดชั่วคราวถึง {Fmt.Day(t)}", $"Closed until {Fmt.Day(t)}"] : L["ปิดชั่วคราว", "Temporarily closed"],
             "Suspended" => L["ถูกระงับ", "Suspended"],
             _ when AcceptsPreorders => L["ปิด · สั่งล่วงหน้าได้", "Closed · pre-order"],
-            _ => Status.NextOpenAt is { } n ? L[$"ปิด · เปิด {Fmt.Day(n)} {Fmt.Time(n)}", $"Closed · opens {Fmt.Day(n)} {Fmt.Time(n)}"] : L["ปิด", "Closed"],
+            // "เปิด 10:00" later today, "เปิดพรุ่งนี้ 10:00" tomorrow, the day name further out.
+            _ => Status.NextOpenAt is { } n
+                ? n.ToLocalTime().Date == DateTime.Now.Date
+                    ? L[$"ปิด · เปิด {Fmt.Time(n)}", $"Closed · opens {Fmt.Time(n)}"]
+                    : n.ToLocalTime().Date == DateTime.Now.Date.AddDays(1)
+                        ? L[$"ปิด · เปิดพรุ่งนี้ {Fmt.Time(n)}", $"Closed · opens tomorrow {Fmt.Time(n)}"]
+                        : L[$"ปิด · เปิด {Fmt.Day(n)} {Fmt.Time(n)}", $"Closed · opens {Fmt.Day(n)} {Fmt.Time(n)}"]
+                : L["ปิด", "Closed"],
         },
     };
 }

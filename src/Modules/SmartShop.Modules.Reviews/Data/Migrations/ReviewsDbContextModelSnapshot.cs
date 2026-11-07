@@ -18,7 +18,7 @@ namespace SmartShop.Modules.Reviews.Data.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasDefaultSchema("reviews")
-                .HasAnnotation("ProductVersion", "10.0.12")
+                .HasAnnotation("ProductVersion", "10.0.13")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63)
                 .HasAnnotation("WolverineEnabled", "true");
 
@@ -30,6 +30,10 @@ namespace SmartShop.Modules.Reviews.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
+
+                    b.Property<bool>("Anonymous")
+                        .HasColumnType("boolean")
+                        .HasColumnName("anonymous");
 
                     b.Property<string>("Comment")
                         .HasMaxLength(1000)

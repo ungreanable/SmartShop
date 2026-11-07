@@ -33,9 +33,16 @@ public sealed class Review
     public string? Reply { get; private set; }
     public DateTimeOffset? RepliedAt { get; private set; }
     public bool Hidden { get; private set; }
+
+    /// <summary>
+    /// Shown as "a villager": nobody but the author learns who wrote it. <see cref="CustomerId"/> is still kept for
+    /// one-review-per-order and abuse handling, it just never leaves the server.
+    /// </summary>
+    public bool Anonymous { get; private set; }
+
     public DateTimeOffset CreatedAt { get; private set; }
 
-    public static Review Create(Guid orderId, Guid shopId, Guid plantId, Guid customerId, int rating, string? comment, DateTimeOffset now) => new()
+    public static Review Create(Guid orderId, Guid shopId, Guid plantId, Guid customerId, int rating, string? comment, bool anonymous, DateTimeOffset now) => new()
     {
         Id = Ids.New(),
         OrderId = orderId,
@@ -44,6 +51,7 @@ public sealed class Review
         CustomerId = customerId,
         Rating = Guard.Range(rating, "Rating", 1, 5),
         Comment = Guard.Optional(comment, "Comment", 1000),
+        Anonymous = anonymous,
         CreatedAt = now,
     };
 
@@ -84,15 +92,22 @@ internal sealed class ReviewsDesignTimeFactory : ModuleDesignTimeFactory<Reviews
     protected override ReviewsDbContext Create(DbContextOptions<ReviewsDbContext> options) => new(options);
 }
 
-public sealed record ReviewRequest(int Rating, string? Comment);
+public sealed record ReviewRequest(int Rating, string? Comment, bool Anonymous = false);
 public sealed record ReplyRequest(string Reply);
 public sealed record HideRequest(bool Hidden);
-public sealed record ReviewDto(Guid Id, Guid OrderId, Guid CustomerId, string CustomerName, string? CustomerPictureUrl, int Rating, string? Comment,
-    string? Reply, DateTimeOffset CreatedAt, DateTimeOffset? RepliedAt, bool Hidden);
+/// <summary>
+/// For an anonymous review <see cref="CustomerId"/> is always null and so is <see cref="OrderId"/> unless it is the caller's own
+/// review: the shop could otherwise look the order up and see who placed it. <see cref="Mine"/> lets the author recognise it.
+/// </summary>
+public sealed record ReviewDto(Guid Id, Guid? OrderId, Guid? CustomerId, string CustomerName, string? CustomerPictureUrl, int Rating, string? Comment,
+    string? Reply, DateTimeOffset CreatedAt, DateTimeOffset? RepliedAt, bool Hidden, bool Anonymous, bool Mine);
 public sealed record ReviewSummaryDto(decimal Average, int Count, Dictionary<int, int> Distribution, List<ReviewDto> Reviews);
 
 public sealed class ReviewsModule : IModule
 {
+    /// <summary>Shown instead of the reviewer's name on anonymous reviews (the app shows its own translation).</summary>
+    public const string AnonymousName = "ลูกค้าในหมู่บ้าน";
+
     public string Name => "Reviews";
 
     public IReadOnlyList<Type> DbContexts => [typeof(ReviewsDbContext)];
@@ -112,16 +127,16 @@ public sealed class ReviewsModule : IModule
             var db = outbox.DbContext;
             if (await db.Reviews.AnyAsync(r => r.OrderId == orderId, ct)) throw new ConflictException("already_reviewed", "You already reviewed this order.");
 
-            var review = Review.Create(orderId, order.ShopId, order.PlantId, user.Id, req.Rating, req.Comment, clock.GetUtcNow());
+            var review = Review.Create(orderId, order.ShopId, order.PlantId, user.Id, req.Rating, req.Comment, req.Anonymous, clock.GetUtcNow());
             db.Reviews.Add(review);
             await db.SaveChangesAsync(ct);
             var (average, count) = await StatsAsync(db, order.ShopId, ct);
-            await outbox.PublishAsync(new ReviewSubmitted(order.PlantId, review.Id, orderId, order.ShopId, user.Id, review.Rating, average, count));
+            await outbox.PublishAsync(new ReviewSubmitted(order.PlantId, review.Id, orderId, order.ShopId, user.Id, review.Rating, average, count, review.Anonymous));
             await outbox.SaveChangesAndFlushMessagesAsync(ct);
             return Results.Created($"/api/shops/{order.ShopId}/reviews", new { review.Id });
         }).WithTags("Reviews").RequirePlantMember();
 
-        app.MapGet("/shops/{shopId:guid}/reviews", async (Guid shopId, ICurrentPlant plant, IShopAccess access, ReviewsDbContext db,
+        app.MapGet("/shops/{shopId:guid}/reviews", async (Guid shopId, ICurrentPlant plant, ICurrentUser user, IShopAccess access, ReviewsDbContext db,
             IUserDirectory users, CancellationToken ct) =>
         {
             var canModerate = plant.Membership.Role == PlantRole.PlantAdmin || await access.GetRoleAsync(shopId, ct) is not null;
@@ -130,10 +145,9 @@ public sealed class ReviewsModule : IModule
             var (average, count) = await StatsAsync(db, shopId, ct);
             var distribution = await visible.GroupBy(r => r.Rating).Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.Count, ct);
             var reviews = await (canModerate ? query : visible).OrderByDescending(r => r.CreatedAt).Take(100).ToListAsync(ct);
-            var people = await users.GetProfilesAsync(reviews.Select(r => r.CustomerId), ct);
-            return new ReviewSummaryDto(average, count, distribution, reviews.Select(r => new ReviewDto(r.Id, r.OrderId, r.CustomerId,
-                people.GetValueOrDefault(r.CustomerId)?.DisplayName ?? "?", people.GetValueOrDefault(r.CustomerId)?.PictureUrl,
-                r.Rating, r.Comment, r.Reply, r.CreatedAt, r.RepliedAt, r.Hidden)).ToList());
+            // Anonymous reviewers are not even looked up, so their profile cannot slip into the response by mistake.
+            var people = await users.GetProfilesAsync(reviews.Where(r => !r.Anonymous).Select(r => r.CustomerId), ct);
+            return new ReviewSummaryDto(average, count, distribution, reviews.Select(r => ToDto(r, people, user.Id)).ToList());
         }).WithTags("Reviews").RequirePlantMember();
 
         app.MapPost("/merchant/reviews/{reviewId:guid}/reply", async (Guid reviewId, ReplyRequest req, IShopAccess access,
@@ -161,6 +175,17 @@ public sealed class ReviewsModule : IModule
             await outbox.SaveChangesAndFlushMessagesAsync(ct);
             return Results.NoContent();
         }).WithTags("Village admin").RequirePlantAdmin();
+    }
+
+    private static ReviewDto ToDto(Review r, IReadOnlyDictionary<Guid, UserProfile> people, Guid callerId)
+    {
+        var mine = r.CustomerId == callerId;
+        if (r.Anonymous)
+            return new ReviewDto(r.Id, mine ? r.OrderId : null, null, AnonymousName, null,
+                r.Rating, r.Comment, r.Reply, r.CreatedAt, r.RepliedAt, r.Hidden, true, mine);
+        var person = people.GetValueOrDefault(r.CustomerId);
+        return new ReviewDto(r.Id, r.OrderId, r.CustomerId, person?.DisplayName ?? "?", person?.PictureUrl,
+            r.Rating, r.Comment, r.Reply, r.CreatedAt, r.RepliedAt, r.Hidden, false, mine);
     }
 
     private static async Task<(decimal Average, int Count)> StatsAsync(ReviewsDbContext db, Guid shopId, CancellationToken ct)

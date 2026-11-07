@@ -65,6 +65,13 @@ public sealed class Shop
 
     public decimal RatingAverage { get; private set; }
     public int RatingCount { get; private set; }
+
+    /// <summary>
+    /// Position in the village shop list set by the village admin (0 = top). Null until the admin arranges the list, so a
+    /// newly approved shop sorts after every arranged one without renumbering the others.
+    /// </summary>
+    public int? DisplayOrder { get; private set; }
+
     public DateTimeOffset CreatedAt { get; private set; }
     public uint Version { get; private set; }
 
@@ -220,6 +227,8 @@ public sealed class Shop
         RatingAverage = decimal.Round(average, 2);
         RatingCount = count;
     }
+
+    public void SetDisplayOrder(int? order) => DisplayOrder = order;
 
 
 
