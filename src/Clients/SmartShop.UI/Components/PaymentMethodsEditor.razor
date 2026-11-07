@@ -7,7 +7,7 @@
     <div class="d-flex align-center py-1">
         <MudText>@CartPage.PaymentIcon(m.Type) @m.DisplayName @(m.Enabled ? "" : L["(ปิด)", "(off)"])</MudText>
         <MudSpacer />
-        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => EditAsync(m))" />
+        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => EditAsync(m))" aria-label="@L["แก้ไขวิธีชำระเงิน", "Edit payment method"]" />
         @if (m.Type != "Cash") { <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="@(() => DeleteAsync(m))" aria-label="@L["ลบช่องทางชำระเงิน", "Delete payment method"]" /> }
     </div>
 }

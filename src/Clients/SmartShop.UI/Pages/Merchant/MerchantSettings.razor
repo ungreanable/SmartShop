@@ -5,11 +5,15 @@
 @inject ISnackbar Snackbar
 @inject IDialogService Dialogs
 
-<div class="ss-page">
+<div class="ss-page @(Dirty ? "ss-has-cart" : "")">
     <MudText Typo="Typo.h5" Class="mb-3" Style="font-weight:700">@L["ตั้งค่าร้าน", "Shop settings"]</MudText>
-    @if (_s is null) { <Loading /> }
+    @if (_s is null && _problem is not null) { <LoadError Problem="_problem" OnRetry="@(() => ReloadAsync())" /> }
+    else if (_s is null) { <Loading /> }
     else
     {
+        @* Leaving with unsaved edits asks first (in-app links and closing/reloading the page). *@
+        <NavigationLock OnBeforeInternalNavigation="ConfirmLeaveAsync" ConfirmExternalNavigation="@Dirty" />
+        @if (_problem is not null) { <LoadError Inline="true" Problem="_problem" OnRetry="@(() => ReloadAsync())" /> }
         @if (_s.Lifecycle == "Suspended")
         {
             <MudAlert Severity="Severity.Error" Class="mb-3">
@@ -36,15 +40,15 @@
                         <ImageUploader Purpose="ShopCover" @bind-Busy="_uploadingCover" Label="@L["รูปหน้าร้าน", "Cover"]" Uploaded="@(f => { if (f is not null) { _coverId = f.Id; _coverUrl = f.ThumbnailUrl; } })" />
                     </div>
                 </div>
-                <MudTextField @bind-Value="_name" Label="@L["ชื่อร้าน", "Name"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                <MudTextField @bind-Value="_category" Label="@L["ประเภท", "Category"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                <MudTextField @bind-Value="_description" Label="@L["คำอธิบาย", "Description"]" Lines="2" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudTextField @bind-Value="_name" Label="@L["ชื่อร้าน", "Name"]" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+                <MudTextField @bind-Value="_category" Label="@L["ประเภท", "Category"]" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+                <MudTextField @bind-Value="_description" Label="@L["คำอธิบาย", "Description"]" Lines="2" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
                 <div class="ss-grid-2">
-                    <MudTextField @bind-Value="_houseNo" Label="@L["บ้านเลขที่", "House no."]" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                    <MudTextField @bind-Value="_phone" Label="@L["เบอร์โทร", "Phone"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    <MudTextField @bind-Value="_houseNo" Label="@L["บ้านเลขที่", "House no."]" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+                    <MudTextField @bind-Value="_phone" Label="@L["เบอร์โทร", "Phone"]" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
                 </div>
-                <MudTextField @bind-Value="_lineContact" Label="@L["LINE ID / ลิงก์ (ไม่บังคับ)", "LINE ID / link (optional)"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Class="mt-2" Disabled="@(_uploadingLogo || _uploadingCover)" OnClick="SaveProfileAsync">@L["บันทึก", "Save"]</MudButton>
+                <MudTextField @bind-Value="_lineContact" Label="@L["LINE ID / ลิงก์ (ไม่บังคับ)", "LINE ID / link (optional)"]" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" Disabled="@(_uploadingLogo || _uploadingCover || !ProfileDirty)" OnClick="SaveProfileAsync">@L["บันทึกข้อมูลร้าน", "Save profile"]</MudButton>
             </MudExpansionPanel>
 
             <MudExpansionPanel Text="@L["🕐 เวลาเปิด-ปิด", "🕐 Opening hours"]">
@@ -65,31 +69,19 @@
                     <MudDatePicker @bind-Date="_closeTo" Label="@L["ถึง (รวมวันนี้)", "To (inclusive)"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
                 </div>
                 <MudTextField @bind-Value="_closeReason" Label="@L["เหตุผล (ลูกค้าเห็น)", "Reason (shown)"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(_closeFrom is null || _closeTo is null)" OnClick="AddClosureAsync">@L["เพิ่มวันปิด", "Add closure"]</MudButton>
+                <MudButton Variant="Variant.Outlined" Disabled="@(_closeFrom is null || _closeTo is null)" OnClick="AddClosureAsync">@L["เพิ่มวันปิด", "Add closure"]</MudButton>
                 <MudDivider Class="my-3" />
                 @if (_s.VacationUntil is not null)
                 {
                     <MudAlert Severity="Severity.Info" Dense="true">🏖️ @L["กำลังลาพักร้อน ร้านถูกซ่อนจากหน้าแรก", "On vacation: hidden from the home feed"]</MudAlert>
-                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Class="mt-1" OnClick="EndVacationAsync">@L["กลับมาเปิดร้าน", "End vacation"]</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-1" OnClick="EndVacationAsync">@L["กลับมาเปิดร้าน", "End vacation"]</MudButton>
                 }
                 else
                 {
                     <MudDatePicker @bind-Date="_vacationUntil" Label="@L["ลาพักร้อนถึง (ว่าง = ไม่มีกำหนด)", "Vacation until (empty = indefinite)"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" />
                     <MudTextField @bind-Value="_vacationMessage" Label="@L["ข้อความถึงลูกค้า", "Message to customers"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="StartVacationAsync">🏖️ @L["เริ่มลาพักร้อน", "Start vacation"]</MudButton>
+                    <MudButton Variant="Variant.Outlined" OnClick="StartVacationAsync">🏖️ @L["เริ่มลาพักร้อน", "Start vacation"]</MudButton>
                 }
-            </MudExpansionPanel>
-
-            <MudExpansionPanel Text="@L["🛵 วิธีรับสินค้า", "🛵 Delivery options"]">
-                <MudSwitch T="bool" @bind-Value="_pickup" Color="Color.Primary" Label="@L["ลูกค้ามารับเองที่ร้าน", "Customer picks up"]" />
-                @if (_pickup) { <MudTextField @bind-Value="_pickupInstruction" Label="@L["จุดรับ / คำแนะนำ", "Pickup instructions"]" Variant="Variant.Outlined" Margin="Margin.Dense" /> }
-                <MudSwitch T="bool" @bind-Value="_delivery" Color="Color.Primary" Label="@L["ร้านไปส่งเอง (ไม่มีค่าส่ง)", "Shop delivers (no fee)"]" />
-                @if (_delivery)
-                {
-                    <MudTextField @bind-Value="_zone" Label="@L["โซนที่ส่ง เช่น ซอย 1-5", "Delivery zone, e.g. Soi 1-5"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                    <MudNumericField T="decimal?" @bind-Value="_minOrder" Label="@L["ยอดขั้นต่ำสำหรับส่ง (ไม่บังคับ)", "Delivery minimum (optional)"]" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                }
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Class="mt-2" Disabled="@(!_pickup && !_delivery)" OnClick="SaveDeliveryAsync">@L["บันทึก", "Save"]</MudButton>
             </MudExpansionPanel>
 
             <MudExpansionPanel Text="@L["🧾 การรับออเดอร์", "🧾 Order settings"]">
@@ -98,15 +90,15 @@
                     <MudRadio Value="@("Auto")" Color="Color.Primary">@L["รับอัตโนมัติ", "Auto-accept"]</MudRadio>
                 </MudRadioGroup>
                 <div class="ss-grid-2">
-                    <MudNumericField T="int" @bind-Value="_timeout" Label="@L["หมดเวลารับ (นาที)", "Accept timeout (min)"]" Min="5" Max="240" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                    <MudNumericField T="int" @bind-Value="_reminder" Label="@L["เตือนซ้ำทุก (นาที)", "Remind every (min)"]" Min="1" Max="60" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                    <MudNumericField T="int" @bind-Value="_prep" Label="@L["เวลาเตรียม (นาที)", "Prep time (min)"]" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                    <MudNumericField T="int" @bind-Value="_slot" Label="@L["ช่วงเวลารับ (นาที)", "Time window (min)"]" Min="10" Max="240" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                    <MudNumericField T="int" @bind-Value="_autoComplete" Label="@L["ยืนยันรับอัตโนมัติหลัง (ชม.)", "Auto-complete after (h)"]" Min="1" Max="168" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    <MudNumericField T="int" @bind-Value="_timeout" Label="@L["หมดเวลารับ (นาที)", "Accept timeout (min)"]" Min="5" Max="240" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+                    <MudNumericField T="int" @bind-Value="_reminder" Label="@L["เตือนซ้ำทุก (นาที)", "Remind every (min)"]" Min="1" Max="60" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+                    <MudNumericField T="int" @bind-Value="_prep" Label="@L["เวลาเตรียม (นาที)", "Prep time (min)"]" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+                    <MudNumericField T="int" @bind-Value="_slot" Label="@L["ช่วงเวลารับ (นาที)", "Time window (min)"]" Min="10" Max="240" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+                    <MudNumericField T="int" @bind-Value="_autoComplete" Label="@L["ยืนยันรับอัตโนมัติหลัง (ชม.)", "Auto-complete after (h)"]" Min="1" Max="168" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
                 </div>
                 <MudSwitch T="bool" @bind-Value="_preorder" Color="Color.Primary" Label="@L["รับสั่งล่วงหน้าตอนร้านปิด", "Accept pre-orders while closed"]" />
                 <MudSwitch T="bool" @bind-Value="_payFirst" Color="Color.Primary" Label="@L["ต้องชำระเงินก่อนเริ่มทำ (ยกเว้นเงินสด)", "Require payment before preparing (except cash)"]" />
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Class="mt-2" OnClick="SaveOrderSettingsAsync">@L["บันทึก", "Save"]</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" Disabled="!OrderDirty" OnClick="SaveOrderSettingsAsync">@L["บันทึกการรับออเดอร์", "Save order settings"]</MudButton>
                 <MudDivider Class="my-3" />
                 @* Saved right away (its own endpoint), like a feature switch. *@
                 <MudSwitch T="bool" Value="_s.Shop.AcceptsCustomOrders" ValueChanged="SetCustomOrdersAsync" Color="Color.Primary"
@@ -118,7 +110,20 @@
             </MudExpansionPanel>
 
             <MudExpansionPanel Text="@L["💳 วิธีชำระเงิน", "💳 Payment methods"]">
-                <PaymentMethodsEditor ShopId="ShopId" Methods="_s.Shop.PaymentMethods" Changed="ReloadAsync" />
+                <PaymentMethodsEditor ShopId="ShopId" Methods="_s.Shop.PaymentMethods" Changed="@(() => ReloadAsync())" />
+            </MudExpansionPanel>
+
+            <MudExpansionPanel Text="@L["🛵 วิธีรับสินค้า", "🛵 Delivery options"]">
+                <MudSwitch T="bool" @bind-Value="_pickup" Color="Color.Primary" Label="@L["ลูกค้ามารับเองที่ร้าน", "Customer picks up"]" />
+                @if (_pickup) { <MudTextField @bind-Value="_pickupInstruction" Label="@L["จุดรับ / คำแนะนำ", "Pickup instructions"]" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" /> }
+                <MudSwitch T="bool" @bind-Value="_delivery" Color="Color.Primary" Label="@L["ร้านไปส่งเอง (ไม่มีค่าส่ง)", "Shop delivers (no fee)"]" />
+                @if (_delivery)
+                {
+                    <MudTextField @bind-Value="_zone" Label="@L["โซนที่ส่ง เช่น ซอย 1-5", "Delivery zone, e.g. Soi 1-5"]" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+                    <MudNumericField T="decimal?" @bind-Value="_minOrder" Label="@L["ยอดขั้นต่ำสำหรับส่ง (ไม่บังคับ)", "Delivery minimum (optional)"]" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+                }
+                @if (!_pickup && !_delivery) { <MudText Typo="Typo.caption" Color="Color.Error" Class="d-block">@L["ต้องเปิดอย่างน้อยหนึ่งวิธี", "Turn on at least one option"]</MudText> }
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" Disabled="@(!_pickup && !_delivery || !DeliveryDirty)" OnClick="SaveDeliveryAsync">@L["บันทึกวิธีรับสินค้า", "Save delivery options"]</MudButton>
             </MudExpansionPanel>
 
             <MudExpansionPanel Text="@L["👥 สมาชิกร้าน", "👥 Shop team"]">
@@ -127,7 +132,7 @@
             @if (_s.Shop.MyRole is "Owner" or "Manager")
             {
                 <MudExpansionPanel Text="@L["💾 สำรอง / กู้คืนข้อมูลร้าน", "💾 Backup & restore"]">
-                    <ShopBackupPanel ShopId="ShopId" ShopName="@_s.Shop.Name" Restored="ReloadAsync" />
+                    <ShopBackupPanel ShopId="ShopId" ShopName="@_s.Shop.Name" Restored="@(() => ReloadAsync())" />
                 </MudExpansionPanel>
             }
             @if (_s.Shop.MyRole == "Owner" && Config.IntegrationsEnabled)
@@ -137,6 +142,19 @@
                 </MudExpansionPanel>
             }
         </MudExpansionPanels>
+
+        @* One save bar for the whole page while anything typed is unsaved: the per-section buttons are easy to miss in a
+           closed panel. Switches that save at once (custom orders, closures, vacation) keep doing so. *@
+        @if (Dirty)
+        {
+            <div class="ss-save-bar">
+                <MudPaper Elevation="6" Class="ss-card">
+                    <MudText Typo="Typo.body2" Style="flex:1; min-width:0">✏️ @L["มีการแก้ไขที่ยังไม่บันทึก", "Unsaved changes"]</MudText>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_saving || _uploadingLogo || _uploadingCover || (DeliveryDirty && !_pickup && !_delivery))"
+                               OnClick="SaveAllAsync">@(_saving ? L["กำลังบันทึก...", "Saving..."] : L["บันทึก", "Save"])</MudButton>
+                </MudPaper>
+            </div>
+        }
     }
 </div>
 
@@ -155,36 +173,100 @@
     private string _acceptMode = "Manual";
     private int _timeout, _reminder, _prep, _slot, _autoComplete;
 
-    protected override async Task OnParametersSetAsync() => await ReloadAsync();
+    private ApiProblem? _problem;
+    private bool _saving;
 
-    private async Task ReloadAsync()
+    protected override async Task OnParametersSetAsync()
     {
-        _s = await Api.Get<ShopSettings>($"api/merchant/shops/{ShopId}");
-        if (_s is null) return;
+        if (_s?.Shop.Id != ShopId) _s = null; // another shop: never carry this one's edits over
+        await ReloadAsync();
+    }
+
+    // ---- unsaved changes: three sections have fields saved with a button; each compares with what the server has ----
+    private static bool Same(string? a, string? b) => (a ?? "") == (b ?? ""); // a cleared field is "" but was null
+
+    private bool ProfileDirty => _s is { Shop: var d } && !(_logoId == _s.LogoId && _coverId == _s.CoverId && Same(_name, d.Name) && Same(_category, d.Category)
+        && Same(_description, d.Description) && Same(_houseNo, d.HouseNo) && Same(_phone, d.Phone) && Same(_lineContact, d.LineContact));
+
+    private bool DeliveryDirty => _s is { Shop: var d } && !(_pickup == d.PickupEnabled && Same(_pickupInstruction, d.PickupInstruction)
+        && _delivery == d.DeliveryEnabled && Same(_zone, d.DeliveryZoneNote) && _minOrder == d.DeliveryMinOrder);
+
+    private bool OrderDirty => _s is { Shop: var d } && !(_acceptMode == _s.AcceptMode && _timeout == _s.AcceptTimeoutMinutes && _reminder == _s.ReminderAfterMinutes
+        && _prep == d.PrepTimeMinutes && _slot == _s.SlotIntervalMinutes && _autoComplete == _s.AutoCompleteHours
+        && _preorder == _s.AllowPreorderWhenClosed && _payFirst == _s.RequirePaymentBeforePreparing);
+
+    private bool Dirty => ProfileDirty || DeliveryDirty || OrderDirty;
+
+    /// <summary>
+    /// Fetches the settings again. Sections with unsaved edits keep them (saving one section, or a switch that saves at
+    /// once, used to wipe what was typed elsewhere); <paramref name="saved"/> is refreshed from the server regardless.
+    /// </summary>
+    private async Task ReloadAsync(string? saved = null)
+    {
+        bool Keep(bool dirty, string section) => dirty && saved != section && saved != "all";
+        var (keepProfile, keepDelivery, keepOrder) = (Keep(ProfileDirty, "profile"), Keep(DeliveryDirty, "delivery"), Keep(OrderDirty, "order"));
+        var loaded = await Api.Load<ShopSettings>($"api/merchant/shops/{ShopId}");
+        _problem = loaded.Problem;
+        if (loaded.Value is null) return; // a failed refresh keeps the page (and the edits) as they are
+        _s = loaded.Value;
         var d = _s.Shop;
-        (_logoId, _coverId, _logoUrl, _coverUrl) = (_s.LogoId, _s.CoverId, d.LogoUrl, d.CoverUrl);
-        (_name, _category, _description, _houseNo, _phone, _lineContact) = (d.Name, d.Category, d.Description, d.HouseNo, d.Phone, d.LineContact);
-        (_pickup, _pickupInstruction, _delivery, _zone, _minOrder) = (d.PickupEnabled, d.PickupInstruction, d.DeliveryEnabled, d.DeliveryZoneNote, d.DeliveryMinOrder);
-        (_acceptMode, _timeout, _reminder, _prep, _slot, _autoComplete) = (_s.AcceptMode, _s.AcceptTimeoutMinutes, _s.ReminderAfterMinutes, d.PrepTimeMinutes, _s.SlotIntervalMinutes, _s.AutoCompleteHours);
-        (_preorder, _payFirst) = (_s.AllowPreorderWhenClosed, _s.RequirePaymentBeforePreparing);
+        if (!keepProfile)
+        {
+            (_logoId, _coverId, _logoUrl, _coverUrl) = (_s.LogoId, _s.CoverId, d.LogoUrl, d.CoverUrl);
+            (_name, _category, _description, _houseNo, _phone, _lineContact) = (d.Name, d.Category, d.Description, d.HouseNo, d.Phone, d.LineContact);
+        }
+        if (!keepDelivery)
+            (_pickup, _pickupInstruction, _delivery, _zone, _minOrder) = (d.PickupEnabled, d.PickupInstruction, d.DeliveryEnabled, d.DeliveryZoneNote, d.DeliveryMinOrder);
+        if (!keepOrder)
+        {
+            (_acceptMode, _timeout, _reminder, _prep, _slot, _autoComplete) = (_s.AcceptMode, _s.AcceptTimeoutMinutes, _s.ReminderAfterMinutes, d.PrepTimeMinutes, _s.SlotIntervalMinutes, _s.AutoCompleteHours);
+            (_preorder, _payFirst) = (_s.AllowPreorderWhenClosed, _s.RequirePaymentBeforePreparing);
+        }
+    }
+
+    private async Task ConfirmLeaveAsync(LocationChangingContext context)
+    {
+        if (!Dirty) return;
+        var leave = await Dialogs.ShowMessageBoxAsync(L["ยังไม่ได้บันทึก", "Unsaved changes"],
+            L["มีการแก้ไขที่ยังไม่ได้บันทึก ออกจากหน้านี้เลยไหม", "Some changes are not saved yet. Leave this page anyway?"],
+            yesText: L["ออกโดยไม่บันทึก", "Leave without saving"], cancelText: L["อยู่ต่อ", "Stay"]);
+        if (leave != true) context.PreventNavigation();
+    }
+
+    /// <summary>The sticky bar's button: saves every section with edits.</summary>
+    private async Task SaveAllAsync()
+    {
+        if (_saving) return;
+        _saving = true;
+        try
+        {
+            if (ProfileDirty && !await SaveProfileCoreAsync()) return;
+            if (DeliveryDirty && !await SaveDeliveryCoreAsync()) return;
+            if (OrderDirty && !await SaveOrderCoreAsync()) return;
+            Snackbar.Add(L["บันทึกแล้ว", "Saved"], Severity.Success);
+            await ReloadAsync("all");
+        }
+        finally { _saving = false; }
     }
 
     private string Url(string path) => $"api/merchant/shops/{ShopId}/{path}";
 
     private async Task SetCustomOrdersAsync(bool enabled) => await Saved(await Api.Put(Url("custom-orders"), new { enabled }));
 
-    private async Task Saved(bool ok)
+    private async Task Saved(bool ok, string? section = null)
     {
         if (!ok) return;
         Snackbar.Add(L["บันทึกแล้ว", "Saved"], Severity.Success);
-        await ReloadAsync();
+        await ReloadAsync(section);
     }
 
-    private async Task SaveProfileAsync() => await Saved(await Api.Put(Url("profile"), new
+    private async Task SaveProfileAsync() => await Saved(await SaveProfileCoreAsync(), "profile");
+
+    private Task<bool> SaveProfileCoreAsync() => Api.Put(Url("profile"), new
     {
         name = _name, category = _category, description = _description, logoId = _logoId, coverId = _coverId,
         houseNo = _houseNo, phone = _phone, lineContact = _lineContact,
-    }));
+    });
 
     private async Task AddClosureAsync()
     {
@@ -208,14 +290,18 @@
 
     private async Task EndVacationAsync() => await Saved(await Api.Delete(Url("vacation")));
 
-    private async Task SaveDeliveryAsync() => await Saved(await Api.Put(Url("delivery-options"), new
+    private async Task SaveDeliveryAsync() => await Saved(await SaveDeliveryCoreAsync(), "delivery");
+
+    private Task<bool> SaveDeliveryCoreAsync() => Api.Put(Url("delivery-options"), new
     {
         pickupEnabled = _pickup, pickupInstruction = _pickupInstruction, deliveryEnabled = _delivery, deliveryZoneNote = _zone, deliveryMinOrder = _minOrder,
-    }));
+    });
 
-    private async Task SaveOrderSettingsAsync() => await Saved(await Api.Put(Url("order-settings"), new
+    private async Task SaveOrderSettingsAsync() => await Saved(await SaveOrderCoreAsync(), "order");
+
+    private Task<bool> SaveOrderCoreAsync() => Api.Put(Url("order-settings"), new
     {
         acceptMode = _acceptMode, acceptTimeoutMinutes = _timeout, reminderAfterMinutes = _reminder, autoCompleteHours = _autoComplete,
         allowPreorderWhenClosed = _preorder, prepTimeMinutes = _prep, slotIntervalMinutes = _slot, requirePaymentBeforePreparing = _payFirst,
-    }));
+    });
 }

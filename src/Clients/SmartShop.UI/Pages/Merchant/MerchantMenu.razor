@@ -3,6 +3,7 @@
 @inject Api Api
 @inject IDialogService Dialogs
 @inject ISnackbar Snackbar
+@inject NavigationManager Nav
 @implements IDisposable
 
 <div class="ss-page">
@@ -19,7 +20,9 @@
         }
     </div>
 
-    @if (_items is null) { <Loading /> }
+    @if (_items is not null && _problem is not null) { <LoadError Inline="true" Problem="_problem" OnRetry="LoadAsync" /> }
+    @if (_items is null && _problem is not null) { <LoadError Problem="_problem" OnRetry="LoadAsync" /> }
+    else if (_items is null) { <Loading /> }
     else if (_items.Count == 0)
     {
         <EmptyState Icon="@Icons.Material.Outlined.RestaurantMenu" Title="@L["ยังไม่มีสินค้า/บริการ", "No items yet"]">
@@ -31,29 +34,46 @@
         @foreach (var m in Filtered)
         {
             var i = m.Item;
-            <div @key="i.Id" class="ss-item" style="cursor:default">
+            @* The whole row opens the editor (a name link alone was a small target); the stock and switch controls
+               stop the tap so using them never navigates away. *@
+            <div @key="i.Id" class="ss-item ss-menu-row" @onclick="@(() => Nav.NavigateTo($"/merchant/{ShopId}/menu/{i.Id}"))">
                 @if (i.ThumbnailUrl is not null) { <img class="ss-item-img" src="@i.ThumbnailUrl" alt="" style="width:64px;height:64px" /> }
                 <div style="flex:1; min-width:0">
-                    <MudLink Href="@($"/merchant/{ShopId}/menu/{i.Id}")" Typo="Typo.subtitle1" Style="font-weight:600">@i.Name</MudLink>
+                    <div class="d-flex align-center gap-1">
+                        <MudText Typo="Typo.subtitle1" Color="Color.Primary" Style="font-weight:600; flex:1; min-width:0">@i.Name</MudText>
+                        <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Class="ss-muted" />
+                    </div>
                     <MudText Typo="Typo.body2">@Fmt.Baht(i.Price) @(i.Kind == "Service" ? L["· บริการ", "· service"] : "")</MudText>
-                    @if (!i.IsOrderable && m.IsAvailable) { <MudText Typo="Typo.caption" Color="Color.Warning">@i.UnavailableReason</MudText> }
-                    @if (m.OnHand is { } onHand)
-                    {
-                        <div class="d-flex align-center gap-1">
-                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Remove" Disabled="@(onHand - (m.Reserved ?? 0) <= 0)" OnClick="@(() => SetStockAsync(m, onHand - 1))" />
-                            <MudText Typo="Typo.body2" Style="min-width:84px; text-align:center">@L["คงเหลือ", "left"] <b>@(onHand - (m.Reserved ?? 0))</b></MudText>
-                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Add" OnClick="@(() => AddStockAsync(m, 1))" />
-                            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => RestockAsync(m))">@L["เติม", "Restock"]</MudButton>
-                            @if (m.Reserved > 0) { <MudText Typo="Typo.caption" Class="ss-muted">(@L["จอง", "reserved"] @m.Reserved)</MudText> }
+                    @if (!i.IsOrderable && m.IsAvailable) { <MudText Typo="Typo.caption" Class="ss-warn-text">@i.UnavailableReason</MudText> }
+                    <div @onclick:stopPropagation="true">
+                        @if (m.OnHand is { } onHand)
+                        {
+                            var left = onHand - (m.Reserved ?? 0);
+                            <div class="d-flex align-center gap-1 flex-wrap mt-1">
+                                <MudText Typo="Typo.body2" Class="me-1">@L["คงเหลือ", "In stock"]</MudText>
+                                <MudIconButton Icon="@Icons.Material.Filled.Remove" Variant="Variant.Outlined" Disabled="@(left <= 0)" OnClick="@(() => SetStockAsync(m, onHand - 1))"
+                                               aria-label="@L[$"ลดสต็อก {i.Name} 1", $"Remove 1 {i.Name} from stock"]" />
+                                <MudText Typo="Typo.h6" Style="min-width:40px; text-align:center">@left</MudText>
+                                <MudIconButton Icon="@Icons.Material.Filled.Add" Variant="Variant.Outlined" OnClick="@(() => AddStockAsync(m, 1))"
+                                               aria-label="@L[$"เพิ่มสต็อก {i.Name} 1", $"Add 1 {i.Name} to stock"]" />
+                                <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="@(() => RestockAsync(m))">@L["เติมหลายชิ้น", "Restock"]</MudButton>
+                                @if (m.Reserved > 0) { <MudText Typo="Typo.caption" Class="ss-muted">(@L["จอง", "reserved"] @m.Reserved)</MudText> }
+                            </div>
+                        }
+                        <div class="ss-menu-switches">
+                            <div>
+                                <MudSwitch T="bool" Value="m.IsAvailable" ValueChanged="@(v => AvailabilityAsync(m, v))" Color="Color.Success" Label="@L["เปิดขาย", "On sale"]" />
+                                <MudText Typo="Typo.caption" Class="ss-muted d-block">@L["ปิด = ซ่อนจากลูกค้า", "Off = hidden from customers"]</MudText>
+                            </div>
+                            @if (i.StockMode == "Untracked")
+                            {
+                                <div>
+                                    <MudSwitch T="bool" Value="m.IsSoldOut" ValueChanged="@(v => SoldOutAsync(m, v))" Color="Color.Error" Label="@L["ของหมด", "Sold out"]" />
+                                    <MudText Typo="Typo.caption" Class="ss-muted d-block">@L["ลูกค้าเห็นแต่สั่งไม่ได้ จนกว่าจะปิดสวิตช์นี้", "Visible but cannot be ordered until you switch this off"]</MudText>
+                                </div>
+                            }
                         </div>
-                    }
-                </div>
-                <div class="d-flex flex-column align-end">
-                    <MudSwitch T="bool" Value="m.IsAvailable" ValueChanged="@(v => AvailabilityAsync(m, v))" Color="Color.Success" Size="Size.Small" Label="@L["ขาย", "On"]" />
-                    @if (i.StockMode == "Untracked")
-                    {
-                        <MudSwitch T="bool" Value="m.IsSoldOut" ValueChanged="@(v => SoldOutAsync(m, v))" Color="Color.Error" Size="Size.Small" Label="@L["หมด", "Sold out"]" />
-                    }
+                    </div>
                 </div>
             </div>
         }
@@ -66,8 +86,8 @@
                 <div class="d-flex align-center">
                     <MudText>@c.Name</MudText>
                     <MudSpacer />
-                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => RenameCategoryAsync(c))" />
-                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="@(() => DeleteCategoryAsync(c))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" OnClick="@(() => RenameCategoryAsync(c))" aria-label="@L[$"แก้ชื่อหมวด {c.Name}", $"Rename {c.Name}"]" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" OnClick="@(() => DeleteCategoryAsync(c))" aria-label="@L[$"ลบหมวด {c.Name}", $"Delete {c.Name}"]" />
                 </div>
             }
             <MudButton StartIcon="@Icons.Material.Filled.Add" Size="Size.Small" OnClick="AddCategoryAsync">@L["เพิ่มหมวดหมู่", "Add category"]</MudButton>
@@ -82,6 +102,7 @@
     [Parameter] public Guid ShopId { get; set; }
 
     private List<MerchantItem>? _items;
+    private ApiProblem? _problem;
     private List<Category> _categories = [];
     private string _filter = "all";
 
@@ -105,10 +126,13 @@
 
     private async Task LoadAsync()
     {
-        var items = Api.Get<List<MerchantItem>>($"api/merchant/shops/{ShopId}/catalog/items");
-        var categories = Api.Get<List<Category>>($"api/merchant/shops/{ShopId}/catalog/categories");
-        _items = await items ?? [];
-        _categories = await categories ?? [];
+        var items = Api.Load<List<MerchantItem>>($"api/merchant/shops/{ShopId}/catalog/items");
+        var categories = Api.Get<List<Category>>($"api/merchant/shops/{ShopId}/catalog/categories", silent: true);
+        var loaded = await items;
+        _problem = loaded.Problem;
+        // A failure is not "no items yet": that would invite the owner to add the whole menu again.
+        if (!loaded.Failed) _items = loaded.Value ?? [];
+        _categories = await categories ?? _categories;
     }
 
     private string Base(Guid itemId) => $"api/merchant/shops/{ShopId}/catalog/items/{itemId}";

@@ -14,7 +14,8 @@
         <MudChip T="string" Value="@("Rejected")" Text="@L["ไม่อนุมัติ", "Rejected"]" />
     </MudChipSet>
 
-    @if (_apps is null) { <Loading /> }
+    @if (_problem is not null) { <LoadError Problem="_problem" OnRetry="LoadAsync" /> }
+    else if (_apps is null) { <Loading /> }
     else if (_apps.Count == 0) { <EmptyState Title="@L["ไม่มีคำขอ", "No requests"]" Icon="@Icons.Material.Outlined.AddBusiness" /> }
     else
     {
@@ -49,6 +50,7 @@
 @code {
     private string _status = "Submitted";
     private List<ShopApplication>? _apps;
+    private ApiProblem? _problem;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -60,8 +62,9 @@
 
     private async Task LoadAsync()
     {
-        _apps = null;
-        _apps = await Api.Get<List<ShopApplication>>($"api/plant/admin/shop-applications?status={_status}") ?? [];
+        (_apps, _problem) = (null, null);
+        var apps = await Api.Load<List<ShopApplication>>($"api/plant/admin/shop-applications?status={_status}");
+        (_apps, _problem) = (apps.Failed ? null : apps.Value ?? [], apps.Problem);
     }
 
     private async Task ApproveAsync(ShopApplication a)

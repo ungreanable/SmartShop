@@ -22,7 +22,8 @@
            "All numbers are anonymous totals: the shop never sees who viewed or did what. People are counted once per day (someone who comes on several days counts on each), your own staff are not counted, and figures update about every 10 minutes."]
     </MudAlert>
 
-    @if (_data is null) { <Loading Rows="4" /> }
+    @if (_problem is not null) { <LoadError Problem="_problem" OnRetry="LoadAsync" /> }
+    else if (_data is null) { <Loading Rows="4" /> }
     else
     {
         var t = _data.Totals;
@@ -133,6 +134,7 @@
 
     private int _days = 7;
     private AnalyticsDashboard? _data;
+    private ApiProblem? _problem;
     private int _heatMax = 1;
 
     protected override async Task OnParametersSetAsync() => await LoadAsync();
@@ -145,8 +147,9 @@
 
     private async Task LoadAsync()
     {
-        _data = null;
-        _data = await Api.Get<AnalyticsDashboard>($"api/merchant/shops/{ShopId}/analytics?days={_days}");
+        (_data, _problem) = (null, null);
+        var loaded = await Api.Load<AnalyticsDashboard>($"api/merchant/shops/{ShopId}/analytics?days={_days}");
+        (_data, _problem) = (loaded.Value, loaded.Problem);
         _heatMax = Math.Max(1, _data?.Heatmap.SelectMany(r => r).DefaultIfEmpty(0).Max() ?? 1);
     }
 
