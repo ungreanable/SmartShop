@@ -58,6 +58,10 @@ public static class OrderNotificationHandler
     public static Task Handle(OrderAccepted e, NotificationDispatcher d, CancellationToken ct) =>
         Customer(d, e.CustomerId, e.PlantId, e.EventId, e.OrderId, "order.accepted", P.High, $"✅ {e.ShopName} รับออเดอร์ #{e.OrderNo} แล้ว", "ร้านกำลังเตรียมให้ค่ะ", ct);
 
+    public static Task Handle(OrderCancellationDeclined e, NotificationDispatcher d, CancellationToken ct) =>
+        Customer(d, e.CustomerId, e.PlantId, e.EventId, e.OrderId, "order.cancel_declined", P.High, $"{e.ShopName} ไม่รับคำขอยกเลิกออเดอร์ #{e.OrderNo}",
+            e.Note ?? "ร้านจะทำออเดอร์นี้ต่อ ติดต่อร้านได้ในแชทของออเดอร์", ct);
+
     public static Task Handle(OrderRejected e, NotificationDispatcher d, CancellationToken ct) =>
         Customer(d, e.CustomerId, e.PlantId, e.EventId, e.OrderId, "order.rejected", P.High, $"❌ {e.ShopName} ไม่สามารถรับออเดอร์ #{e.OrderNo}", e.Reason, ct);
 

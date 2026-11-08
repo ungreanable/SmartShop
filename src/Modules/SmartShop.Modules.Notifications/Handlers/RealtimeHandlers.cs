@@ -37,6 +37,12 @@ public static class RealtimeOrderHandler
     public static Task Handle(OrderCompleted e, IRealtimePublisher rt, CancellationToken ct) => Updated(rt, e.ShopId, e.CustomerId, e.OrderId, OrderStatus.Completed, ct);
     public static Task Handle(OrderCancellationRequested e, IRealtimePublisher rt, CancellationToken ct) => rt.ToShopAsync(e.ShopId, RealtimeEvents.OrderUpdated, new { e.OrderId, e.ShopId, cancelRequested = true }, ct);
 
+    public static async Task Handle(OrderCancellationDeclined e, IRealtimePublisher rt, CancellationToken ct)
+    {
+        await rt.ToShopAsync(e.ShopId, RealtimeEvents.OrderUpdated, new { e.OrderId, e.ShopId, cancelRequested = false }, ct);
+        await rt.ToUserAsync(e.CustomerId, RealtimeEvents.OrderUpdated, new { e.OrderId, e.ShopId, cancelRequested = false }, ct);
+    }
+
     public static async Task Handle(OrderMessagePosted e, IRealtimePublisher rt, CancellationToken ct)
     {
         await rt.ToShopAsync(e.ShopId, RealtimeEvents.OrderMessage, new { e.OrderId, e.Preview }, ct);

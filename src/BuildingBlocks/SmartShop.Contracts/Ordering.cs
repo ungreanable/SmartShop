@@ -66,6 +66,9 @@ public sealed record OrderExpired(Guid PlantId, Guid OrderId, string OrderNo, Gu
     bool QuoteUnanswered = false) : IntegrationEvent(PlantId);
 
 public sealed record OrderCancellationRequested(Guid PlantId, Guid OrderId, string OrderNo, Guid ShopId, Guid CustomerId, string? Reason) : IntegrationEvent(PlantId);
+/// <summary>The shop said no to the customer's cancellation request: the order goes on.</summary>
+public sealed record OrderCancellationDeclined(Guid PlantId, Guid OrderId, string OrderNo, Guid ShopId, string ShopName, Guid CustomerId, Guid ActorId,
+    string? Note) : IntegrationEvent(PlantId);
 public sealed record OrderPendingReminder(Guid PlantId, Guid OrderId, string OrderNo, Guid ShopId, string ShopName, int Attempt) : IntegrationEvent(PlantId);
 public sealed record OrderMessagePosted(Guid PlantId, Guid OrderId, string OrderNo, Guid ShopId, Guid CustomerId, Guid SenderId, bool FromShop, string Preview) : IntegrationEvent(PlantId);
 public sealed record OrderReported(Guid PlantId, Guid OrderId, string OrderNo, Guid ReportId, Guid ReporterId, string Reason) : IntegrationEvent(PlantId);
