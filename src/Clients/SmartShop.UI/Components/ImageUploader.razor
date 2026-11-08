@@ -54,10 +54,11 @@
     [Parameter] public bool Busy { get; set; }
     [Parameter] public EventCallback<bool> BusyChanged { get; set; }
 
-    // Photos are shrunk on the device first: a 12 MP phone photo (5-10 MB) becomes a few hundred KB, which uploads in
-    // seconds on a mobile connection. The server keeps at most 2400 px anyway (ImageProcessor.OriginalMax).
-    private const int ResizeTo = 2400;
-    private const long ResizeAbove = 1024 * 1024;
+    // Photos are shrunk on the device first: a 12 MP phone photo (5-10 MB) becomes a WebP of a few hundred KB, which
+    // uploads in seconds on a mobile connection. The server keeps at most 2048 px anyway (ImageProcessor.OriginalMax), and
+    // stores a WebP made here as it is instead of encoding it again.
+    private const int ResizeTo = 2048;
+    private const long ResizeAbove = 150 * 1024;
 
     // Each step has its own limit: a browser that never finishes shrinking or reading a file (seen in the LINE in-app
     // browser) or a stalled mobile connection must end in a message, never in a spinner that turns forever.
@@ -98,23 +99,14 @@
         try
         {
             _stage = Stage.Preparing;
-            file = await ShrinkAsync(file);
-
-            byte[] content;
-            using (var readLimit = CancellationTokenSource.CreateLinkedTokenSource(_cancel.Token))
-            {
-                readLimit.CancelAfter(ReadLimit);
-                content = new byte[file.Size];
-                await using var stream = file.OpenReadStream(MaxImageBytes, readLimit.Token);
-                await stream.ReadExactlyAsync(content, readLimit.Token);
-            }
+            var (content, contentType) = await ShrinkAsync(file, _cancel.Token) ?? (await ReadAsync(file, _cancel.Token), file.ContentType);
 
             step = "upload";
             _stage = Stage.Uploading;
             await InvokeAsync(StateHasChanged);
             using var uploadLimit = CancellationTokenSource.CreateLinkedTokenSource(_cancel.Token);
             uploadLimit.CancelAfter(UploadLimit);
-            var (result, problem) = await Api.UploadAsync(content, file.Name, file.ContentType, Purpose, uploadLimit.Token);
+            var (result, problem) = await Api.UploadAsync(content, file.Name, contentType, Purpose, uploadLimit.Token);
             if (result is not null)
             {
                 _fileName = null;
@@ -178,21 +170,48 @@
         if (BusyChanged.HasDelegate) await BusyChanged.InvokeAsync(busy);
     }
 
-    /// <summary>Large photos are scaled down in the browser (which also applies the camera's rotation); GIF and PDF are sent as they are.</summary>
-    /// <remarks>Shrinking is only an optimisation: if the browser takes too long or fails, the original is sent instead.</remarks>
-    private static async Task<IBrowserFile> ShrinkAsync(IBrowserFile file)
+    private static async Task<byte[]> ReadAsync(IBrowserFile file, CancellationToken ct)
     {
-        if (file.Size <= ResizeAbove || file.ContentType is not ("image/jpeg" or "image/png" or "image/webp")) return file;
-        try
-        {
-            var smaller = await file.RequestImageFileAsync("image/jpeg", ResizeTo, ResizeTo).AsTask().WaitAsync(ShrinkLimit);
-            return smaller.Size > 0 && smaller.Size < file.Size ? smaller : file;
-        }
-        catch (Exception e) when (e is Microsoft.JSInterop.JSException or InvalidOperationException or TimeoutException)
-        {
-            return file; // the browser could not decode it in time (e.g. HEIC on a PC): send the original, let the server explain
-        }
+        using var readLimit = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        readLimit.CancelAfter(ReadLimit);
+        var content = new byte[file.Size];
+        await using var stream = file.OpenReadStream(MaxImageBytes, readLimit.Token);
+        await stream.ReadExactlyAsync(content, readLimit.Token);
+        return content;
     }
+
+    /// <summary>
+    /// Photos are scaled down and re-encoded in the browser (which also applies the camera's rotation and drops EXIF/GPS):
+    /// WebP where the browser can make it, JPEG otherwise. GIF and PDF are sent as they are. Null: send the original.
+    /// </summary>
+    /// <remarks>Shrinking is only an optimisation: if the browser takes too long, fails, or the result is not smaller, the original is sent.</remarks>
+    private async Task<(byte[] Content, string ContentType)?> ShrinkAsync(IBrowserFile file, CancellationToken ct)
+    {
+        if (file.Size <= ResizeAbove || file.ContentType is not ("image/jpeg" or "image/png" or "image/webp")) return null;
+        // Slips keep JPEG: its QR code (read on the server) survives JPEG better than a phone browser's default WebP quality.
+        var formats = Purpose == "PaymentSlip" ? new[] { "image/jpeg" } : new[] { "image/webp", "image/jpeg" };
+        foreach (var format in formats)
+        {
+            try
+            {
+                var smaller = await file.RequestImageFileAsync(format, ResizeTo, ResizeTo).AsTask().WaitAsync(ShrinkLimit, ct);
+                // A browser that cannot encode WebP (older Safari) quietly hands back a PNG instead, usually bigger than the
+                // photo: try JPEG then.
+                if (smaller.Size <= 0 || smaller.Size >= file.Size) continue;
+                var content = await ReadAsync(smaller, ct);
+                if (format == "image/webp" && !IsWebp(content)) continue;
+                return (content, format);
+            }
+            catch (Exception e) when (e is Microsoft.JSInterop.JSException or InvalidOperationException or TimeoutException)
+            {
+                return null; // the browser could not decode it in time (e.g. HEIC on a PC): send the original, let the server explain
+            }
+        }
+        return null;
+    }
+
+    private static bool IsWebp(byte[] content) =>
+        content.Length >= 12 && content.AsSpan(0, 4).SequenceEqual("RIFF"u8) && content.AsSpan(8, 4).SequenceEqual("WEBP"u8);
 
     private void Fail(string message)
     {

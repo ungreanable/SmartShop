@@ -46,6 +46,10 @@ public static class Scenario
     public static byte[] Jpeg(int width = 64, int height = 48, SKColor? color = null) =>
         Encode(width, height, color, SKEncodedImageFormat.Jpeg, 80);
 
+    /// <summary>A WebP as the app makes it on the phone (picture data only, no metadata).</summary>
+    public static byte[] Webp(int width = 64, int height = 48, SKColor? color = null) =>
+        Encode(width, height, color, SKEncodedImageFormat.Webp, 80);
+
     /// <summary>A JPEG as phones save it: pixels stored sideways plus an EXIF Orientation tag (6 = rotate 90° clockwise).</summary>
     public static byte[] JpegWithOrientation(int width, int height, ushort orientation)
     {

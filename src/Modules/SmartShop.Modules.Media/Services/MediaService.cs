@@ -87,7 +87,7 @@ internal sealed class MediaService(MediaDbContext db, IObjectStorage storage, Ti
             if (!await ProcessingGate.WaitAsync(GateTimeout, ct))
                 throw new UnavailableException("media_busy", "Many pictures are being processed right now. Please try again in a moment.");
             ProcessedImage processed;
-            try { processed = ImageProcessor.Process(buffer, size); }
+            try { processed = ImageProcessor.Process(buffer, size, keepDetail: purpose == MediaPurpose.PaymentSlip); }
             catch (InvalidDataException) { throw new DomainException("media_corrupt", "The image could not be read."); }
             finally { ProcessingGate.Release(); }
 

@@ -1,5 +1,10 @@
+using System.Buffers.Binary;
 using System.Net;
+using Microsoft.Extensions.DependencyInjection;
 using SkiaSharp;
+using SmartShop.Contracts.Media;
+using SmartShop.Infrastructure.Media;
+using SmartShop.Infrastructure.Storage;
 using SmartShop.IntegrationTests.Infrastructure;
 
 namespace SmartShop.IntegrationTests;
@@ -13,7 +18,7 @@ public class MediaTests(SmartShopFactory factory)
 
         var upload = await admin.UploadAsync("ItemImage", Scenario.Png(3000, 1000));
 
-        upload.Width.ShouldBe(2400); // original capped
+        upload.Width.ShouldBe(2048); // original capped
         upload.Url.ShouldNotBeNull();
         var anonymous = factory.CreateClient();
         var medium = await anonymous.GetAsync(upload.Url);
@@ -31,8 +36,8 @@ public class MediaTests(SmartShopFactory factory)
         // 48 MP, like current phone cameras; decoded at 1/2 scale instead of ~190 MB of pixels.
         var upload = await admin.UploadAsync("ItemImage", Scenario.Jpeg(8000, 6000), "photo.jpg");
 
-        upload.Width.ShouldBe(2400);
-        upload.Height.ShouldBe(1800);
+        upload.Width.ShouldBe(2048);
+        upload.Height.ShouldBe(1536);
     }
 
     [Theory]
@@ -46,8 +51,8 @@ public class MediaTests(SmartShopFactory factory)
 
         var upload = await admin.UploadAsync("ItemImage", Scenario.JpegWithOrientation(4000, 3000, orientation), "portrait.jpg");
 
-        upload.Width.ShouldBe(1800);
-        upload.Height.ShouldBe(2400);
+        upload.Width.ShouldBe(1536);
+        upload.Height.ShouldBe(2048);
         using var small = SKBitmap.Decode(await factory.CreateClient().GetByteArrayAsync(upload.ThumbnailUrl));
         ((double)small.Width / small.Height).ShouldBe(0.75, 0.01);
         var top = small.GetPixel(small.Width / 2, small.Height / 8);
@@ -132,5 +137,79 @@ public class MediaTests(SmartShopFactory factory)
 
         var ex = await Should.ThrowAsync<HttpRequestException>(() => outsider.UploadAsync("ItemImage"));
         ex.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Original_is_stored_as_webp_too()
+    {
+        var (_, admin) = await factory.CreatePlantAsync();
+
+        var upload = await admin.UploadAsync("ItemImage", Scenario.Jpeg(1600, 1200), "photo.jpg");
+
+        upload.ContentType.ShouldBe("image/webp");
+        var original = await factory.CreateClient().GetAsync(OriginalUrl(upload.Id));
+        original.Content.Headers.ContentType!.MediaType.ShouldBe("image/webp");
+        using var decoded = SKBitmap.Decode(await original.Content.ReadAsByteArrayAsync());
+        decoded.Width.ShouldBe(1600);
+    }
+
+    [Fact]
+    public async Task Webp_already_shrunk_on_the_phone_is_kept_as_it_is()
+    {
+        var (_, admin) = await factory.CreatePlantAsync();
+        var webp = Scenario.Webp(1500, 1000);
+
+        var upload = await admin.UploadAsync("ItemImage", webp, "photo.webp");
+
+        (await factory.CreateClient().GetByteArrayAsync(OriginalUrl(upload.Id))).ShouldBe(webp);
+    }
+
+    [Fact]
+    public async Task Webp_carrying_metadata_is_encoded_again_so_the_metadata_is_dropped()
+    {
+        var (_, admin) = await factory.CreatePlantAsync();
+        var webp = WithChunk(Scenario.Webp(1500, 1000), "EXIF", "GPS 13.7563 100.5018"u8.ToArray());
+
+        var upload = await admin.UploadAsync("ItemImage", webp, "photo.webp");
+
+        var stored = await factory.CreateClient().GetByteArrayAsync(OriginalUrl(upload.Id));
+        stored.ShouldNotBe(webp);
+        System.Text.Encoding.ASCII.GetString(stored).ShouldNotContain("GPS");
+    }
+
+    [Fact]
+    public async Task Small_picture_is_served_from_memory_after_the_first_view()
+    {
+        var (_, admin) = await factory.CreatePlantAsync();
+        var upload = await admin.UploadAsync("ItemImage");
+        var anonymous = factory.CreateClient();
+        var first = await anonymous.GetByteArrayAsync(upload.ThumbnailUrl);
+
+        // Gone from object storage: only the in-memory copy can answer now.
+        await factory.Services.GetRequiredService<IObjectStorage>().DeleteAsync($"{upload.Id:N}/sm.webp");
+
+        (await anonymous.GetByteArrayAsync(upload.ThumbnailUrl)).ShouldBe(first);
+    }
+
+    [Fact]
+    public async Task Api_responses_say_how_long_the_server_took()
+    {
+        var response = await factory.CreateClient().GetAsync("/api/me");
+
+        response.Headers.GetValues("Server-Timing").ShouldContain(v => v.StartsWith("app;dur=", StringComparison.Ordinal));
+    }
+
+    private string OriginalUrl(Guid id) => factory.Services.GetRequiredService<IMediaUrls>().For(id, MediaVariant.Original)!;
+
+    private static byte[] WithChunk(byte[] webp, string type, byte[] data)
+    {
+        var padded = data.Length + (data.Length & 1);
+        var result = new byte[webp.Length + 8 + padded];
+        webp.CopyTo(result, 0);
+        System.Text.Encoding.ASCII.GetBytes(type).CopyTo(result, webp.Length);
+        BinaryPrimitives.WriteUInt32LittleEndian(result.AsSpan(webp.Length + 4), (uint)data.Length);
+        data.CopyTo(result, webp.Length + 8);
+        BinaryPrimitives.WriteUInt32LittleEndian(result.AsSpan(4), (uint)(result.Length - 8));
+        return result;
     }
 }

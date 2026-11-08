@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using SkiaSharp;
 
 namespace SmartShop.Modules.Media.Services;
@@ -6,21 +7,28 @@ public sealed record ProcessedImage(byte[] Original, string OriginalContentType,
 
 /// <summary>
 /// Normalises uploaded images: applies EXIF orientation, re-encodes (which strips EXIF/GPS metadata)
-/// and produces WebP variants for fast loading on mobile networks.
+/// and stores everything as WebP (original and the resized variants) for fast loading on mobile networks.
 /// </summary>
 internal static class ImageProcessor
 {
-    private const int OriginalMax = 2400;
+    /// <summary>Matches the size the app shrinks photos to on the phone (ImageUploader), so those need no resize here.</summary>
+    public const int OriginalMax = 2048;
     private const int MediumMax = 1200;
     private const int SmallMax = 400;
+
+    private const int OriginalQuality = 82;
+    /// <summary>Payment slips keep more detail: their QR code is read from the original.</summary>
+    private const int DetailedOriginalQuality = 90;
+    private const int MediumQuality = 75;
+    private const int SmallQuality = 70;
 
     /// <summary>Refuse decompression bombs: a 100 MP bitmap alone is 400 MB of native memory.</summary>
     private const long MaxPixels = 100_000_000;
 
-    public static ProcessedImage Process(byte[] data) => Process(data, data.Length);
+    public static ProcessedImage Process(byte[] data, bool keepDetail = false) => Process(data, data.Length, keepDetail);
 
     /// <summary>Processes the first <paramref name="length"/> bytes of a (pooled) buffer without copying it.</summary>
-    public static ProcessedImage Process(byte[] data, int length)
+    public static ProcessedImage Process(byte[] data, int length, bool keepDetail = false)
     {
         using var codec = SKCodec.Create(new MemoryStream(data, 0, length, writable: false))
                           ?? throw new InvalidDataException("The file is not a supported image.");
@@ -37,10 +45,15 @@ internal static class ImageProcessor
             using var medium = ResizeToFit(original, MediumMax);
             using var small = ResizeToFit(medium, SmallMax);
 
+            // A photo the app already shrank to WebP on the phone is kept byte for byte: encoding the biggest image is
+            // most of the work, and on a 1 vCPU server that time is taken from every other request.
+            var keep = ReferenceEquals(oriented, decoded) && original.Width == codec.Info.Width && original.Height == codec.Info.Height
+                       && WebpContainer.IsPlainStill(data.AsSpan(0, length));
             return new ProcessedImage(
-                Encode(original, SKEncodedImageFormat.Jpeg, 90), "image/jpeg",
-                Encode(medium, SKEncodedImageFormat.Webp, 80),
-                Encode(small, SKEncodedImageFormat.Webp, 75),
+                keep ? data.AsSpan(0, length).ToArray() : Encode(original, SKEncodedImageFormat.Webp, keepDetail ? DetailedOriginalQuality : OriginalQuality),
+                "image/webp",
+                Encode(medium, SKEncodedImageFormat.Webp, MediumQuality),
+                Encode(small, SKEncodedImageFormat.Webp, SmallQuality),
                 original.Width, original.Height);
         }
         finally
@@ -64,6 +77,8 @@ internal static class ImageProcessor
 
     private static SKBitmap ResizeToFit(SKBitmap source, int max)
     {
+        // Already small enough: a plain copy instead of resampling at the same size.
+        if (Math.Max(source.Width, source.Height) <= max && source.Copy(SKColorType.Rgba8888) is { } copy) return copy;
         var scale = Math.Min(1.0, (double)max / Math.Max(source.Width, source.Height));
         var width = Math.Max(1, (int)Math.Round(source.Width * scale));
         var height = Math.Max(1, (int)Math.Round(source.Height * scale));
@@ -106,6 +121,35 @@ internal static class ImageProcessor
         using var image = SKImage.FromBitmap(bitmap);
         canvas.DrawImage(image, 0, 0, new SKSamplingOptions(SKFilterMode.Linear));
         return oriented;
+    }
+}
+
+/// <summary>Reads the chunk list of a WebP file (RIFF container) without decoding it.</summary>
+internal static class WebpContainer
+{
+    /// <summary>
+    /// True for a still WebP made only of picture data: no EXIF/XMP (which can hold GPS), no ICC profile, no animation and
+    /// nothing hidden after the last chunk. Such a file can be stored as it is without leaking anything about the phone.
+    /// </summary>
+    public static bool IsPlainStill(ReadOnlySpan<byte> file)
+    {
+        if (file.Length < 20 || !file[..4].SequenceEqual("RIFF"u8) || !file[8..12].SequenceEqual("WEBP"u8)) return false;
+        if (BinaryPrimitives.ReadUInt32LittleEndian(file[4..8]) + 8L != file.Length) return false;
+
+        var position = 12;
+        var hasPicture = false;
+        while (position < file.Length)
+        {
+            if (file.Length - position < 8) return false;
+            var type = file.Slice(position, 4);
+            long size = BinaryPrimitives.ReadUInt32LittleEndian(file.Slice(position + 4, 4));
+            if (type.SequenceEqual("VP8 "u8) || type.SequenceEqual("VP8L"u8)) hasPicture = true;
+            else if (!type.SequenceEqual("VP8X"u8) && !type.SequenceEqual("ALPH"u8)) return false;
+            var next = position + 8L + size + (size & 1);
+            if (next > file.Length) return false;
+            position = (int)next;
+        }
+        return hasPicture;
     }
 }
 

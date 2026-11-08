@@ -89,6 +89,20 @@ public static class SmartShopHost
             forwarded.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(network));
         app.UseForwardedHeaders(forwarded);
 
+        // "Server-Timing: app;dur=12.3" on every response: the browser's network panel then shows how much of a slow
+        // request was spent in the API and how much on the way (Cloudflare, proxies, the network).
+        app.Use((context, next) =>
+        {
+            var started = System.Diagnostics.Stopwatch.GetTimestamp();
+            context.Response.OnStarting(() =>
+            {
+                var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+                context.Response.Headers.Append("Server-Timing", string.Create(System.Globalization.CultureInfo.InvariantCulture, $"app;dur={elapsed:0.0}"));
+                return Task.CompletedTask;
+            });
+            return next(context);
+        });
+
         app.UseExceptionHandler();
         app.UseStatusCodePages();
         app.UseCors();

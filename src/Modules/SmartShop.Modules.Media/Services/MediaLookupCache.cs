@@ -28,3 +28,27 @@ internal sealed class MediaLookupCache : IDisposable
 
     public void Dispose() => _cache.Dispose();
 }
+
+/// <summary>
+/// Keeps the bytes of small images (thumbnails and list pictures) in memory, so a picture many people look at is fetched
+/// from object storage once instead of on every phone's first view. Media is never changed or deleted after upload, so
+/// nothing has to be invalidated; the cache is bounded by total bytes and forgets pictures nobody asked for in a while.
+/// </summary>
+internal sealed class MediaContentCache : IDisposable
+{
+    /// <summary>Thumbnails are 10-30 KB and list pictures 50-150 KB; bigger files (originals, PDFs) are streamed as before.</summary>
+    public const long MaxItemBytes = 512 * 1024;
+    private const long MaxTotalBytes = 48L * 1024 * 1024;
+    private static readonly TimeSpan Lifetime = TimeSpan.FromHours(1);
+
+    private readonly MemoryCache _cache = new(new MemoryCacheOptions { SizeLimit = MaxTotalBytes, CompactionPercentage = 0.25 });
+
+    public sealed record Entry(byte[] Content, string ContentType);
+
+    public bool TryGet(string key, out Entry? entry) => _cache.TryGetValue(key, out entry);
+
+    public void Add(string key, Entry entry) =>
+        _cache.Set(key, entry, new MemoryCacheEntryOptions { Size = entry.Content.Length, SlidingExpiration = Lifetime });
+
+    public void Dispose() => _cache.Dispose();
+}
