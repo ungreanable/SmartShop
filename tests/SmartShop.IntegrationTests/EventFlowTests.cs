@@ -60,7 +60,7 @@ public class EventFlowTests(SmartShopFactory factory)
     public async Task Shop_member_ordering_from_their_own_shop_is_not_alerted_about_their_own_order()
     {
         var s = await OpenShopAsync();
-        var manager = await factory.JoinAsync(s.Plant, s.Admin, "ผู้จัดการ");
+        var manager = await factory.JoinAsync(s.Plant, s.Admin);
         var invite = await s.Owner.PostAsync<InviteDto>($"/api/merchant/shops/{s.ShopId}/invites", new { role = "Manager" });
         await manager.PostOkAsync($"/api/shop-invites/{invite.Code}/accept");
 
@@ -177,7 +177,7 @@ public class EventFlowTests(SmartShopFactory factory)
     public async Task Member_who_left_the_village_stops_getting_the_shops_order_alerts()
     {
         var s = await OpenShopAsync();
-        var manager = await factory.JoinAsync(s.Plant, s.Admin, "ผู้จัดการ");
+        var manager = await factory.JoinAsync(s.Plant, s.Admin);
         var invite = await s.Owner.PostAsync<InviteDto>($"/api/merchant/shops/{s.ShopId}/invites", new { role = "Manager" });
         await manager.PostOkAsync($"/api/shop-invites/{invite.Code}/accept");
         await manager.PostOkAsync($"/api/plants/{s.Plant.Id}/leave");
