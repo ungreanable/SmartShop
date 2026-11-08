@@ -6,8 +6,8 @@
     <EfVersion>10.0.14</EfVersion>
     <AspireVersion>13.6.4</AspireVersion>
     <WolverineVersion>6.62.0</WolverineVersion>
-    <OtelVersion>1.20.0</OtelVersion>
-    <OtelInstrVersion>1.20.0</OtelInstrVersion>
+    <OtelVersion>1.20.1</OtelVersion>
+    <OtelInstrVersion>1.20.2</OtelInstrVersion>
     <ExtVersion>10.11.0</ExtVersion>
   </PropertyGroup>
   <ItemGroup Label="ASP.NET Core / EF Core">
@@ -52,7 +52,9 @@
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="$(OtelVersion)" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="$(OtelInstrVersion)" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="$(OtelInstrVersion)" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="$(OtelInstrVersion)" />
+    <!-- Own version: Runtime is released separately from the other instrumentation packages, and one shared
+         property for packages at different versions makes Dependabot updates fail. -->
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.20.1" />
     <PackageVersion Include="Yarp.ReverseProxy" Version="2.3.0" />
   </ItemGroup>
   <ItemGroup Label="Libraries">
