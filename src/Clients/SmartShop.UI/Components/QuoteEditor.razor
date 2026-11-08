@@ -8,8 +8,10 @@
 
 @foreach (var row in _rows)
 {
-    <div class="ss-quote-row">
+    @* A dish without a price or a "cannot make" blinks until it is answered, so none is missed in a long order. *@
+    <div class="ss-quote-row @(row.Answered ? "" : "ss-custom-todo")">
         <MudText Typo="Typo.body2" Style="font-weight:600">@row.Line.Quantity× @row.Line.Name</MudText>
+        @if (!row.Answered) { <MudText Typo="Typo.caption" Color="Color.Warning">✍️ @L["ยังไม่ได้ใส่ราคา", "No price yet"]</MudText> }
         <div class="d-flex align-center gap-2 flex-wrap">
             @if (!row.Unavailable)
             {
@@ -51,6 +53,7 @@
         public decimal? Price { get; set; } = line.Unavailable || line.UnitPrice == 0 ? null : line.UnitPrice;
         public bool Unavailable { get; set; } = line.Unavailable;
         public string? Note { get; set; } = line.ShopNote;
+        public bool Answered => Unavailable || Price is >= 0;
     }
 
     private List<Row> _rows = [];

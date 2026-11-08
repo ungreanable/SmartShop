@@ -94,7 +94,8 @@ public sealed class Api(HttpClient http, Session session, PlantContextAccessor p
     /// Uploads a file and returns either the result or the reason it failed, so the caller can show it next to the file.
     /// The content is rebuilt for the token-refresh retry (a consumed stream would otherwise be sent empty).
     /// </summary>
-    public async Task<(UploadResult? Result, ApiProblem? Problem)> UploadAsync(byte[] content, string fileName, string contentType, string purpose)
+    public async Task<(UploadResult? Result, ApiProblem? Problem)> UploadAsync(byte[] content, string fileName, string contentType, string purpose,
+        CancellationToken ct = default)
     {
         HttpRequestMessage Build()
         {
@@ -108,8 +109,8 @@ public sealed class Api(HttpClient http, Session session, PlantContextAccessor p
 
         try
         {
-            using var response = await ExecuteAsync(Build(), Build);
-            if (response.IsSuccessStatusCode) return (await response.Content.ReadFromJsonAsync<UploadResult>(ApiJson.Options), null);
+            using var response = await ExecuteAsync(Build(), Build, ct);
+            if (response.IsSuccessStatusCode) return (await response.Content.ReadFromJsonAsync<UploadResult>(ApiJson.Options, ct), null);
             if (response.StatusCode == HttpStatusCode.Unauthorized)
             {
                 await HandleErrorAsync(response, true);
@@ -187,16 +188,16 @@ public sealed class Api(HttpClient http, Session session, PlantContextAccessor p
         }
     }
 
-    private async Task<HttpResponseMessage> ExecuteAsync(HttpRequestMessage request, Func<HttpRequestMessage> rebuild)
+    private async Task<HttpResponseMessage> ExecuteAsync(HttpRequestMessage request, Func<HttpRequestMessage> rebuild, CancellationToken ct = default)
     {
         await AddHeadersAsync(request, false);
-        var response = await http.SendAsync(request);
+        var response = await http.SendAsync(request, ct);
         if (response.StatusCode != HttpStatusCode.Unauthorized || !session.IsAuthenticated) return response;
 
         response.Dispose();
         var retry = rebuild();
         await AddHeadersAsync(retry, true);
-        return await http.SendAsync(retry);
+        return await http.SendAsync(retry, ct);
     }
 
     private async Task AddHeadersAsync(HttpRequestMessage request, bool forceRefresh)

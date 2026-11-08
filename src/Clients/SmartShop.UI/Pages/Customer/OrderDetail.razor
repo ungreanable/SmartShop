@@ -137,7 +137,8 @@
         <MudPaper Outlined="true" Class="pa-3 mb-3 ss-card">
             @foreach (var line in _order.Lines)
             {
-                <div class="d-flex py-1">
+                @* Shop side: custom dishes still waiting for a price blink, the rest of the order stays calm. *@
+                <div class="d-flex py-1 @(IsShop && line.IsCustom && _order.Status == "PendingAcceptance" ? "ss-custom-todo" : "")">
                     <MudText Style="min-width:32px">@line.Quantity×</MudText>
                     <div style="flex:1">
                         <MudText Style="@(line.Unavailable ? "text-decoration:line-through" : null)">@line.Name</MudText>

@@ -1,10 +1,12 @@
 @* Uploads one image (or PDF for slips) to /api/media and returns the media id.
-   Shows the chosen file with a spinner while it uploads, and the reason when it fails. *@
+    Shows the chosen file with a spinner, the current step and elapsed time while it uploads, a cancel button when it is
+   slow, and the reason when it fails. *@
 @inject Api Api
 @inject ISnackbar Snackbar
+@implements IDisposable
 
 <div class="ss-uploader">
-    <MudFileUpload T="IBrowserFile" FilesChanged="UploadAsync" Accept="@Accept" Disabled="_busy">
+    <MudFileUpload T="IBrowserFile" @ref="_picker" FilesChanged="UploadAsync" Accept="@Accept" Disabled="_busy">
         <CustomContent Context="upload">
             @if (ChildContent is not null)
             {
@@ -25,6 +27,15 @@
             @if (_busy) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Primary" Style="width:16px;height:16px" /> }
             else { <MudIcon Icon="@Icons.Material.Filled.ErrorOutline" Color="Color.Error" Size="Size.Small" /> }
             <span class="ss-upload-name">@_fileName</span>
+            @if (_busy)
+            {
+                @* Where it is and for how long, so a slow upload does not look frozen; cancel gives the user a way out. *@
+                <span class="ss-muted ss-nowrap">@StageText@(_elapsed >= 3 ? $" {_elapsed} {L["วิ", "s"]}" : "")</span>
+                @if (_elapsed >= 5)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="Cancel">@L["ยกเลิก", "Cancel"]</MudButton>
+                }
+            }
         </div>
         @if (_error is not null) { <MudText Typo="Typo.caption" Color="Color.Error" Class="d-block">@_error</MudText> }
     }
@@ -48,8 +59,23 @@
     private const int ResizeTo = 2400;
     private const long ResizeAbove = 1024 * 1024;
 
+    // Each step has its own limit: a browser that never finishes shrinking or reading a file (seen in the LINE in-app
+    // browser) or a stalled mobile connection must end in a message, never in a spinner that turns forever.
+    private static readonly TimeSpan ShrinkLimit = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan ReadLimit = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan UploadLimit = TimeSpan.FromSeconds(90);
+
+    private enum Stage { Preparing, Uploading }
+
+    private MudFileUpload<IBrowserFile>? _picker;
+    private CancellationTokenSource? _cancel;
+    private System.Threading.Timer? _ticker;
+    private Stage _stage;
+    private int _elapsed;
     private bool _busy;
     private string? _fileName, _error;
+
+    private string StageText => _stage == Stage.Preparing ? L["กำลังเตรียมรูป…", "Preparing…"] : L["กำลังอัปโหลด…", "Uploading…"];
     private string Accept => AllowPdf ? "image/*,application/pdf" : "image/*";
 
     private async Task UploadAsync(IBrowserFile? file)
@@ -66,12 +92,29 @@
         }
 
         await SetBusyAsync(true);
+        _cancel = new CancellationTokenSource();
+        StartTicker();
+        var step = "read";
         try
         {
+            _stage = Stage.Preparing;
             file = await ShrinkAsync(file);
-            var content = new byte[file.Size];
-            await using (var stream = file.OpenReadStream(MaxImageBytes)) await stream.ReadExactlyAsync(content);
-            var (result, problem) = await Api.UploadAsync(content, file.Name, file.ContentType, Purpose);
+
+            byte[] content;
+            using (var readLimit = CancellationTokenSource.CreateLinkedTokenSource(_cancel.Token))
+            {
+                readLimit.CancelAfter(ReadLimit);
+                content = new byte[file.Size];
+                await using var stream = file.OpenReadStream(MaxImageBytes, readLimit.Token);
+                await stream.ReadExactlyAsync(content, readLimit.Token);
+            }
+
+            step = "upload";
+            _stage = Stage.Uploading;
+            await InvokeAsync(StateHasChanged);
+            using var uploadLimit = CancellationTokenSource.CreateLinkedTokenSource(_cancel.Token);
+            uploadLimit.CancelAfter(UploadLimit);
+            var (result, problem) = await Api.UploadAsync(content, file.Name, file.ContentType, Purpose, uploadLimit.Token);
             if (result is not null)
             {
                 _fileName = null;
@@ -79,18 +122,54 @@
             }
             else if (problem is not null && problem.Status != 401) Fail(Explain(problem));
         }
-        catch (IOException)
+        catch (OperationCanceledException) when (_cancel?.IsCancellationRequested == true)
+        {
+            (_fileName, _error) = (null, null); // the user pressed cancel: nothing to explain
+        }
+        catch (OperationCanceledException)
+        {
+            Fail(step == "read"
+                ? L["อ่านรูปจากเครื่องไม่ทัน ลองเลือกรูปใหม่ หรือแคปหน้าจอรูปนั้นแล้วส่งแทน", "Reading the picture took too long. Choose it again, or send a screenshot of it."]
+                : Explain(new ApiProblem(0, "timeout", "Timeout")));
+        }
+        catch (Exception e) when (e is IOException or Microsoft.JSInterop.JSException)
         {
             Fail(L["อ่านไฟล์จากเครื่องไม่ได้ ลองเลือกใหม่อีกครั้ง", "Could not read the file from your device. Please choose it again."]);
         }
-        catch (TaskCanceledException)
-        {
-            Fail(Explain(new ApiProblem(0, "timeout", "Timeout")));
-        }
         finally
         {
+            StopTicker();
+            _cancel?.Dispose();
+            _cancel = null;
+            // Lets the same file be chosen again right away (a file input ignores re-picking an unchanged value).
+            if (_picker is not null) await _picker.ClearAsync();
             await SetBusyAsync(false);
         }
+    }
+
+    private void Cancel() => _cancel?.Cancel();
+
+    private void StartTicker()
+    {
+        _elapsed = 0;
+        _ticker = new System.Threading.Timer(_ =>
+        {
+            _elapsed++;
+            _ = InvokeAsync(StateHasChanged);
+        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    private void StopTicker()
+    {
+        _ticker?.Dispose();
+        _ticker = null;
+    }
+
+    public void Dispose()
+    {
+        StopTicker();
+        _cancel?.Cancel();
+        _cancel?.Dispose();
     }
 
     private async Task SetBusyAsync(bool busy)
@@ -100,17 +179,18 @@
     }
 
     /// <summary>Large photos are scaled down in the browser (which also applies the camera's rotation); GIF and PDF are sent as they are.</summary>
+    /// <remarks>Shrinking is only an optimisation: if the browser takes too long or fails, the original is sent instead.</remarks>
     private static async Task<IBrowserFile> ShrinkAsync(IBrowserFile file)
     {
         if (file.Size <= ResizeAbove || file.ContentType is not ("image/jpeg" or "image/png" or "image/webp")) return file;
         try
         {
-            var smaller = await file.RequestImageFileAsync("image/jpeg", ResizeTo, ResizeTo);
+            var smaller = await file.RequestImageFileAsync("image/jpeg", ResizeTo, ResizeTo).AsTask().WaitAsync(ShrinkLimit);
             return smaller.Size > 0 && smaller.Size < file.Size ? smaller : file;
         }
-        catch (Exception e) when (e is Microsoft.JSInterop.JSException or InvalidOperationException)
+        catch (Exception e) when (e is Microsoft.JSInterop.JSException or InvalidOperationException or TimeoutException)
         {
-            return file; // the browser could not decode it (e.g. HEIC on a PC): let the server explain
+            return file; // the browser could not decode it in time (e.g. HEIC on a PC): send the original, let the server explain
         }
     }
 
