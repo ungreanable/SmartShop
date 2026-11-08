@@ -10,9 +10,11 @@
 @inject Session Session
 
 <div class="ss-page">
-    @if (_order is null) { <Loading Rows="4" /> }
+    @if (_order is null && _problem is not null) { <LoadError Problem="_problem" OnRetry="ReloadAllAsync" /> }
+    else if (_order is null) { <Loading Rows="4" /> }
     else
     {
+        @if (_problem is not null) { <LoadError Inline="true" Problem="_problem" OnRetry="ReloadAllAsync" /> }
         <div class="d-flex align-center mb-1">
             <MudText Typo="Typo.h5" Style="font-weight:700">#@_order.OrderNo</MudText>
             <MudSpacer />
@@ -135,7 +137,9 @@
         <MudPaper Outlined="true" Class="pa-3 mb-3 ss-card">
             @foreach (var line in _order.Lines)
             {
-                <div class="d-flex py-1">
+                @* Custom dishes blink where someone has to act on them: for the shop while they still need a price, for the
+                   customer once the prices arrived and wait for "accept". The rest of the order stays calm. *@
+                <div class="d-flex py-1 @CustomLineClass(line)">
                     <MudText Style="min-width:32px">@line.Quantity×</MudText>
                     <div style="flex:1">
                         <MudText Style="@(line.Unavailable ? "text-decoration:line-through" : null)">@line.Name</MudText>
@@ -147,6 +151,14 @@
                         @if (line.Note is not null) { <MudText Typo="Typo.caption" Class="ss-muted">📝 @line.Note</MudText> }
                     </div>
                     @if (line.IsCustom && _order.Status == "PendingAcceptance") { <MudText Class="ss-muted">@L["รอราคา", "To be priced"]</MudText> }
+                    else if (line.IsCustom && _order.Status == "AwaitingPriceApproval" && !line.Unavailable)
+                    {
+                        @* The price the shop just set: the one number the customer is asked to agree to. *@
+                        <div class="text-right">
+                            <MudText Style="font-weight:700" Color="Color.Primary">@Fmt.Baht(line.LineTotal)</MudText>
+                            @if (line.Quantity > 1) { <MudText Typo="Typo.caption" Class="ss-muted">@Fmt.Baht(line.UnitPrice) × @line.Quantity</MudText> }
+                        </div>
+                    }
                     else { <MudText>@Fmt.Baht(line.LineTotal)</MudText> }
                 </div>
             }
@@ -283,7 +295,15 @@
     // Opened from the merchant screens (ShopId set): ask for the shop view, even if I placed this order myself.
     private string AsShop => ShopId is null ? "" : "?as=shop";
 
-    private async Task LoadAsync() => _order = await Api.Get<Order>($"api/orders/{OrderId}{AsShop}");
+    private ApiProblem? _problem;
+
+    // A failed refresh keeps the order on screen (with a retry row) instead of falling back to the skeleton.
+    private async Task LoadAsync()
+    {
+        var loaded = await Api.Load<Order>($"api/orders/{OrderId}{AsShop}");
+        _problem = loaded.Problem;
+        if (loaded.Value is not null || _order?.Id != OrderId) _order = loaded.Value;
+    }
 
     // Guards every order action against double taps on slow connections.
     private bool _busy;
@@ -305,6 +325,11 @@
     }
 
     private bool _editQuote;
+
+    private string? CustomLineClass(OrderLine line) => !line.IsCustom || _order is null ? null
+        : IsShop && _order.Status == "PendingAcceptance" ? "ss-custom-todo"
+        : IsCustomer && _order.Status == "AwaitingPriceApproval" ? "ss-custom-quoted"
+        : null;
 
     private async Task QuoteAsync(object body)
     {

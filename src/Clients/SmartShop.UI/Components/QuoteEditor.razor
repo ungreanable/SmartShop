@@ -8,8 +8,10 @@
 
 @foreach (var row in _rows)
 {
-    <div class="ss-quote-row">
+    @* A dish without a price or a "cannot make" blinks until it is answered, so none is missed in a long order. *@
+    <div class="ss-quote-row @(row.Answered ? "" : "ss-custom-todo")">
         <MudText Typo="Typo.body2" Style="font-weight:600">@row.Line.Quantity× @row.Line.Name</MudText>
+        @if (!row.Answered) { <MudText Typo="Typo.caption" Color="Color.Warning">✍️ @L["ยังไม่ได้ใส่ราคา", "No price yet"]</MudText> }
         <div class="d-flex align-center gap-2 flex-wrap">
             @if (!row.Unavailable)
             {
@@ -27,14 +29,17 @@
               Placeholder="@L["เช่น ไข่เยี่ยวม้าหมด เปลี่ยนเป็นไข่ดาวได้ไหม", "e.g. Out of century eggs, fried egg instead?"]"
               Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" MaxLength="300" Class="mt-2" />
 
-<div class="d-flex align-center mt-2">
-    <MudText Typo="Typo.subtitle1">@L["ยอดรวมที่ลูกค้าจะเห็น", "Total the customer will see"]</MudText>
-    <MudSpacer />
-    <MudText Typo="Typo.subtitle1" Style="font-weight:700">@Fmt.Baht(Total)</MudText>
+@* Sticky: with several dishes the total and the send button would otherwise scroll off a phone screen. *@
+<div class="ss-quote-footer">
+    <div class="d-flex align-center">
+        <MudText Typo="Typo.subtitle1">@L["ยอดรวมที่ลูกค้าจะเห็น", "Total the customer will see"]</MudText>
+        <MudSpacer />
+        <MudText Typo="Typo.subtitle1" Style="font-weight:700">@Fmt.Baht(Total)</MudText>
+    </div>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true" Class="mt-1" Disabled="@(Busy || !Complete)"
+               OnClick="SubmitAsync">@L["ส่งราคาให้ลูกค้า", "Send prices to the customer"]</MudButton>
+    @if (!Complete) { <MudText Typo="Typo.caption" Class="ss-muted d-block">@L["ใส่ราคาทุกรายการ หรือเลือก \"ทำไม่ได้\"", "Price every dish or mark it as not possible"]</MudText> }
 </div>
-<MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true" Class="mt-2" Disabled="@(Busy || !Complete)"
-           OnClick="SubmitAsync">@L["ส่งราคาให้ลูกค้า", "Send prices to the customer"]</MudButton>
-@if (!Complete) { <MudText Typo="Typo.caption" Class="ss-muted">@L["ใส่ราคาทุกรายการ หรือเลือก \"ทำไม่ได้\"", "Price every dish or mark it as not possible"]</MudText> }
 
 @code {
     [Parameter, EditorRequired] public Order Order { get; set; } = default!;
@@ -48,6 +53,7 @@
         public decimal? Price { get; set; } = line.Unavailable || line.UnitPrice == 0 ? null : line.UnitPrice;
         public bool Unavailable { get; set; } = line.Unavailable;
         public string? Note { get; set; } = line.ShopNote;
+        public bool Answered => Unavailable || Price is >= 0;
     }
 
     private List<Row> _rows = [];

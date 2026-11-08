@@ -4,6 +4,11 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    ignore:
+      # Pinned on purpose to the patched 2.x line (see Directory.Packages.props): SignalR and Aspire are built
+      # against MessagePack 2, so a 3.x major could break them at run time even when everything compiles.
+      - dependency-name: "MessagePack"
+        update-types: ["version-update:semver-major"]
     groups:
       aspnetcore:
         patterns: ["Microsoft.*", "System.*"]

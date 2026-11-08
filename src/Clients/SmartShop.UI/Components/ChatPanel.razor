@@ -10,10 +10,10 @@
         @foreach (var m in _messages)
         {
             <div class="ss-bubble @(m.SenderId == Session.User?.Id ? "mine" : "")">
-                @if (m.SenderId != Session.User?.Id) { <div style="font-size:.7rem; opacity:.7">@m.SenderName</div> }
+                @if (m.SenderId != Session.User?.Id) { <div style="font-size:.8125rem; opacity:.85">@m.SenderName</div> }
                 @if (m.Body is not null) { @m.Body }
                 @if (m.ImageUrl is not null) { <img src="@m.ImageUrl" alt="" style="max-width:200px; border-radius:8px; display:block" /> }
-                <div style="font-size:.65rem; opacity:.6; text-align:right">@Fmt.Time(m.SentAt)</div>
+                <div style="font-size:.8125rem; opacity:.85; text-align:right">@Fmt.Time(m.SentAt)</div>
             </div>
         }
         @if (_messages.Count == 0) { <MudText Typo="Typo.caption" Class="ss-muted">@L["ยังไม่มีข้อความ", "No messages yet"]</MudText> }
@@ -25,7 +25,7 @@
         </ImageUploader>
         <MudTextField @bind-Value="_text" Placeholder="@L["พิมพ์ข้อความ...", "Type a message..."]" Variant="Variant.Outlined" Margin="Margin.Dense"
                       OnKeyUp="@(async e => { if (e.Key == "Enter") await SendAsync(); })" Immediate="true" />
-        <MudIconButton Icon="@Icons.Material.Filled.Send" Color="Color.Primary" Disabled="@string.IsNullOrWhiteSpace(_text)" OnClick="SendAsync" />
+        <MudIconButton Icon="@Icons.Material.Filled.Send" Color="Color.Primary" Disabled="@string.IsNullOrWhiteSpace(_text)" OnClick="SendAsync" aria-label="@L["ส่งข้อความ", "Send message"]" />
     </div>
 </MudPaper>
 

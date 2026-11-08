@@ -9,7 +9,7 @@
         <MudText Typo="Typo.h5" Style="font-weight:700">@L["แจ้งเตือน", "Notifications"]</MudText>
         <MudSpacer />
         <MudButton Size="Size.Small" OnClick="ReadAllAsync">@L["อ่านทั้งหมด", "Mark all read"]</MudButton>
-        <MudIconButton Icon="@Icons.Material.Filled.Settings" Href="/profile#notifications" />
+        <MudIconButton Icon="@Icons.Material.Filled.Settings" Href="/profile#notifications" aria-label="@L["ตั้งค่าการแจ้งเตือน", "Notification settings"]" />
     </div>
 
     @if (_items is null) { <Loading /> }

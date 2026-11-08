@@ -22,14 +22,36 @@
                                              : L[$"(ไม่บังคับ สูงสุด {group.MaxSelect})", $"(optional, up to {group.MaxSelect})"])
                     </span>
                 </MudText>
-                @foreach (var option in group.Options)
+                @if (group.MaxSelect == 1)
                 {
-                    <div class="d-flex align-center">
-                        <MudCheckBox T="bool" Value="_selected.Contains(option.Id)" ValueChanged="@(v => Toggle(group, option, v))" Disabled="!option.IsAvailable"
-                                     Label="@option.Name" Dense="true" Color="Color.Primary" />
-                        <MudSpacer />
-                        @if (option.PriceDelta != 0) { <MudText Typo="Typo.body2">+@Fmt.Baht(option.PriceDelta)</MudText> }
-                    </div>
+                    @* Pick one: radio buttons say "only one" at a glance, and roomy rows are easy to hit. An optional group
+                       gets a "none" choice, since a radio cannot be unticked. *@
+                    <MudRadioGroup T="Guid" Value="SelectedIn(group)" ValueChanged="@(v => Pick(group, v))">
+                        @if (group.MinSelect == 0)
+                        {
+                            <div class="ss-option-row"><MudRadio T="Guid" Value="Guid.Empty" Color="Color.Primary">@L["ไม่ใส่", "None"]</MudRadio></div>
+                        }
+                        @foreach (var option in group.Options)
+                        {
+                            <div class="ss-option-row">
+                                <MudRadio T="Guid" Value="option.Id" Disabled="!option.IsAvailable" Color="Color.Primary">@option.Name</MudRadio>
+                                <MudSpacer />
+                                @if (option.PriceDelta != 0) { <MudText Typo="Typo.body2">+@Fmt.Baht(option.PriceDelta)</MudText> }
+                            </div>
+                        }
+                    </MudRadioGroup>
+                }
+                else
+                {
+                    @foreach (var option in group.Options)
+                    {
+                        <div class="ss-option-row">
+                            <MudCheckBox T="bool" Value="_selected.Contains(option.Id)" ValueChanged="@(v => Toggle(group, option, v))" Disabled="!option.IsAvailable"
+                                         Label="@option.Name" Color="Color.Primary" />
+                            <MudSpacer />
+                            @if (option.PriceDelta != 0) { <MudText Typo="Typo.body2">+@Fmt.Baht(option.PriceDelta)</MudText> }
+                        </div>
+                    }
                 }
             </div>
         }
@@ -58,9 +80,9 @@
                       Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" MaxLength="200" />
 
         <div class="d-flex align-center justify-center gap-4 mt-4">
-            <MudIconButton Icon="@Icons.Material.Filled.Remove" Variant="Variant.Outlined" Disabled="@(_qty <= 1)" OnClick="@(() => _qty--)" />
+            <MudIconButton Icon="@Icons.Material.Filled.Remove" Variant="Variant.Outlined" Disabled="@(_qty <= 1)" OnClick="@(() => _qty--)" aria-label="@L["ลดจำนวน", "Decrease quantity"]" />
             <MudText Typo="Typo.h5">@_qty</MudText>
-            <MudIconButton Icon="@Icons.Material.Filled.Add" Variant="Variant.Outlined" Disabled="@(_qty >= Max)" OnClick="@(() => _qty++)" />
+            <MudIconButton Icon="@Icons.Material.Filled.Add" Variant="Variant.Outlined" Disabled="@(_qty >= Max)" OnClick="@(() => _qty++)" aria-label="@L["เพิ่มจำนวน", "Increase quantity"]" />
         </div>
         @if (Item.Remaining is { } remaining && remaining <= 10)
         {
@@ -107,6 +129,14 @@
         if (group.MaxSelect == 1) foreach (var o in group.Options) _selected.Remove(o.Id);
         else if (group.Options.Count(o => _selected.Contains(o.Id)) >= group.MaxSelect) return;
         _selected.Add(option.Id);
+    }
+
+    private Guid SelectedIn(ModifierGroup group) => group.Options.FirstOrDefault(o => _selected.Contains(o.Id))?.Id ?? Guid.Empty;
+
+    private void Pick(ModifierGroup group, Guid optionId)
+    {
+        foreach (var o in group.Options) _selected.Remove(o.Id);
+        if (optionId != Guid.Empty) _selected.Add(optionId);
     }
 
     private async Task DateChangedAsync(DateTime? date)

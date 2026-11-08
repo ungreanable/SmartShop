@@ -36,7 +36,7 @@ public sealed record ShopListingSnapshot(
     Guid? LogoId, Guid? CoverId, string? HouseNo,
     bool PickupEnabled, bool DeliveryEnabled, bool AllowPreorderWhenClosed, int PrepTimeMinutes,
     decimal RatingAverage, int RatingCount, bool IsActive,
-    ShopScheduleSnapshot Schedule, DateTimeOffset CreatedAt);
+    ShopScheduleSnapshot Schedule, DateTimeOffset CreatedAt, int? DisplayOrder = null);
 
 public interface IShopDirectory
 {
@@ -46,6 +46,9 @@ public interface IShopDirectory
     Task<IReadOnlyList<Guid>> GetOrderNotificationRecipientsAsync(Guid shopId, CancellationToken ct = default);
     Task<ShopListingSnapshot?> GetListingSnapshotAsync(Guid shopId, CancellationToken ct = default);
     Task<IReadOnlyList<Guid>> GetFavoritersAsync(Guid shopId, CancellationToken ct = default);
+
+    /// <summary>The village admin's shop order: shop id to position, null for shops not arranged yet.</summary>
+    Task<IReadOnlyDictionary<Guid, int?>> GetDisplayOrderAsync(Guid plantId, CancellationToken ct = default);
 }
 
 public sealed record ShopApplicationSubmitted(Guid PlantId, Guid ApplicationId, Guid ApplicantId, string ShopName) : IntegrationEvent(PlantId);
@@ -67,6 +70,9 @@ public sealed record ShopMemberRoleChanged(Guid PlantId, Guid ShopId, Guid UserI
 public sealed record ShopMemberNotificationToggled(Guid PlantId, Guid ShopId, Guid UserId, bool Enabled) : IntegrationEvent(PlantId);
 public sealed record ShopOwnershipTransferred(Guid PlantId, Guid ShopId, Guid FromUserId, Guid ToUserId) : IntegrationEvent(PlantId);
 public sealed record ShopRatingChanged(Guid PlantId, Guid ShopId, decimal Average, int Count) : IntegrationEvent(PlantId);
+
+/// <summary>The village admin rearranged the shop list; read the new order with <see cref="IShopDirectory.GetDisplayOrderAsync"/>.</summary>
+public sealed record ShopsReordered(Guid PlantId, Guid ActorId) : IntegrationEvent(PlantId);
 
 /// <summary>Re-evaluates a shop's open/closed status at a schedule boundary.</summary>
 public sealed record EvaluateShopStatus(Guid ShopId) : IScheduledCommand;

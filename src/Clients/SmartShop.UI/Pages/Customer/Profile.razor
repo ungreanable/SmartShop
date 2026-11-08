@@ -10,10 +10,12 @@
 @inject NavigationManager Nav
 @inject PushEvents PushEvents
 @inject PushPrompt PushPrompt
+@inject ThemeSettings ThemeChoice
 @implements IDisposable
 
 <div class="ss-page">
-    @if (_me is null) { <Loading Rows="2" /> }
+    @if (_meProblem is not null) { <LoadError Problem="_meProblem" OnRetry="LoadMeAsync" /> }
+    else if (_me is null) { <Loading Rows="2" /> }
     else
     {
         <div class="d-flex align-center gap-3 mb-4">
@@ -29,18 +31,26 @@
             </div>
         </div>
 
+        @* The app bar only has icons for these; older shop owners and admins look for them here, in words. *@
+        @if (Plant.IsAdmin)
+        {
+            <MudButton Href="/admin" Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large" FullWidth="true" Class="mb-3"
+                       StartIcon="@Icons.Material.Filled.AdminPanelSettings">@L["ผู้ดูแลหมู่บ้าน", "Village admin"]</MudButton>
+        }
+
         @* ---- my shops ---- *@
         <MudPaper Outlined="true" Class="pa-3 mb-3 ss-card">
             <MudText Typo="Typo.subtitle1" Style="font-weight:600">🏪 @L["ร้านของฉัน", "My shops"]</MudText>
             @foreach (var shop in Plant.MyShops)
             {
-                <div class="d-flex align-center py-1">
+                <div class="d-flex align-center gap-2 py-1">
                     <div style="min-width:0">
                         <MudText Class="ss-ellipsis">@shop.Name</MudText>
                         <MudText Typo="Typo.caption" Class="ss-muted">@Fmt.ShopRole(shop.Role, L)</MudText>
                     </div>
                     <MudSpacer />
-                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Href="@($"/merchant/{shop.Id}")">@L["จัดการร้าน", "Manage"]</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@($"/merchant/{shop.Id}")" Class="ss-nowrap"
+                               StartIcon="@Icons.Material.Filled.Storefront">@L["โหมดร้านค้า", "Merchant mode"]</MudButton>
                 </div>
             }
             <MudButton Href="/shop-applications" StartIcon="@Icons.Material.Filled.AddBusiness" Variant="Variant.Text" Size="Size.Small">@L["ขอเปิดร้านใหม่", "Open a new shop"]</MudButton>
@@ -65,7 +75,8 @@
                         {
                             <MudButton Size="Size.Small" Variant="Variant.Filled" Href="@url" Target="_blank" Style="background:#06C755;color:#fff">@L["เพิ่มเพื่อน", "Add friend"]</MudButton>
                         }
-                        <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" OnClick="RefreshLineAsync" title="@L["ตรวจสอบอีกครั้ง", "Check again"]" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" OnClick="RefreshLineAsync" title="@L["ตรวจสอบอีกครั้ง", "Check again"]"
+                                       aria-label="@L["ตรวจสอบอีกครั้ง", "Check again"]" />
                     }
                 </div>
                 <div class="ss-setting-row">
@@ -119,7 +130,7 @@
                 <MudTextField @bind-Value="_houseNo" Label="@L["บ้านเลขที่", "House no."]" Variant="Variant.Outlined" Margin="Margin.Dense" />
                 <MudTextField @bind-Value="_soi" Label="@L["ซอย", "Soi"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
             </div>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Class="mt-2" OnClick="SaveProfileAsync">@L["บันทึก", "Save"]</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="SaveProfileAsync">@L["บันทึก", "Save"]</MudButton>
         </MudPaper>
 
         <MudPaper Outlined="true" Class="pa-3 mb-3 ss-card">
@@ -129,6 +140,15 @@
                 <MudToggleGroup T="string" Value="L.Language" ValueChanged="@(v => L.SetAsync(v))" Size="Size.Small" Color="Color.Primary">
                     <MudToggleItem Value="@("th")" Text="ไทย" />
                     <MudToggleItem Value="@("en")" Text="EN" />
+                </MudToggleGroup>
+            </div>
+            @* Per device: some people want dark at night whatever the phone says, or light in the sun. *@
+            <div class="ss-setting-row">
+                <MudText>🌓 @L["ธีม", "Theme"]</MudText>
+                <MudToggleGroup T="string" Value="ThemeChoice.Mode" ValueChanged="@(v => ThemeChoice.SetAsync(v))" Color="Color.Primary">
+                    <MudToggleItem Value="@("system")" Text="@L["ตามระบบ", "System"]" />
+                    <MudToggleItem Value="@("light")" Text="@L["สว่าง", "Light"]" />
+                    <MudToggleItem Value="@("dark")" Text="@L["มืด", "Dark"]" />
                 </MudToggleGroup>
             </div>
             <MudButton Href="/villages" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.HolidayVillage">@L["หมู่บ้านของฉัน", "My villages"]</MudButton>
@@ -149,6 +169,7 @@
 
 @code {
     private Me? _me;
+    private ApiProblem? _meProblem;
     private Channels? _channels;
     private NotificationSettings? _settings;
     private string? _name, _phone, _houseNo, _soi;
@@ -163,13 +184,18 @@
     protected override async Task OnInitializedAsync()
     {
         // Profile, channels and settings are independent: one round trip instead of three.
-        var me = Api.Get<Me>("api/me");
+        var me = LoadMeAsync();
         _houseNo = Plant.Current?.HouseNo;
         _soi = Plant.Current?.Soi;
         _pushSupported = await Push.IsSupportedAsync();
         PushEvents.DeviceRegistered += OnDeviceRegistered;
         await Task.WhenAll(me, LoadChannelsAsync());
-        _me = await me;
+    }
+
+    private async Task LoadMeAsync()
+    {
+        var me = await Api.Load<Me>("api/me");
+        (_me, _meProblem) = (me.Value, me.Problem);
         _name = _me?.DisplayName;
         _phone = _me?.Phone;
     }

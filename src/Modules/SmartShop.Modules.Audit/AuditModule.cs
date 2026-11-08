@@ -120,6 +120,7 @@ public static class AuditHandler
     public static Task Handle(ShopApplicationChangesRequested e, AuditDbContext db, CancellationToken ct) => Record(db, e, "shop_application.changes_requested", e.ActorId, "ShopApplication", e.ApplicationId, $"{e.ShopName}: {e.Note}", ct);
     public static Task Handle(ShopSuspended e, AuditDbContext db, CancellationToken ct) => Record(db, e, "shop.suspended", e.ActorId, "Shop", e.ShopId, e.Reason, ct);
     public static Task Handle(ShopReinstated e, AuditDbContext db, CancellationToken ct) => Record(db, e, "shop.reinstated", e.ActorId, "Shop", e.ShopId, null, ct);
+    public static Task Handle(ShopsReordered e, AuditDbContext db, CancellationToken ct) => Record(db, e, "shop.reordered", e.ActorId, "Plant", e.PlantId, null, ct);
     public static Task Handle(ShopOwnershipTransferred e, AuditDbContext db, CancellationToken ct) => Record(db, e, "shop.ownership_transferred", e.FromUserId, "User", e.ToUserId, e.ShopId.ToString(), ct);
 
     public static Task Handle(ReviewModerated e, AuditDbContext db, CancellationToken ct) =>

@@ -1,8 +1,9 @@
 @page "/"
-@implements IDisposable
+@implements IAsyncDisposable
 @inject Api Api
 @inject PlantContext Plant
 @inject Realtime Realtime
+@inject Browser Browser
 @inject NavigationManager Nav
 
 <div class="ss-page @(_cart?.ItemCount > 0 ? "ss-has-cart" : "")">
@@ -19,9 +20,9 @@
 
     @if (_home is null)
     {
-        <Loading />
+        <Loading Rows="4" />
     }
-    else if (_home.Shops.Count == 0 && _category is null)
+    else if (_home.Total == 0 && _category is null)
     {
         <EmptyState Icon="@Icons.Material.Outlined.Storefront" Title="@L["ยังไม่มีร้านในหมู่บ้านนี้", "No shops in this village yet"]"
                     Text="@L["อยากเปิดร้านเองไหม? ส่งคำขอให้ผู้ดูแลหมู่บ้านได้เลย", "Want to open one? Send a request to the village admin."]">
@@ -43,28 +44,41 @@
             </div>
         }
 
-        @if (_home.OpenNow.Count > 0 && _category is null)
+        @* The server sends every open shop before the first closed one, so the open section is complete before "closed" starts. *@
+        @if (_shops.Any(s => s.Status.AcceptingOrders))
         {
-            <MudText Typo="Typo.h6" Class="mb-2" Style="font-weight:700">🟢 @L["เปิดอยู่ตอนนี้", "Open now"]</MudText>
-            <div class="ss-hscroll mb-4">
-                @foreach (var s in _home.OpenNow)
-                {
-                    <div @key="s.Id" class="ss-mini-card" style="cursor:pointer" @onclick="@(() => Nav.NavigateTo($"/shops/{s.Id}"))">
-                        @if ((s.CoverUrl ?? s.LogoUrl) is { } img) { <img src="@img" alt="" loading="lazy" /> }
-                        else { <div style="width:160px;height:100px;border-radius:12px;background:#DFF5E8" class="d-flex align-center justify-center"><MudIcon Icon="@Icons.Material.Filled.Storefront" Color="Color.Primary" /></div> }
-                        <MudText Typo="Typo.subtitle2" Class="mt-1" Style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">@s.Name</MudText>
-                        <MudText Typo="Typo.caption" Class="ss-muted">@(s.Category ?? "") @(s.Status.Until is { } u ? L[$"· ถึง {Fmt.Time(u)}", $"· until {Fmt.Time(u)}"] : "")</MudText>
-                    </div>
-                }
-            </div>
+            <MudText Typo="Typo.h6" Class="mb-2" Style="font-weight:700">🟢 @L["เปิดอยู่", "Open now"] <span class="ss-muted" style="font-weight:400">(@_home.OpenCount)</span></MudText>
+            @foreach (var s in _shops.Where(s => s.Status.AcceptingOrders))
+            {
+                <ShopCardView @key="s.Id" Shop="s" />
+            }
+        }
+        @if (_shops.Any(s => !s.Status.AcceptingOrders))
+        {
+            <MudText Typo="Typo.h6" Class="mb-2 mt-2" Style="font-weight:700">⚪ @L["ปิดอยู่", "Closed"]</MudText>
+            @foreach (var s in _shops.Where(s => !s.Status.AcceptingOrders))
+            {
+                <ShopCardView @key="s.Id" Shop="s" />
+            }
+        }
+        @if (_home.Total == 0)
+        {
+            <MudText Typo="Typo.body2" Class="ss-muted">@L["ไม่มีร้านในหมวดนี้", "No shops in this category"]</MudText>
         }
 
-        <MudText Typo="Typo.h6" Class="mb-2" Style="font-weight:700">@L["ร้านทั้งหมด", "All shops"]</MudText>
-        @foreach (var s in _home.Shops)
+        @if (_loadingMore)
         {
-            <ShopCardView @key="s.Id" Shop="s" />
+            <Loading Rows="2" />
+        }
+        else if (_home.HasMore)
+        {
+            <div class="d-flex justify-center mb-3">
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="LoadMoreAsync">@L["โหลดเพิ่ม", "Load more"]</MudButton>
+            </div>
         }
     }
+    @* Always rendered, so the scroll observer is set up once and survives category changes. *@
+    <div @ref="_listEnd" style="height:1px"></div>
 </div>
 
 @if (_cart?.ItemCount > 0)
@@ -78,11 +92,23 @@
 }
 
 @code {
+    // A page is about one phone screen and a half of cards: small enough for a slow connection, big enough to scroll.
+    private const int PageSize = 20;
+
     private HomeFeed? _home;
+    private List<ShopCard> _shops = [];
+    private int _pages;
+    private int _generation; // bumped whenever the list is replaced, so a page fetched for the old list is dropped
+    private bool _loadingMore;
+    private bool _recheckEnd;
     private Cart? _cart;
     private List<Announcement> _announcements = [];
     private string? _category;
     private string? _q;
+
+    private ElementReference _listEnd;
+    private DotNetObjectReference<Home>? _self;
+    private IJSObjectReference? _endObserver;
 
     private Reloader? _homeReload;
     private Reloader? _fullReload;
@@ -91,7 +117,7 @@
     {
         _homeReload = new Reloader(async () =>
         {
-            _home = await Api.Get<HomeFeed>(HomeUrl, silent: true) ?? _home;
+            await RefreshLoadedAsync();
             StateHasChanged();
         });
         _fullReload = new Reloader(async () =>
@@ -105,22 +131,82 @@
         await LoadAsync();
     }
 
-    private string HomeUrl => $"api/home{(_category is null ? "" : "?category=" + Uri.EscapeDataString(_category))}";
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _self = DotNetObjectReference.Create(this);
+            _endObserver = await Browser.ObserveListEndAsync(_listEnd, _self);
+        }
+        // After a page arrives the end of a short list can still be on screen: ask the observer to report it again.
+        if (_recheckEnd && _endObserver is not null && _home?.HasMore == true)
+        {
+            _recheckEnd = false;
+            try { await _endObserver.InvokeVoidAsync("recheck"); }
+            catch (JSException) { }
+        }
+    }
+
+    private string HomeUrl(int page, int size) =>
+        $"api/home?page={page}&size={size}{(_category is null ? "" : "&category=" + Uri.EscapeDataString(_category))}";
 
     private async Task LoadAsync()
     {
-        var home = Api.Get<HomeFeed>(HomeUrl);
+        var home = Api.Get<HomeFeed>(HomeUrl(1, PageSize));
         var cart = Api.Get<Cart>("api/cart", silent: true);
         var news = Api.Get<List<Announcement>>("api/plant/announcements", silent: true);
-        _home = await home;
+        Show(await home, 1);
         _cart = await cart;
         _announcements = await news ?? [];
+    }
+
+    private void Show(HomeFeed? home, int pages)
+    {
+        _home = home;
+        _shops = home?.Shops ?? [];
+        _pages = pages;
+        _generation++;
+        _recheckEnd = true;
+    }
+
+    [JSInvokable]
+    public Task OnListEndVisible() => InvokeAsync(LoadMoreAsync);
+
+    private async Task LoadMoreAsync()
+    {
+        if (_loadingMore || _home is not { HasMore: true }) return;
+        _loadingMore = true;
+        StateHasChanged();
+        var generation = _generation;
+        var next = await Api.Get<HomeFeed>(HomeUrl(_pages + 1, PageSize));
+        _loadingMore = false;
+        // The list was replaced (category, village or a refresh) while this page was on its way: it belongs to the old list.
+        if (next is not null && generation == _generation && _home is not null)
+        {
+            // A shop that opened or closed in between can shift by one place; never show it twice.
+            var shown = _shops.Select(s => s.Id).ToHashSet();
+            _shops = [.. _shops, .. next.Shops.Where(s => !shown.Contains(s.Id))];
+            _home = next;
+            _pages++;
+            _recheckEnd = true;
+        }
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Re-fetches what is already on screen in one request (the server sorts its cached list and slices it, so the size does not
+    /// add cache entries), so shops move between "open" and "closed" without losing the scroll position.
+    /// </summary>
+    private async Task RefreshLoadedAsync()
+    {
+        var pages = Math.Clamp(_pages, 1, 5);
+        if (await Api.Get<HomeFeed>(HomeUrl(1, pages * PageSize), silent: true) is { } home) Show(home, pages);
     }
 
     private async Task FilterAsync(string? category)
     {
         _category = category;
-        _home = null;
+        Show(null, 0);
         await LoadAsync();
     }
 
@@ -135,7 +221,7 @@
     {
         // Filtered by category and that shop is not in the list: nothing on screen changes.
         if (_category is not null && _home is not null && e.TryGetProperty("shopId", out var id) && id.TryGetGuid(out var shopId)
-            && !_home.Shops.Any(s => s.Id == shopId)) return;
+            && !_shops.Any(s => s.Id == shopId)) return;
         _ = InvokeAsync(() => _homeReload?.ScheduleJittered(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(4)));
     }
 
@@ -143,18 +229,29 @@
 
     private async void OnPlantChanged()
     {
-        _home = null;
         _category = null;
+        Show(null, 0);
         await LoadAsync();
         await InvokeAsync(StateHasChanged);
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         Realtime.ShopStatusChanged -= OnShopChanged;
         Realtime.Resynced -= OnResynced;
         Plant.Changed -= OnPlantChanged;
         _homeReload?.Dispose();
         _fullReload?.Dispose();
+        if (_endObserver is not null)
+        {
+            try
+            {
+                await _endObserver.InvokeVoidAsync("dispose");
+                await _endObserver.DisposeAsync();
+            }
+            catch (JSDisconnectedException) { } // the mobile app's web view is already gone
+            catch (JSException) { }
+        }
+        _self?.Dispose();
     }
 }

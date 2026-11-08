@@ -4,6 +4,7 @@
 @inject Browser Browser
 @inject IDialogService Dialogs
 @inject ISnackbar Snackbar
+@inject AppState State
 
 <div class="ss-page">
     <MudText Typo="Typo.h5" Class="mb-3" Style="font-weight:700">@L["ภาพรวมหมู่บ้าน", "Village overview"]</MudText>
@@ -62,6 +63,7 @@
         var shops = Api.Get<List<AdminShopRow>>("api/plant/admin/shops");
         var link = Api.Get<JoinLink>("api/plant/admin/join-link");
         _counts = await counts;
+        if (_counts is not null) State.SetPendingMembers(_counts.Pending);
         _applications = (await apps)?.Count ?? 0;
         _shops = (await shops)?.Count ?? 0;
         await SetLinkAsync(await link);

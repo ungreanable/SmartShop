@@ -42,13 +42,11 @@ body { overscroll-behavior-y: contain; }
 /* Cards */
 .ss-card { border-radius: var(--ss-radius) !important; overflow: hidden; }
 .ss-shop-card { display: flex; gap: 12px; padding: 10px; align-items: stretch; cursor: pointer; }
-.ss-shop-card .ss-thumb { width: 92px; height: 92px; border-radius: 12px; object-fit: cover; flex: none; background: #E9ECEF; }
+.ss-shop-card .ss-thumb { width: 92px; height: 92px; border-radius: 12px; object-fit: cover; flex: none; background: var(--mud-palette-action-disabled-background, #E9ECEF); }
 .ss-shop-card.ss-closed .ss-thumb { filter: grayscale(0.9); opacity: 0.7; }
 .ss-hscroll { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; }
 .ss-hscroll > * { scroll-snap-align: start; flex: none; }
 .ss-hscroll::-webkit-scrollbar { display: none; }
-.ss-mini-card { width: 160px; }
-.ss-mini-card img { width: 160px; height: 100px; object-fit: cover; border-radius: 12px; background: #E9ECEF; }
 
 /* Shop page */
 .ss-cover { width: 100%; height: 180px; object-fit: cover; background: linear-gradient(135deg, #00A851, #7AD39A); display: block; }
@@ -56,7 +54,7 @@ body { overscroll-behavior-y: contain; }
 .ss-shop-head { margin-top: -36px; position: relative; }
 .ss-sticky-tabs { position: sticky; top: 56px; z-index: 10; background: var(--mud-palette-background); margin: 0 -16px; padding: 4px 16px; }
 .ss-item { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--mud-palette-lines-default); cursor: pointer; }
-.ss-item .ss-item-img { width: 88px; height: 88px; border-radius: 12px; object-fit: cover; background: #E9ECEF; flex: none; }
+.ss-item .ss-item-img { width: 88px; height: 88px; border-radius: 12px; object-fit: cover; background: var(--mud-palette-action-disabled-background, #E9ECEF); flex: none; }
 .ss-item.ss-unavailable { opacity: 0.5; }
 .ss-section-title { scroll-margin-top: 110px; }
 
@@ -76,11 +74,22 @@ body { overscroll-behavior-y: contain; }
 .ss-new-order::after { content: ""; position: absolute; inset: -2px; border-radius: inherit; pointer-events: none;
     box-shadow: 0 0 0 6px rgba(255, 106, 19, 0.45); opacity: 0; will-change: opacity; animation: ss-flash 1.2s infinite; }
 @media (prefers-reduced-motion: reduce) { .ss-new-order::after { animation: none; opacity: 1; } }
+/* Custom ("ตามสั่ง") dish still waiting for the shop's price: tinted and blinking outline until answered. */
+.ss-custom-todo { position: relative; border-radius: 10px; padding-left: 8px; padding-right: 8px; background: rgba(245, 159, 0, 0.12); }
+.ss-custom-todo::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    border: 2px solid var(--mud-palette-warning); opacity: 0; will-change: opacity; animation: ss-flash 1.2s infinite; }
+@media (prefers-reduced-motion: reduce) { .ss-custom-todo::before { animation: none; opacity: 1; } }
+/* Customer side: the shop's new prices for custom dishes, waiting for "accept". Brand colour, same gentle blink. */
+.ss-custom-quoted { position: relative; border-radius: 10px; padding-left: 8px; padding-right: 8px; background: rgba(0, 128, 62, 0.12); /* older WebViews */
+    background: color-mix(in srgb, var(--mud-palette-primary) 12%, transparent); }
+.ss-custom-quoted::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    border: 2px solid var(--mud-palette-primary); opacity: 0; will-change: opacity; animation: ss-flash 1.2s infinite; }
+@media (prefers-reduced-motion: reduce) { .ss-custom-quoted::before { animation: none; opacity: 1; } }
 
 .ss-qr { width: 240px; height: 240px; image-rendering: pixelated; background: #fff; padding: 8px; border-radius: 12px; }
 .ss-chat { max-height: 360px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
 .ss-bubble { max-width: 78%; padding: 8px 12px; border-radius: 16px; background: var(--mud-palette-background-gray, #EEF1F4); align-self: flex-start; white-space: pre-wrap; }
-.ss-bubble.mine { align-self: flex-end; background: var(--mud-palette-primary); color: #fff; }
+.ss-bubble.mine { align-self: flex-end; background: var(--mud-palette-primary); color: var(--mud-palette-primary-text); }
 .ss-muted { color: var(--mud-palette-text-secondary); }
 .ss-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .ss-big-switch .mud-switch-span { transform: scale(1.3); }
@@ -147,7 +156,7 @@ body { overscroll-behavior-y: contain; }
 .ss-img-remove.mud-icon-button { position: absolute; top: -10px; right: -10px; padding: 8px; background: var(--mud-palette-surface) !important; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
 /* Never squash photos: fill the box and crop the overflow instead of stretching */
 .mud-avatar img, .mud-avatar .mud-image { width: 100%; height: 100%; object-fit: cover; }
-.ss-item-img { object-fit: cover; border-radius: 12px; background: #E9ECEF; flex: none; }
+.ss-item-img { object-fit: cover; border-radius: 12px; background: var(--mud-palette-action-disabled-background, #E9ECEF); flex: none; }
 .ss-rating-row { display: grid; grid-template-columns: 26px 1fr 22px; align-items: center; gap: 6px; }
 /* Image preview: whole picture, never cropped */
 .ss-preview { display: flex; justify-content: center; align-items: center; background: #000; cursor: zoom-out; }
@@ -174,3 +183,54 @@ body { overscroll-behavior-y: contain; }
 .ss-an-hour, .ss-an-dow { color: var(--mud-palette-text-secondary); }
 .ss-an-cell { position: relative; aspect-ratio: 1; border-radius: 3px; background: var(--mud-palette-lines-default); overflow: hidden; }
 .ss-an-cell-fill { position: absolute; inset: 0; background: var(--mud-palette-primary); }
+
+/* ---------- connection and load failures ---------- */
+/* Under the dense app bar, over the page: thin and out of the way, gone as soon as the connection is back. */
+.ss-offline-bar { position: fixed; top: 48px; left: 0; right: 0; z-index: 1250; display: flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 30px; box-sizing: border-box; padding: 3px 12px; font-size: 0.9375rem; background: #4A5059; color: #fff; pointer-events: none; }
+.ss-offline-space { height: 30px; }
+/* Translucent amber: readable with the theme's text colour in light and dark mode alike. */
+.ss-load-error-inline { display: flex; align-items: center; gap: 8px; padding: 2px 4px 2px 12px; margin-bottom: 8px; border-radius: 10px;
+  background: rgba(245, 159, 0, 0.16); }
+
+/* ---------- contrast ---------- */
+/* Bright amber is fine as a border or chip background but too pale for text (2.1:1 on white): amber text, outlined and
+   text-variant warning buttons/chips use the theme's dark amber instead (WarningDarken, 5.3:1). */
+.mud-warning-text, .ss-warn-text, .mud-button-outlined-warning, .mud-button-text-warning,
+.mud-chip-outlined.mud-chip-color-warning, .mud-chip-text.mud-chip-color-warning { color: var(--mud-palette-warning-darken) !important; }
+
+/* Orders waiting for the customer (confirm price / received / new slip): stand out from the rest of the list. */
+.ss-needs-me { border: 2px solid var(--mud-palette-warning) !important; }
+
+/* ---------- touch targets ---------- */
+/* At least 44 px for anything tapped on its own (older users, small phones). Not inside inputs and the date picker,
+   where the larger box would stretch the field or overflow the calendar on a 360 px screen. */
+.mud-icon-button { min-width: 44px; min-height: 44px; }
+.mud-input-adornment .mud-icon-button, .mud-picker .mud-icon-button, .mud-input-control .mud-icon-button { min-width: 0; min-height: 0; }
+.mud-chip.mud-clickable, .ss-tap-chip.mud-chip { min-height: 44px; border-radius: 22px; padding-left: 14px; padding-right: 14px; }
+.ss-sticky-tabs .mud-chip { margin-top: 2px; margin-bottom: 2px; }
+.ss-code-row .ss-coupon-input { flex: 1; margin: 0; }
+
+/* Item options: one comfortable row per choice */
+.ss-option-row { display: flex; align-items: center; min-height: 48px; border-bottom: 1px solid var(--mud-palette-lines-default); }
+.ss-option-row:last-child { border-bottom: 0; }
+
+/* Merchant menu: whole row opens the editor; labelled switches side by side, wrapping on narrow phones */
+.ss-menu-row { cursor: pointer; }
+.ss-menu-switches { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 4px; cursor: default; }
+.ss-menu-switches > div { flex: 1 1 140px; min-width: 0; }
+
+/* Custom-order quote: one block per dish, divided; total and send button stay in reach while scrolling on phones */
+.ss-quote-row { padding: 10px 0; border-bottom: 1px solid var(--mud-palette-lines-default); }
+.ss-quote-row:first-of-type { border-top: 1px solid var(--mud-palette-lines-default); }
+.ss-quote-footer { position: sticky; bottom: calc(var(--ss-bottom-nav) + 4px); z-index: 5; margin: 8px -12px 0; padding: 8px 12px;
+  background: var(--mud-palette-surface); border-top: 1px solid var(--mud-palette-lines-default); }
+
+/* Merchant settings: save bar for unsaved changes, above the bottom navigation */
+.ss-save-bar { position: fixed; left: 0; right: 0; bottom: calc(var(--ss-bottom-nav) + 8px); z-index: 1150; display: flex; justify-content: center; padding: 0 12px; }
+.ss-save-bar > .mud-paper { display: flex; align-items: center; gap: 8px; width: 100%; max-width: calc(var(--ss-max) - 24px); padding: 8px 8px 8px 14px; }
+
+/* Admin: count badge on a bottom-nav item */
+.ss-bottom-nav .ss-nav-count { position: absolute; top: 6px; left: calc(50% + 6px); min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px;
+  background: var(--mud-palette-error); color: #fff; font-size: 0.8125rem; line-height: 20px; text-align: center; font-weight: 600; }
+.ss-bottom-nav a { position: relative; }

@@ -1,0 +1,52 @@
+@* Thin bar under the app bar while offline or while live updates are down, so a page that stops changing is not
+   mistaken for "nothing new". Waits a few seconds first: phones drop and regain the connection all the time. *@
+@implements IDisposable
+@inject Realtime Realtime
+
+@if (_show)
+{
+    <div class="ss-offline-bar" role="status" aria-live="polite">
+        <MudIcon Icon="@Icons.Material.Filled.CloudOff" Size="Size.Small" />
+        @(Realtime.Online ? L["การเชื่อมต่อขาด · กำลังเชื่อมต่อใหม่…", "Connection lost · reconnecting…"] : L["ออฟไลน์ · กำลังเชื่อมต่อใหม่…", "Offline · reconnecting…"])
+    </div>
+    @* Takes the bar's height in the page flow, so it pushes the page down instead of hiding its first line. *@
+    <div class="ss-offline-space"></div>
+}
+
+@code {
+    private static readonly TimeSpan Grace = TimeSpan.FromSeconds(4);
+    private bool _show;
+    private CancellationTokenSource? _wait;
+
+    protected override void OnInitialized()
+    {
+        Realtime.ConnectionChanged += OnChanged;
+        OnChanged();
+    }
+
+    private void OnChanged() => _ = InvokeAsync(async () =>
+    {
+        if (Realtime.Healthy)
+        {
+            _wait?.Cancel();
+            _wait = null;
+            if (_show) { _show = false; StateHasChanged(); }
+            return;
+        }
+        if (_show || _wait is not null) return;
+        // The browser says offline: no point waiting. A dropped live connection often comes back by itself.
+        var wait = _wait = new CancellationTokenSource();
+        try { if (Realtime.Online) await Task.Delay(Grace, wait.Token); }
+        catch (OperationCanceledException) { return; }
+        _wait = null;
+        if (Realtime.Healthy) return;
+        _show = true;
+        StateHasChanged();
+    });
+
+    public void Dispose()
+    {
+        Realtime.ConnectionChanged -= OnChanged;
+        _wait?.Cancel();
+    }
+}

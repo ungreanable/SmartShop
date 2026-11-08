@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 
 namespace SmartShop.UI.Services;
@@ -54,6 +55,16 @@ public sealed class Browser(IJSRuntime js)
     public ValueTask ApplyUpdateAsync() => js.InvokeVoidAsync("smartshop.sw.apply");
 
     public ValueTask ScrollToAsync(string elementId) => js.InvokeVoidAsync("smartshop.scrollTo", elementId);
+
+    /// <summary>
+    /// Calls <c>OnListEndVisible</c> on <paramref name="listener"/> when <paramref name="sentinel"/> nears the screen. Null when the
+    /// browser (or an older cached smartshop.js) cannot: the caller then relies on its "load more" button.
+    /// </summary>
+    public async ValueTask<IJSObjectReference?> ObserveListEndAsync<T>(ElementReference sentinel, DotNetObjectReference<T> listener) where T : class
+    {
+        try { return await js.InvokeAsync<IJSObjectReference?>("smartshop.observeEnd", sentinel, listener); }
+        catch (JSException) { return null; }
+    }
     public ValueTask SetBadgeAsync(int count) => js.InvokeVoidAsync("smartshop.setBadge", count);
     public ValueTask<string> UserAgentLabelAsync() => js.InvokeAsync<string>("smartshop.deviceLabel");
 }

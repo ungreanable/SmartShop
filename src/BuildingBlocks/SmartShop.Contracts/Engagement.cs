@@ -2,7 +2,10 @@ using System.Data.Common;
 
 namespace SmartShop.Contracts.Reviews
 {
-    public sealed record ReviewSubmitted(Guid PlantId, Guid ReviewId, Guid OrderId, Guid ShopId, Guid CustomerId, int Rating, decimal Average, int Count) : IntegrationEvent(PlantId);
+    /// <summary><see cref="CustomerId"/> is for internal bookkeeping only: when <see cref="Anonymous"/>, nothing the shop or other
+    /// customers can see (notifications, webhooks, statistics) may name or link the reviewer.</summary>
+    public sealed record ReviewSubmitted(Guid PlantId, Guid ReviewId, Guid OrderId, Guid ShopId, Guid CustomerId, int Rating, decimal Average, int Count,
+        bool Anonymous = false) : IntegrationEvent(PlantId);
     public sealed record ReviewModerated(Guid PlantId, Guid ReviewId, Guid ShopId, Guid ActorId, bool Hidden, decimal Average, int Count) : IntegrationEvent(PlantId);
     public sealed record ReviewReplied(Guid PlantId, Guid ReviewId, Guid ShopId, Guid CustomerId) : IntegrationEvent(PlantId);
 }

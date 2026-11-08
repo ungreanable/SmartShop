@@ -39,6 +39,12 @@ public sealed class ApiException(ApiProblem problem) : Exception(problem.Message
     public ApiProblem Problem { get; } = problem;
 }
 
+/// <summary>Result of <see cref="Api.Load{T}"/>: the value, or why it could not be loaded.</summary>
+public readonly record struct Loaded<T>(T? Value, ApiProblem? Problem)
+{
+    public bool Failed => Problem is not null;
+}
+
 /// <summary>
 /// Thin JSON client for the SmartShop API. Adds the bearer token and the current village header, retries once
 /// after refreshing on 401, and (unless <c>silent</c>) shows problems as snackbars.
@@ -60,17 +66,36 @@ public sealed class Api(HttpClient http, Session session, PlantContextAccessor p
     public async Task<T?> Send<T>(HttpMethod method, string url, object? body, bool silent = false, string? idempotencyKey = null)
     {
         using var response = await SendRaw(method, url, body, silent, idempotencyKey);
-        if (response is null || response.StatusCode == HttpStatusCode.NoContent) return default;
+        return response is null ? default : await ReadAsync<T>(response);
+    }
+
+    /// <summary>
+    /// GET for the data a page is built from. <see cref="Get{T}"/> returns null both for "nothing there" and for
+    /// "could not load", so a page could only spin forever or look empty; this tells them apart so the page can offer
+    /// a retry (<c>LoadError</c>). Silent: the page shows the failure itself, no snackbar on top.
+    /// </summary>
+    public async Task<Loaded<T>> Load<T>(string url)
+    {
+        using var response = await SendRaw(HttpMethod.Get, url, null, silent: true);
+        // No await between SendRaw and reading LastProblem: another request cannot overwrite it in between.
+        if (response is null) return new(default, LastProblem ?? new ApiProblem(0, null, "Error"));
+        return new(await ReadAsync<T>(response), null);
+    }
+
+    private static async Task<T?> ReadAsync<T>(HttpResponseMessage response)
+    {
+        if (response.StatusCode == HttpStatusCode.NoContent) return default;
         // An empty 200 body means "nothing" too; never let it crash the page.
         var json = await response.Content.ReadAsStringAsync();
-        return string.IsNullOrWhiteSpace(json) ? default : System.Text.Json.JsonSerializer.Deserialize<T>(json, ApiJson.Options);
+        return string.IsNullOrWhiteSpace(json) ? default : JsonSerializer.Deserialize<T>(json, ApiJson.Options);
     }
 
     /// <summary>
     /// Uploads a file and returns either the result or the reason it failed, so the caller can show it next to the file.
     /// The content is rebuilt for the token-refresh retry (a consumed stream would otherwise be sent empty).
     /// </summary>
-    public async Task<(UploadResult? Result, ApiProblem? Problem)> UploadAsync(byte[] content, string fileName, string contentType, string purpose)
+    public async Task<(UploadResult? Result, ApiProblem? Problem)> UploadAsync(byte[] content, string fileName, string contentType, string purpose,
+        CancellationToken ct = default)
     {
         HttpRequestMessage Build()
         {
@@ -84,8 +109,8 @@ public sealed class Api(HttpClient http, Session session, PlantContextAccessor p
 
         try
         {
-            using var response = await ExecuteAsync(Build(), Build);
-            if (response.IsSuccessStatusCode) return (await response.Content.ReadFromJsonAsync<UploadResult>(ApiJson.Options), null);
+            using var response = await ExecuteAsync(Build(), Build, ct);
+            if (response.IsSuccessStatusCode) return (await response.Content.ReadFromJsonAsync<UploadResult>(ApiJson.Options, ct), null);
             if (response.StatusCode == HttpStatusCode.Unauthorized)
             {
                 await HandleErrorAsync(response, true);
@@ -163,16 +188,16 @@ public sealed class Api(HttpClient http, Session session, PlantContextAccessor p
         }
     }
 
-    private async Task<HttpResponseMessage> ExecuteAsync(HttpRequestMessage request, Func<HttpRequestMessage> rebuild)
+    private async Task<HttpResponseMessage> ExecuteAsync(HttpRequestMessage request, Func<HttpRequestMessage> rebuild, CancellationToken ct = default)
     {
         await AddHeadersAsync(request, false);
-        var response = await http.SendAsync(request);
+        var response = await http.SendAsync(request, ct);
         if (response.StatusCode != HttpStatusCode.Unauthorized || !session.IsAuthenticated) return response;
 
         response.Dispose();
         var retry = rebuild();
         await AddHeadersAsync(retry, true);
-        return await http.SendAsync(retry);
+        return await http.SendAsync(retry, ct);
     }
 
     private async Task AddHeadersAsync(HttpRequestMessage request, bool forceRefresh)

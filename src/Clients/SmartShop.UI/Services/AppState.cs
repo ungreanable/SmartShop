@@ -34,6 +34,21 @@ public sealed class AppState(Api api, Realtime realtime, Session session)
         Changed?.Invoke();
     }
 
+    /// <summary>Join requests waiting for a village admin (badge in the admin navigation); null until known.</summary>
+    public int? PendingMembers { get; private set; }
+
+    public async Task RefreshPendingMembersAsync()
+    {
+        if (await api.Get<PlantCounts>("api/plant/admin/counts", silent: true) is { } counts) SetPendingMembers(counts.Pending);
+    }
+
+    public void SetPendingMembers(int count)
+    {
+        if (PendingMembers == count) return;
+        PendingMembers = count;
+        Changed?.Invoke();
+    }
+
     public void SetCartItems(int count)
     {
         CartItems = count;
@@ -69,6 +84,7 @@ public static class UiSetup
         });
         services.AddScoped(_ => new HttpClient { BaseAddress = new Uri(config.ApiBaseUrl) });
         services.AddScoped<Loc>();
+        services.AddScoped<ThemeSettings>();
         services.AddScoped<Session>();
         services.AddScoped<PlantContextAccessor>();
         services.AddScoped<Api>();
@@ -86,14 +102,21 @@ public static class UiSetup
 
     public static MudTheme Theme { get; } = new()
     {
+        // Contrast (WCAG AA, 4.5:1 for text): white on #00A851 was only 3.1:1, hard to read for older eyes in sunlight.
+        // #00803E keeps the brand green and gives 5.1:1 for white button text, 4.7:1 as text on the page background.
+        // Warning stays bright amber for borders and chips (with dark text, 7.4:1); warning TEXT uses the dark amber
+        // WarningDarken (5.3:1 on white, 4.9:1 on the page; see .ss-warn-text and MudAlert).
         PaletteLight = new PaletteLight
         {
-            Primary = "#00A851",
-            PrimaryDarken = "#008C44",
-            Secondary = "#FF6A13",
+            Primary = "#00803E",
+            PrimaryDarken = "#006B34",
+            PrimaryLighten = "#00A851",
+            Secondary = "#C2410C", // white text 5.2:1 (the brighter #FF6A13 was 2.9:1)
             Tertiary = "#2E7DFF",
-            Success = "#00A851",
+            Success = "#00803E",
             Warning = "#F59F00",
+            WarningDarken = "#A85600",
+            WarningContrastText = "#1F2328",
             Error = "#E03131",
             Background = "#F6F7F9",
             Surface = "#FFFFFF",
@@ -107,7 +130,14 @@ public static class UiSetup
         PaletteDark = new PaletteDark
         {
             Primary = "#2BC46E",
+            // Dark text on the light dark-mode green (8.2:1); white on it is only 2.3:1.
+            PrimaryContrastText = "#111315",
+            // Amber text (WarningDarken, used by .ss-warn-text and alerts) must be light on the dark surface: 9.6:1.
+            Warning = "#FFB545",
+            WarningDarken = "#FFB545",
+            WarningContrastText = "#111315",
             Secondary = "#FF8A45",
+            SecondaryContrastText = "#111315", // dark text on the light orange: 7.9:1
             Tertiary = "#5C9BFF",
             Background = "#111315",
             Surface = "#1A1D20",
