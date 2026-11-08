@@ -137,8 +137,9 @@
         <MudPaper Outlined="true" Class="pa-3 mb-3 ss-card">
             @foreach (var line in _order.Lines)
             {
-                @* Shop side: custom dishes still waiting for a price blink, the rest of the order stays calm. *@
-                <div class="d-flex py-1 @(IsShop && line.IsCustom && _order.Status == "PendingAcceptance" ? "ss-custom-todo" : "")">
+                @* Custom dishes blink where someone has to act on them: for the shop while they still need a price, for the
+                   customer once the prices arrived and wait for "accept". The rest of the order stays calm. *@
+                <div class="d-flex py-1 @CustomLineClass(line)">
                     <MudText Style="min-width:32px">@line.Quantity×</MudText>
                     <div style="flex:1">
                         <MudText Style="@(line.Unavailable ? "text-decoration:line-through" : null)">@line.Name</MudText>
@@ -150,6 +151,14 @@
                         @if (line.Note is not null) { <MudText Typo="Typo.caption" Class="ss-muted">📝 @line.Note</MudText> }
                     </div>
                     @if (line.IsCustom && _order.Status == "PendingAcceptance") { <MudText Class="ss-muted">@L["รอราคา", "To be priced"]</MudText> }
+                    else if (line.IsCustom && _order.Status == "AwaitingPriceApproval" && !line.Unavailable)
+                    {
+                        @* The price the shop just set: the one number the customer is asked to agree to. *@
+                        <div class="text-right">
+                            <MudText Style="font-weight:700" Color="Color.Primary">@Fmt.Baht(line.LineTotal)</MudText>
+                            @if (line.Quantity > 1) { <MudText Typo="Typo.caption" Class="ss-muted">@Fmt.Baht(line.UnitPrice) × @line.Quantity</MudText> }
+                        </div>
+                    }
                     else { <MudText>@Fmt.Baht(line.LineTotal)</MudText> }
                 </div>
             }
@@ -316,6 +325,11 @@
     }
 
     private bool _editQuote;
+
+    private string? CustomLineClass(OrderLine line) => !line.IsCustom || _order is null ? null
+        : IsShop && _order.Status == "PendingAcceptance" ? "ss-custom-todo"
+        : IsCustomer && _order.Status == "AwaitingPriceApproval" ? "ss-custom-quoted"
+        : null;
 
     private async Task QuoteAsync(object body)
     {

@@ -79,6 +79,12 @@ body { overscroll-behavior-y: contain; }
 .ss-custom-todo::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
     border: 2px solid var(--mud-palette-warning); opacity: 0; will-change: opacity; animation: ss-flash 1.2s infinite; }
 @media (prefers-reduced-motion: reduce) { .ss-custom-todo::before { animation: none; opacity: 1; } }
+/* Customer side: the shop's new prices for custom dishes, waiting for "accept". Brand colour, same gentle blink. */
+.ss-custom-quoted { position: relative; border-radius: 10px; padding-left: 8px; padding-right: 8px; background: rgba(0, 128, 62, 0.12); /* older WebViews */
+    background: color-mix(in srgb, var(--mud-palette-primary) 12%, transparent); }
+.ss-custom-quoted::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    border: 2px solid var(--mud-palette-primary); opacity: 0; will-change: opacity; animation: ss-flash 1.2s infinite; }
+@media (prefers-reduced-motion: reduce) { .ss-custom-quoted::before { animation: none; opacity: 1; } }
 
 .ss-qr { width: 240px; height: 240px; image-rendering: pixelated; background: #fff; padding: 8px; border-radius: 12px; }
 .ss-chat { max-height: 360px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
