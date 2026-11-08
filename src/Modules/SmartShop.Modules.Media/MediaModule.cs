@@ -81,7 +81,7 @@ public sealed class MediaModule : IModule
             var etag = $"\"{id:N}-{MediaUrls.Name(parsed.Value)}\"";
             void CacheHeaders()
             {
-                http.Response.Headers[HeaderNames.CacheControl] = "private, max-age=3600, immutable";
+                http.Response.Headers[HeaderNames.CacheControl] = "private, max-age=86400, immutable";
                 http.Response.Headers[HeaderNames.XContentTypeOptions] = "nosniff";
                 http.Response.Headers[HeaderNames.ETag] = etag;
             }

@@ -4,7 +4,13 @@ self.importScripts('./service-worker-assets.js');
 self.importScripts('./push-handlers.js');
 self.addEventListener('install', event => event.waitUntil(onInstall(event)));
 self.addEventListener('activate', event => event.waitUntil(onActivate(event)));
-self.addEventListener('fetch', event => event.respondWith(onFetch(event)));
+self.addEventListener('fetch', event => {
+  // API calls and real time never come from the cache: let the browser send them directly. Going through the worker
+  // first meant waiting for it to wake up (often hundreds of ms on low-end phones) after the user had been idle.
+  const path = new URL(event.request.url).pathname;
+  if (path.startsWith('/api/') || path.startsWith('/hubs/')) return;
+  event.respondWith(onFetch(event));
+});
 
 const cacheNamePrefix = 'smartshop-cache-';
 const cacheName = `${cacheNamePrefix}${self.assetsManifest.version}`;

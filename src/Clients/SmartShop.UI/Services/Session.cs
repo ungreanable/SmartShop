@@ -56,11 +56,15 @@ public sealed class Session : IDisposable
         if (_auth is null) return null;
         if (!forceRefresh && _auth.AccessTokenExpiresAt > DateTimeOffset.UtcNow.AddSeconds(60)) return _auth.AccessToken;
 
+        var tokenBefore = _auth.AccessToken;
         await _refreshLock.WaitAsync();
         try
         {
             if (_auth is null) return null;
             if (!forceRefresh && _auth.AccessTokenExpiresAt > DateTimeOffset.UtcNow.AddSeconds(60)) return _auth.AccessToken;
+            // Several requests rejected with 401 at the same time (e.g. a phone clock running slow): the first one
+            // refreshed while the others waited, so they reuse its new token instead of refreshing one after another.
+            if (forceRefresh && _auth.AccessToken != tokenBefore) return _auth.AccessToken;
             using var response = await _http.PostAsJsonAsync("api/auth/refresh", new { refreshToken = _auth.RefreshToken });
             if (!response.IsSuccessStatusCode)
             {

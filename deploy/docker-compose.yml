@@ -90,10 +90,12 @@ services:
       Messaging__Role: Api
     healthcheck:
       test: ["CMD", "dotnet", "SmartShop.Api.dll", "--healthcheck"]
-      interval: 15s
+      # Each probe starts a whole .NET process (~0.1-0.4 s of CPU): every minute once running, every 3 s while starting.
+      interval: 60s
+      start_interval: 3s
+      start_period: 90s
       timeout: 5s
-      retries: 10
-      start_period: 20s
+      retries: 3
     depends_on:
       migrator: { condition: service_completed_successfully }
       valkey: { condition: service_healthy }
@@ -107,7 +109,9 @@ services:
       <<: *app-env
     healthcheck:
       test: ["CMD", "dotnet", "SmartShop.Worker.dll", "--healthcheck"]
-      interval: 30s
+      interval: 60s
+      start_interval: 3s
+      start_period: 90s
       timeout: 5s
       retries: 5
     depends_on:

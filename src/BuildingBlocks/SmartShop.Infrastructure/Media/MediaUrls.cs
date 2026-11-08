@@ -35,7 +35,11 @@ public sealed class MediaUrls : IMediaUrls
     {
         if (mediaId is not { } id) return null;
         var now = _clock.GetUtcNow();
-        var expires = new DateTimeOffset(now.Year, now.Month, now.Day, now.Hour, 0, 0, TimeSpan.Zero).AddHours(2).ToUnixTimeSeconds();
+        // URLs stay the same for a whole day (they change at 03:00 Thai time), valid 24-48 h. With an hourly window every
+        // picture got a new URL each hour, so phones downloaded all of them again through the API instead of reusing
+        // their cache; the first image-heavy page of each hour was the slow one.
+        var dayStart = new DateTimeOffset(now.UtcDateTime.AddHours(-20).Date, TimeSpan.Zero).AddHours(20);
+        var expires = dayStart.AddDays(2).ToUnixTimeSeconds();
         return $"/api/media/{id}/{Name(variant)}?exp={expires}&sig={Sign(id, variant, expires)}";
     }
 
