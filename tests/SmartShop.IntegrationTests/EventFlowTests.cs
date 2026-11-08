@@ -69,4 +69,31 @@ public class EventFlowTests(SmartShopFactory factory)
         await Task.Delay(TimeSpan.FromSeconds(2));
         (await InboxAsync(s.Owner)).ShouldNotContain(n => n.Link != null && n.Link.Contains(order.Id.ToString()));
     }
+
+    [Fact]
+    public async Task Customer_who_agrees_to_the_shops_prices_is_not_told_that_the_shop_accepted()
+    {
+        var s = await OpenShopAsync();
+        await s.Owner.PutOkAsync($"/api/merchant/shops/{s.ShopId}/custom-orders", new { enabled = true });
+        var customer = await factory.JoinAsync(s.Plant, s.Admin);
+        await customer.PostOkAsync("/api/cart/custom", new { shopId = s.ShopId, text = "ข้าวผัดกุ้ง" });
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/orders")
+        {
+            Content = JsonContent.Create(new { fulfillmentType = "Pickup", paymentMethodId = s.CashId }, options: TestClient.Json),
+        };
+        request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString("N"));
+        var order = await TestClient.ReadAsync<QuoteOrderDto>(await customer.Http.SendAsync(request));
+        await s.Owner.PostOkAsync($"/api/merchant/orders/{order.Id}/quote", new { lines = new[] { new { lineId = order.Lines.Single().Id, unitPrice = 70 } } });
+
+        await customer.PostOkAsync($"/api/orders/{order.Id}/accept-quote");
+
+        await FactoryExtensions.EventuallyAsync(async () =>
+        {
+            (await InboxAsync(customer)).ShouldContain(n => n.Type == "order.quoted");
+            (await InboxAsync(s.Owner)).ShouldContain(n => n.Type == "order.quote_accepted");
+        });
+        // Published together with the shop's "customer accepted the price": give its queue the same moment.
+        await Task.Delay(TimeSpan.FromSeconds(2));
+        (await InboxAsync(customer)).ShouldNotContain(n => n.Type == "order.accepted");
+    }
 }

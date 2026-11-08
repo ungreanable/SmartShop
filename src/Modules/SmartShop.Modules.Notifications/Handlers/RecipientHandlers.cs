@@ -55,7 +55,8 @@ public static class OrderNotificationHandler
         Customer(d, e.CustomerId, e.PlantId, e.EventId, e.OrderId, "order.quoted", P.High, $"💬 {e.ShopName} ใส่ราคาออเดอร์ #{e.OrderNo} แล้ว",
             $"{Links.Baht(e.Total)}{(e.Message is { } m ? " · " + m : "")} · กดยืนยันภายใน 15 นาที", ct);
 
-    public static Task Handle(OrderAccepted e, NotificationDispatcher d, CancellationToken ct) =>
+    // Not when the customer just agreed to the shop's prices: "the shop accepted your order" would answer their own tap.
+    public static Task Handle(OrderAccepted e, NotificationDispatcher d, CancellationToken ct) => e.QuoteAccepted ? Task.CompletedTask :
         Customer(d, e.CustomerId, e.PlantId, e.EventId, e.OrderId, "order.accepted", P.High, $"✅ {e.ShopName} รับออเดอร์ #{e.OrderNo} แล้ว", "ร้านกำลังเตรียมให้ค่ะ", ct);
 
     public static Task Handle(OrderCancellationDeclined e, NotificationDispatcher d, CancellationToken ct) =>

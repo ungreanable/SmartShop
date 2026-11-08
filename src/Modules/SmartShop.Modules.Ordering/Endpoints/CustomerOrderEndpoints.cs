@@ -75,7 +75,7 @@ internal static class CustomerOrderEndpoints
             await a.SaveAsync(ct,
                 new OrderQuoteAccepted(o.PlantId, o.Id, o.OrderNo, o.ShopId, o.ShopName, o.CustomerId, o.Subtotal, o.Discount, o.Total,
                     o.PaymentMethodId, o.PaymentMethodType),
-                new OrderAccepted(o.PlantId, o.Id, o.OrderNo, o.ShopId, o.ShopName, o.CustomerId, o.AcceptedBy ?? a.UserId));
+                new OrderAccepted(o.PlantId, o.Id, o.OrderNo, o.ShopId, o.ShopName, o.CustomerId, o.AcceptedBy ?? a.UserId, QuoteAccepted: true));
             return await a.ToDtoAsync(o, "customer", ct);
         });
 
