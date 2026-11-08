@@ -127,9 +127,13 @@ internal static class ImageProcessor
 /// <summary>Reads the chunk list of a WebP file (RIFF container) without decoding it.</summary>
 internal static class WebpContainer
 {
+    /// <summary>Browsers attach their colour profile (sRGB is ~0.5 KB, at most a few KB); anything bigger is not just that.</summary>
+    private const long MaxColourProfileBytes = 16 * 1024;
+
     /// <summary>
-    /// True for a still WebP made only of picture data: no EXIF/XMP (which can hold GPS), no ICC profile, no animation and
-    /// nothing hidden after the last chunk. Such a file can be stored as it is without leaking anything about the phone.
+    /// True for a still WebP made only of picture data and a small colour profile (Chrome adds one to every WebP it makes):
+    /// no EXIF/XMP (which can hold GPS), no animation and nothing hidden after the last chunk. Such a file can be stored
+    /// as it is without leaking anything about the phone.
     /// </summary>
     public static bool IsPlainStill(ReadOnlySpan<byte> file)
     {
@@ -144,6 +148,7 @@ internal static class WebpContainer
             var type = file.Slice(position, 4);
             long size = BinaryPrimitives.ReadUInt32LittleEndian(file.Slice(position + 4, 4));
             if (type.SequenceEqual("VP8 "u8) || type.SequenceEqual("VP8L"u8)) hasPicture = true;
+            else if (type.SequenceEqual("ICCP"u8)) { if (size > MaxColourProfileBytes) return false; }
             else if (!type.SequenceEqual("VP8X"u8) && !type.SequenceEqual("ALPH"u8)) return false;
             var next = position + 8L + size + (size & 1);
             if (next > file.Length) return false;

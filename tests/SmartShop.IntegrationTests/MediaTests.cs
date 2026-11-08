@@ -165,6 +165,17 @@ public class MediaTests(SmartShopFactory factory)
     }
 
     [Fact]
+    public async Task Webp_from_chrome_with_its_colour_profile_is_kept_as_it_is()
+    {
+        var (_, admin) = await factory.CreatePlantAsync();
+        var webp = WithColourProfile(Scenario.Webp(1500, 1000), 1500, 1000);
+
+        var upload = await admin.UploadAsync("ItemImage", webp, "photo.webp");
+
+        (await factory.CreateClient().GetByteArrayAsync(OriginalUrl(upload.Id))).ShouldBe(webp);
+    }
+
+    [Fact]
     public async Task Webp_carrying_metadata_is_encoded_again_so_the_metadata_is_dropped()
     {
         var (_, admin) = await factory.CreatePlantAsync();
@@ -200,6 +211,27 @@ public class MediaTests(SmartShopFactory factory)
     }
 
     private string OriginalUrl(Guid id) => factory.Services.GetRequiredService<IMediaUrls>().For(id, MediaVariant.Original)!;
+
+    /// <summary>The layout Chrome writes: VP8X header, ICC colour profile, then the picture.</summary>
+    private static byte[] WithColourProfile(byte[] simple, int width, int height)
+    {
+        System.Text.Encoding.ASCII.GetString(simple, 12, 4).ShouldBe("VP8 ");
+        var header = new byte[18];
+        "VP8X"u8.CopyTo(header);
+        header[4] = 10;
+        header[8] = 0x20; // ICC profile present
+        WriteUInt24(header.AsSpan(12), width - 1);
+        WriteUInt24(header.AsSpan(15), height - 1);
+        var profile = new byte[8 + 456];
+        "ICCP"u8.CopyTo(profile);
+        BinaryPrimitives.WriteUInt32LittleEndian(profile.AsSpan(4), 456);
+        byte[] result = [.. simple[..12], .. header, .. profile, .. simple[12..]];
+        BinaryPrimitives.WriteUInt32LittleEndian(result.AsSpan(4), (uint)(result.Length - 8));
+        return result;
+
+        static void WriteUInt24(Span<byte> target, int value) =>
+            (target[0], target[1], target[2]) = ((byte)value, (byte)(value >> 8), (byte)(value >> 16));
+    }
 
     private static byte[] WithChunk(byte[] webp, string type, byte[] data)
     {
