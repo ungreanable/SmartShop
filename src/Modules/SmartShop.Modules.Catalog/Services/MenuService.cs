@@ -36,7 +36,7 @@ public sealed record CachedCategory(Guid Id, string Name, int SortOrder);
 public sealed record CachedMenu(List<CachedCategory> Categories, List<CachedItem> Items, List<RoundDto> Rounds);
 
 /// <summary>
-/// Menu = cached item structure (10 min, invalidated on any catalog change) + live stock from the database.
+/// Menu = cached item structure (10 min, invalidated on any catalog change) + live stock and group-buy totals from the database.
 /// Exact stock is never served from cache; checkout always re-checks it atomically.
 /// </summary>
 public sealed class MenuService(CatalogDbContext db, HybridCache cache, IMediaUrls media)
@@ -49,7 +49,15 @@ public sealed class MenuService(CatalogDbContext db, HybridCache cache, IMediaUr
         var countedIds = menu.Items.Where(i => i.StockMode is StockMode.Tracked or StockMode.Daily).Select(i => i.Id).ToList();
         var stock = await db.Inventories.AsNoTracking().Where(s => countedIds.Contains(s.ItemId))
             .ToDictionaryAsync(s => s.ItemId, s => s.OnHand - s.Reserved, ct);
+        // Group-buy progress moves with every order, so like stock it is read live; the cached copy would lag up to 10 minutes.
         var rounds = menu.Rounds.ToDictionary(r => r.Id);
+        if (rounds.Count > 0)
+        {
+            var roundIds = rounds.Keys.ToList();
+            var live = await db.PreOrderRounds.AsNoTracking().Where(r => roundIds.Contains(r.Id))
+                .Select(r => new { r.Id, r.OrderedQuantity, r.Status }).ToListAsync(ct);
+            foreach (var r in live) rounds[r.Id] = rounds[r.Id] with { OrderedQuantity = r.OrderedQuantity, Status = r.Status };
+        }
 
         MenuItemDto Map(CachedItem i)
         {

@@ -33,6 +33,12 @@ internal sealed class PlantDirectory(PlantsDbContext db) : IPlantDirectory
             .Where(m => m.PlantId == plantId && m.Status == MembershipStatus.Active)
             .Select(m => m.UserId)
             .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<Guid>> KeepActiveMembersAsync(Guid plantId, IReadOnlyCollection<Guid> userIds, CancellationToken ct = default) =>
+        userIds.Count == 0 ? [] : await db.Memberships.AsNoTracking()
+            .Where(m => m.PlantId == plantId && m.Status == MembershipStatus.Active && userIds.Contains(m.UserId))
+            .Select(m => m.UserId)
+            .ToListAsync(ct);
 }
 
 /// <summary>Removes cached memberships so permission changes apply within seconds.</summary>

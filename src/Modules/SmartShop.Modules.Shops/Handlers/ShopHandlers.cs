@@ -47,24 +47,30 @@ public static class EvaluateShopStatusHandler
     }
 }
 
+/// <summary>
+/// Review events only say that the rating changed. The figures inside them were counted when each review was saved, so two
+/// reviews close together (or a redelivered older event) could leave an out-of-date rating; it is always re-read instead.
+/// </summary>
 public static class ReviewSubmittedHandler
 {
-    public static async Task Handle(ReviewSubmitted e, ShopsDbContext db, IMessageBus bus, CancellationToken ct)
-    {
-        var shop = await db.Shops.FirstOrDefaultAsync(s => s.Id == e.ShopId, ct);
-        if (shop is null) return;
-        shop.UpdateRating(e.Average, e.Count);
-        await bus.PublishAsync(new ShopRatingChanged(shop.PlantId, shop.Id, shop.RatingAverage, shop.RatingCount));
-    }
+    public static Task Handle(ReviewSubmitted e, ShopsDbContext db, IShopRatingSource ratings, IMessageBus bus, CancellationToken ct) =>
+        ShopRatingRefresh.RunAsync(db, ratings, bus, e.ShopId, ct);
 }
 
 public static class ReviewModeratedHandler
 {
-    public static async Task Handle(ReviewModerated e, ShopsDbContext db, IMessageBus bus, CancellationToken ct)
+    public static Task Handle(ReviewModerated e, ShopsDbContext db, IShopRatingSource ratings, IMessageBus bus, CancellationToken ct) =>
+        ShopRatingRefresh.RunAsync(db, ratings, bus, e.ShopId, ct);
+}
+
+internal static class ShopRatingRefresh
+{
+    public static async Task RunAsync(ShopsDbContext db, IShopRatingSource ratings, IMessageBus bus, Guid shopId, CancellationToken ct)
     {
-        var shop = await db.Shops.FirstOrDefaultAsync(s => s.Id == e.ShopId, ct);
+        var shop = await db.Shops.FirstOrDefaultAsync(s => s.Id == shopId, ct);
         if (shop is null) return;
-        shop.UpdateRating(e.Average, e.Count);
+        var rating = await ratings.GetAsync(shopId, ct);
+        shop.UpdateRating(rating.Average, rating.Count);
         await bus.PublishAsync(new ShopRatingChanged(shop.PlantId, shop.Id, shop.RatingAverage, shop.RatingCount));
     }
 }

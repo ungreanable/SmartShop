@@ -42,7 +42,7 @@ public static class RemindPendingOrderHandler
         var order = await db.Orders.AsNoTracking().FirstOrDefaultAsync(o => o.Id == command.OrderId, ct);
         if (order is not { Status: OrderStatus.PendingAcceptance } || order.ExpiresAt is not { } expires) return;
 
-        await bus.PublishAsync(new OrderPendingReminder(order.PlantId, order.Id, order.OrderNo, order.ShopId, order.ShopName, command.Attempt));
+        await bus.PublishAsync(new OrderPendingReminder(order.PlantId, order.Id, order.OrderNo, order.ShopId, order.ShopName, command.Attempt, order.NeedsQuote));
 
         var interval = TimeSpan.FromMinutes((await shops.GetOrderingInfoAsync(order.ShopId, ct))?.ReminderAfterMinutes ?? 3);
         var next = clock.GetUtcNow() + interval;
@@ -104,6 +104,9 @@ public static class PaymentStatusHandler
 
     public static Task Handle(PaymentRejected e, OrderingDbContext db, IPaymentDirectory payments, TimeProvider clock, CancellationToken ct) =>
         Sync(db, payments, e.OrderId, PaymentStatus.Rejected, clock, e.ActorId, e.Reason, ct);
+
+    public static Task Handle(PaymentVoided e, OrderingDbContext db, IPaymentDirectory payments, TimeProvider clock, CancellationToken ct) =>
+        Sync(db, payments, e.OrderId, PaymentStatus.Voided, clock, null, null, ct);
 
     private static async Task Sync(OrderingDbContext db, IPaymentDirectory payments, Guid orderId, PaymentStatus reported, TimeProvider clock,
         Guid? actor, string? note, CancellationToken ct)

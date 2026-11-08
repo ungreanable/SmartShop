@@ -112,8 +112,11 @@ public sealed class ReviewsModule : IModule
 
     public IReadOnlyList<Type> DbContexts => [typeof(ReviewsDbContext)];
 
-    public void Register(IHostApplicationBuilder builder) =>
+    public void Register(IHostApplicationBuilder builder)
+    {
         builder.Services.AddModuleDbContext<ReviewsDbContext>(ReviewsDbContext.SchemaName);
+        builder.Services.AddScoped<IShopRatingSource, ShopRatingSource>();
+    }
 
     public void MapEndpoints(IEndpointRouteBuilder app)
     {
@@ -188,12 +191,21 @@ public sealed class ReviewsModule : IModule
             r.Rating, r.Comment, r.Reply, r.CreatedAt, r.RepliedAt, r.Hidden, false, mine);
     }
 
-    private static async Task<(decimal Average, int Count)> StatsAsync(ReviewsDbContext db, Guid shopId, CancellationToken ct)
+    internal static async Task<(decimal Average, int Count)> StatsAsync(ReviewsDbContext db, Guid shopId, CancellationToken ct)
     {
         var visible = db.Reviews.Where(r => r.ShopId == shopId && !r.Hidden);
         var count = await visible.CountAsync(ct);
         var average = count == 0 ? 0 : (decimal)await visible.AverageAsync(r => r.Rating, ct);
         return (decimal.Round(average, 2), count);
+    }
+}
+
+internal sealed class ShopRatingSource(ReviewsDbContext db) : IShopRatingSource
+{
+    public async Task<ShopRating> GetAsync(Guid shopId, CancellationToken ct = default)
+    {
+        var (average, count) = await ReviewsModule.StatsAsync(db, shopId, ct);
+        return new ShopRating(average, count);
     }
 }
 

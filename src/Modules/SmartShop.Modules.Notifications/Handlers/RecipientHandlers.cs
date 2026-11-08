@@ -37,7 +37,8 @@ public static class OrderNotificationHandler
 
     public static async Task Handle(OrderPendingReminder e, NotificationDispatcher d, IShopDirectory shops, CancellationToken ct) =>
         await d.NotifyAsync(await shops.GetOrderNotificationRecipientsAsync(e.ShopId, ct), e.PlantId, e.EventId,
-            new("order.reminder", P.High, $"⏰ ยังไม่มีใครรับออเดอร์ #{e.OrderNo}", "ลูกค้ากำลังรออยู่ กรุณากดรับหรือปฏิเสธออเดอร์",
+            new("order.reminder", P.High, e.NeedsQuote ? $"⏰ ออเดอร์ตามสั่ง #{e.OrderNo} ยังไม่ได้ใส่ราคา" : $"⏰ ยังไม่มีใครรับออเดอร์ #{e.OrderNo}",
+                e.NeedsQuote ? "ลูกค้ากำลังรออยู่ กรุณาใส่ราคาหรือปฏิเสธออเดอร์" : "ลูกค้ากำลังรออยู่ กรุณากดรับหรือปฏิเสธออเดอร์",
                 Links.ShopOrder(e.ShopId, e.OrderId), ExemptFromQuietHours: true), ct);
 
     public static async Task Handle(OrderCancellationRequested e, NotificationDispatcher d, IShopDirectory shops, CancellationToken ct) =>
@@ -71,6 +72,10 @@ public static class OrderNotificationHandler
         if (!e.QuoteUnanswered)
         {
             await Customer(d, e.CustomerId, e.PlantId, e.EventId, e.OrderId, "order.expired", P.High, $"ออเดอร์ #{e.OrderNo} หมดเวลา", $"{e.ShopName} ไม่ได้ตอบรับในเวลาที่กำหนด", ct);
+            // The shop missed it too: without this the order just disappears from its list and nobody learns why.
+            await d.NotifyAsync(await shops.GetOrderNotificationRecipientsAsync(e.ShopId, ct), e.PlantId, e.EventId,
+                new("order.expired", P.Medium, $"ออเดอร์ #{e.OrderNo} หมดเวลาเพราะไม่มีใครรับ", "ลูกค้าได้รับแจ้งแล้ว ถ้ารับไม่ทันบ่อย ลองตั้ง \"รับอัตโนมัติ\" หรือกด \"ยุ่ง\" ไว้",
+                    Links.ShopOrder(e.ShopId, e.OrderId)), ct);
             return;
         }
         await Customer(d, e.CustomerId, e.PlantId, e.EventId, e.OrderId, "order.expired", P.Medium, $"ออเดอร์ #{e.OrderNo} หมดเวลา",
@@ -193,6 +198,10 @@ public static class CommunityNotificationHandler
     public static async Task Handle(ShopSuspended e, NotificationDispatcher d, IShopDirectory shops, CancellationToken ct) =>
         await d.NotifyAsync((await shops.GetMembersAsync(e.ShopId, ct)).Select(m => m.UserId), e.PlantId, e.EventId,
             new("shop.suspended", P.High, "ร้านของคุณถูกระงับชั่วคราว", e.Reason ?? "ติดต่อผู้ดูแลหมู่บ้าน", $"/merchant/{e.ShopId}"), ct);
+
+    public static async Task Handle(ShopReinstated e, NotificationDispatcher d, IShopDirectory shops, CancellationToken ct) =>
+        await d.NotifyAsync((await shops.GetMembersAsync(e.ShopId, ct)).Select(m => m.UserId), e.PlantId, e.EventId,
+            new("shop.reinstated", P.High, "✅ ร้านของคุณกลับมาเปิดให้บริการได้แล้ว", "ผู้ดูแลหมู่บ้านยกเลิกการระงับแล้ว ตรวจเวลาเปิดร้านแล้วรับออเดอร์ได้เลย", $"/merchant/{e.ShopId}"), ct);
 
     public static async Task Handle(StockLow e, NotificationDispatcher d, IShopDirectory shops, CancellationToken ct) =>
         await d.NotifyAsync((await shops.GetMembersAsync(e.ShopId, ct)).Where(m => m.Role >= ShopRole.Manager).Select(m => m.UserId), e.PlantId, e.EventId,

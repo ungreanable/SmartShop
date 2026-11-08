@@ -17,6 +17,7 @@ public sealed class CatalogDbContext(DbContextOptions<CatalogDbContext> options)
     public DbSet<StockMovement> StockMovements => Set<StockMovement>();
     public DbSet<SlotBooking> SlotBookings => Set<SlotBooking>();
     public DbSet<PreOrderRound> PreOrderRounds => Set<PreOrderRound>();
+    public DbSet<RoundOrder> RoundOrders => Set<RoundOrder>();
 
     protected override void ConfigureModel(ModelBuilder b)
     {
@@ -84,6 +85,13 @@ public sealed class CatalogDbContext(DbContextOptions<CatalogDbContext> options)
             e.Property(x => x.Title).HasMaxLength(100);
             e.Property(x => x.Status).HasConversion<string>().HasMaxLength(16);
             e.HasIndex(x => new { x.ShopId, x.Status });
+        });
+
+        b.Entity<RoundOrder>(e =>
+        {
+            e.ToTable("round_orders");
+            e.HasKey(x => new { x.OrderId, x.RoundId });
+            e.HasIndex(x => x.RoundId);
         });
     }
 }

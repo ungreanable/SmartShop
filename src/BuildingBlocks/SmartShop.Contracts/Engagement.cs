@@ -8,6 +8,14 @@ namespace SmartShop.Contracts.Reviews
         bool Anonymous = false) : IntegrationEvent(PlantId);
     public sealed record ReviewModerated(Guid PlantId, Guid ReviewId, Guid ShopId, Guid ActorId, bool Hidden, decimal Average, int Count) : IntegrationEvent(PlantId);
     public sealed record ReviewReplied(Guid PlantId, Guid ReviewId, Guid ShopId, Guid CustomerId) : IntegrationEvent(PlantId);
+
+    public sealed record ShopRating(decimal Average, int Count);
+
+    /// <summary>The shop's rating as it is now; the figures inside review events can arrive out of order.</summary>
+    public interface IShopRatingSource
+    {
+        Task<ShopRating> GetAsync(Guid shopId, CancellationToken ct = default);
+    }
 }
 
 namespace SmartShop.Contracts.Promotions

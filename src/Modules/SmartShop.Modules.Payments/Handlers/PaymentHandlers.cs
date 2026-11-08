@@ -37,13 +37,15 @@ public static class CreatePaymentHandler
 
 public static class VoidPaymentHandler
 {
-    public static Task Handle(OrderCancelled e, PaymentsDbContext db, CancellationToken ct) => Void(db, e.OrderId, ct);
-    public static Task Handle(OrderRejected e, PaymentsDbContext db, CancellationToken ct) => Void(db, e.OrderId, ct);
-    public static Task Handle(OrderExpired e, PaymentsDbContext db, CancellationToken ct) => Void(db, e.OrderId, ct);
+    public static Task Handle(OrderCancelled e, PaymentsDbContext db, IMessageBus bus, CancellationToken ct) => Void(db, bus, e.OrderId, ct);
+    public static Task Handle(OrderRejected e, PaymentsDbContext db, IMessageBus bus, CancellationToken ct) => Void(db, bus, e.OrderId, ct);
+    public static Task Handle(OrderExpired e, PaymentsDbContext db, IMessageBus bus, CancellationToken ct) => Void(db, bus, e.OrderId, ct);
 
-    private static async Task Void(PaymentsDbContext db, Guid orderId, CancellationToken ct)
+    private static async Task Void(PaymentsDbContext db, IMessageBus bus, Guid orderId, CancellationToken ct)
     {
         var payment = await db.Payments.FirstOrDefaultAsync(p => p.OrderId == orderId, ct);
-        payment?.Void();
+        // Tell Ordering, so a cancelled order no longer shows "waiting for verification" in lists and on its page.
+        if (payment?.Void() == true)
+            await bus.PublishAsync(new PaymentVoided(payment.PlantId, payment.Id, payment.OrderId, payment.ShopId, payment.CustomerId));
     }
 }

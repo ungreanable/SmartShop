@@ -13,6 +13,8 @@ public sealed record PaymentProofUploaded(Guid PlantId, Guid PaymentId, Guid Ord
 public sealed record PaymentProofRemoved(Guid PlantId, Guid PaymentId, Guid OrderId, Guid ShopId, Guid CustomerId, PaymentStatus Status) : IntegrationEvent(PlantId);
 public sealed record PaymentVerified(Guid PlantId, Guid PaymentId, Guid OrderId, string OrderNo, Guid ShopId, Guid CustomerId, Guid ActorId) : IntegrationEvent(PlantId);
 public sealed record PaymentRejected(Guid PlantId, Guid PaymentId, Guid OrderId, string OrderNo, Guid ShopId, Guid CustomerId, Guid ActorId, string Reason) : IntegrationEvent(PlantId);
+/// <summary>The order did not happen, so the payment is closed without money changing hands.</summary>
+public sealed record PaymentVoided(Guid PlantId, Guid PaymentId, Guid OrderId, Guid ShopId, Guid CustomerId) : IntegrationEvent(PlantId);
 public sealed record PaymentDuplicateSlipDetected(Guid PlantId, Guid PaymentId, Guid OrderId, string OrderNo, Guid ShopId, Guid DuplicateOfOrderId) : IntegrationEvent(PlantId);
 
 /// <summary>Ask the configured slip verification service about one uploaded slip (runs in the worker).</summary>

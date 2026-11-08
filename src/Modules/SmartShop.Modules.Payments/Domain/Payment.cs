@@ -105,10 +105,16 @@ public sealed class Payment
     }
 
     /// <summary>The order did not happen. Paid payments stay paid but are flagged for a manual refund by the shop.</summary>
-    public void Void()
+    /// <returns>True when the status became <see cref="PaymentStatus.Voided"/> by this call.</returns>
+    public bool Void()
     {
         if (Status == PaymentStatus.Paid) RefundRequired = true;
-        else Status = PaymentStatus.Voided;
+        else if (Status != PaymentStatus.Voided)
+        {
+            Status = PaymentStatus.Voided;
+            return true;
+        }
+        return false;
     }
 }
 

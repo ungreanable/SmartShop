@@ -1,5 +1,8 @@
 using System.Net;
+using Microsoft.Extensions.DependencyInjection;
+using SmartShop.Contracts.Reviews;
 using SmartShop.IntegrationTests.Infrastructure;
+using Wolverine;
 
 namespace SmartShop.IntegrationTests;
 
@@ -156,5 +159,24 @@ public class ReviewTests(SmartShopFactory factory)
 
         await FactoryExtensions.EventuallyAsync(async () =>
             (await owner.GetAsync<ShopSettingsDto>($"/api/merchant/shops/{shopId}")).Shop.RatingCount.ShouldBe(0));
+    }
+
+    [Fact]
+    public async Task An_older_review_event_arriving_late_does_not_roll_the_shop_rating_back()
+    {
+        var (plant, _, owner, shopId, customer, orderId) = await CompletedOrderAsync();
+        await CompleteAsync(owner, customer, orderId);
+        await customer.PostOkAsync($"/api/orders/{orderId}/review", new { rating = 5 });
+        await FactoryExtensions.EventuallyAsync(async () =>
+            (await owner.GetAsync<ShopSettingsDto>($"/api/merchant/shops/{shopId}")).Shop.RatingCount.ShouldBe(1));
+
+        // A redelivered event carrying the figures from before this review (no reviews yet).
+        await factory.Services.GetRequiredService<IMessageBus>().PublishAsync(
+            new ReviewSubmitted(plant.Id, Guid.NewGuid(), Guid.NewGuid(), shopId, customer.UserId, 1, 0, 0));
+        await Task.Delay(TimeSpan.FromSeconds(3));
+
+        var shop = (await owner.GetAsync<ShopSettingsDto>($"/api/merchant/shops/{shopId}")).Shop;
+        shop.RatingCount.ShouldBe(1);
+        shop.RatingAverage.ShouldBe(5);
     }
 }

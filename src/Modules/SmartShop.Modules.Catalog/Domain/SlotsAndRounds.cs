@@ -95,3 +95,16 @@ public sealed class PreOrderRound
         return reached;
     }
 }
+
+/// <summary>
+/// How much one order added to a pre-order round. Makes the round total idempotent: a redelivered "placed" event adds
+/// nothing twice, and a cancellation takes back exactly what that order added, once.
+/// </summary>
+public sealed class RoundOrder
+{
+    public Guid OrderId { get; set; }
+    public Guid RoundId { get; set; }
+    /// <summary>Negative: the order was taken back before its "placed" event was counted.</summary>
+    public int Quantity { get; set; }
+    public bool Released { get; set; }
+}

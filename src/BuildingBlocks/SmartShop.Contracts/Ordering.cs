@@ -71,7 +71,8 @@ public sealed record OrderCancellationRequested(Guid PlantId, Guid OrderId, stri
 /// <summary>The shop said no to the customer's cancellation request: the order goes on.</summary>
 public sealed record OrderCancellationDeclined(Guid PlantId, Guid OrderId, string OrderNo, Guid ShopId, string ShopName, Guid CustomerId, Guid ActorId,
     string? Note) : IntegrationEvent(PlantId);
-public sealed record OrderPendingReminder(Guid PlantId, Guid OrderId, string OrderNo, Guid ShopId, string ShopName, int Attempt) : IntegrationEvent(PlantId);
+/// <param name="NeedsQuote">The order has custom dishes: the shop has to price them, not just accept.</param>
+public sealed record OrderPendingReminder(Guid PlantId, Guid OrderId, string OrderNo, Guid ShopId, string ShopName, int Attempt, bool NeedsQuote = false) : IntegrationEvent(PlantId);
 public sealed record OrderMessagePosted(Guid PlantId, Guid OrderId, string OrderNo, Guid ShopId, Guid CustomerId, Guid SenderId, bool FromShop, string Preview) : IntegrationEvent(PlantId);
 public sealed record OrderReported(Guid PlantId, Guid OrderId, string OrderNo, Guid ReportId, Guid ReporterId, string Reason) : IntegrationEvent(PlantId);
 public sealed record OrderReportResolved(Guid PlantId, Guid OrderId, Guid ReportId, Guid ReporterId, string Resolution) : IntegrationEvent(PlantId);

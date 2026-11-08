@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Hybrid;
+using SmartShop.Contracts.Plants;
 using SmartShop.Contracts.Shops;
 using SmartShop.Infrastructure.Caching;
 using SmartShop.Infrastructure.Tenancy;
@@ -8,7 +9,7 @@ using SmartShop.Modules.Shops.Domain;
 
 namespace SmartShop.Modules.Shops.Services;
 
-internal sealed class ShopDirectory(ShopsDbContext db, HybridCache cache, ICurrentPlant plant) : IShopDirectory
+internal sealed class ShopDirectory(ShopsDbContext db, HybridCache cache, ICurrentPlant plant, IPlantDirectory plants) : IShopDirectory
 {
     /// <summary>Cache lookup only: never runs the factory and never writes.</summary>
     private static readonly HybridCacheEntryOptions ReadOnly = new()
@@ -67,11 +68,20 @@ internal sealed class ShopDirectory(ShopsDbContext db, HybridCache cache, ICurre
                 .ToListAsync(token),
             CacheKeys.Short, cancellationToken: ct);
 
-    public async Task<IReadOnlyList<Guid>> GetOrderNotificationRecipientsAsync(Guid shopId, CancellationToken ct = default) =>
-        await db.Members.AsNoTracking()
+    /// <summary>
+    /// Members with order alerts on who still belong to the shop's village: someone who left or was suspended keeps the shop
+    /// role until an owner removes it, but must stop hearing about the village's orders straight away.
+    /// </summary>
+    public async Task<IReadOnlyList<Guid>> GetOrderNotificationRecipientsAsync(Guid shopId, CancellationToken ct = default)
+    {
+        var plantId = await db.Shops.AsNoTracking().Where(s => s.Id == shopId).Select(s => (Guid?)s.PlantId).FirstOrDefaultAsync(ct);
+        if (plantId is null) return [];
+        var members = await db.Members.AsNoTracking()
             .Where(m => m.ShopId == shopId && m.ReceiveOrderNotifications)
             .Select(m => m.UserId)
             .ToListAsync(ct);
+        return await plants.KeepActiveMembersAsync(plantId.Value, members, ct);
+    }
 
     public async Task<ShopListingSnapshot?> GetListingSnapshotAsync(Guid shopId, CancellationToken ct = default)
     {

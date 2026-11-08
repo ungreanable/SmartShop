@@ -19,6 +19,8 @@ public interface IPlantDirectory
     Task<PlantInfo?> GetPlantAsync(Guid plantId, CancellationToken ct = default);
     Task<IReadOnlyList<Guid>> GetActiveAdminIdsAsync(Guid plantId, CancellationToken ct = default);
     Task<IReadOnlyList<Guid>> GetActiveMemberIdsAsync(Guid plantId, CancellationToken ct = default);
+    /// <summary>Those of <paramref name="userIds"/> who are still active members of the village.</summary>
+    Task<IReadOnlyList<Guid>> KeepActiveMembersAsync(Guid plantId, IReadOnlyCollection<Guid> userIds, CancellationToken ct = default);
 }
 
 public sealed record PlantCreated(Guid PlantId, string Name) : IntegrationEvent(PlantId);

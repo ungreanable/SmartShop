@@ -19,7 +19,7 @@ namespace SmartShop.Modules.Catalog.Data.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasDefaultSchema("catalog")
-                .HasAnnotation("ProductVersion", "10.0.12")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63)
                 .HasAnnotation("WolverineEnabled", "true");
 
@@ -308,6 +308,33 @@ namespace SmartShop.Modules.Catalog.Data.Migrations
                         .HasDatabaseName("ix_preorder_rounds_shop_id_status");
 
                     b.ToTable("preorder_rounds", "catalog");
+                });
+
+            modelBuilder.Entity("SmartShop.Modules.Catalog.Domain.RoundOrder", b =>
+                {
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_id");
+
+                    b.Property<Guid>("RoundId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("round_id");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer")
+                        .HasColumnName("quantity");
+
+                    b.Property<bool>("Released")
+                        .HasColumnType("boolean")
+                        .HasColumnName("released");
+
+                    b.HasKey("OrderId", "RoundId")
+                        .HasName("pk_round_orders");
+
+                    b.HasIndex("RoundId")
+                        .HasDatabaseName("ix_round_orders_round_id");
+
+                    b.ToTable("round_orders", "catalog");
                 });
 
             modelBuilder.Entity("SmartShop.Modules.Catalog.Domain.SlotBooking", b =>
