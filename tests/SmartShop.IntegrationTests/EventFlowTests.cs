@@ -198,7 +198,11 @@ public class EventFlowTests(SmartShopFactory factory)
         var now = DateTimeOffset.UtcNow;
         var round = await s.Owner.PostAsync<RoundViewDto>($"/api/merchant/shops/{s.ShopId}/catalog/rounds", new
         {
-            title = "ทุเรียนรอบนี้", orderCutoff = now.AddDays(1), fulfillFrom = now.AddDays(2), fulfillTo = now.AddDays(2).AddHours(3), minTotalQuantity = 10,
+            title = "ทุเรียนรอบนี้",
+            orderCutoff = now.AddDays(1),
+            fulfillFrom = now.AddDays(2),
+            fulfillTo = now.AddDays(2).AddHours(3),
+            minTotalQuantity = 10,
         });
         var item = await s.Owner.PostAsync<MerchantItemDto>($"/api/merchant/shops/{s.ShopId}/catalog/items",
             new { kind = "Product", stockMode = "Untracked", name = "ทุเรียน", price = 300, preOrderRoundId = round.Id });
