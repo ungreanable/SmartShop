@@ -7,6 +7,7 @@ using SmartShop.Modules.Shops.Data;
 using SmartShop.Modules.Shops.Domain;
 using SmartShop.SharedKernel.Scheduling;
 using Wolverine;
+using Wolverine.EntityFrameworkCore;
 
 namespace SmartShop.Modules.Shops.Handlers;
 
@@ -14,6 +15,7 @@ namespace SmartShop.Modules.Shops.Handlers;
 /// Re-evaluates a shop's open/closed status. Runs right after any schedule change and again at the next
 /// schedule boundary, so "shop opened/closed" is announced as an event even when nobody touches the app.
 /// </summary>
+[RequiresEagerTransaction]
 public static class EvaluateShopStatusHandler
 {
     public static async Task Handle(EvaluateShopStatus command, ShopsDbContext db, IMessageBus bus, HybridCache cache,
@@ -21,7 +23,10 @@ public static class EvaluateShopStatusHandler
     {
         var shop = await db.Shops.AsNoTracking().FirstOrDefaultAsync(s => s.Id == command.ShopId, ct);
         if (shop is null) return;
-        var tracker = await db.StatusTrackers.FirstOrDefaultAsync(t => t.ShopId == shop.Id, ct);
+        // Locked: the scheduled evaluation, one triggered by a settings change and the status sweep may run at once, and
+        // both would announce the same change (a second "your favourite shop opened" push).
+        var tracker = (await db.StatusTrackers
+            .FromSql($"select * from shops.status_trackers where shop_id = {shop.Id} for update").ToListAsync(ct)).SingleOrDefault();
         if (tracker is null) db.StatusTrackers.Add(tracker = new ShopStatusTracker(shop.Id));
 
         var now = clock.GetUtcNow();

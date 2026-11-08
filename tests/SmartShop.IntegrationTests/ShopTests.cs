@@ -97,6 +97,41 @@ public class ShopTests(SmartShopFactory factory)
     }
 
     [Fact]
+    public async Task Status_sweep_restarts_the_evaluator_after_a_lost_scheduled_evaluation()
+    {
+        var (_, _, owner, shopId) = await factory.CreateShopAsync();
+        await owner.PostOkAsync($"/api/merchant/shops/{shopId}/status", new { action = "open" });
+        async Task<SmartShop.Modules.Shops.Domain.ShopStatusTracker> TrackerAsync()
+        {
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<SmartShop.Modules.Shops.Data.ShopsDbContext>();
+            return await db.StatusTrackers.AsNoTracking().FirstAsync(s => s.ShopId == shopId);
+        }
+        await FactoryExtensions.EventuallyAsync(async () =>
+            (await TrackerAsync()).LastAnnouncedState.ShouldBe(SmartShop.SharedKernel.Scheduling.ShopOpenState.Open));
+
+        // As after a redeploy that swallowed the evaluation planned for a boundary ten minutes ago: the evaluator still
+        // remembers "closed" and nothing is scheduled any more, so the chain would never run again on its own.
+        await Task.Delay(TimeSpan.FromSeconds(2));
+        var dataSource = factory.Services.GetRequiredService<Npgsql.NpgsqlDataSource>();
+        await using (var cmd = dataSource.CreateCommand(
+                         "update shops.status_trackers set last_announced_state = 'Closed', next_evaluation_at = now() - interval '10 minutes' where shop_id = @id"))
+        {
+            cmd.Parameters.AddWithValue("id", shopId);
+            (await cmd.ExecuteNonQueryAsync()).ShouldBe(1);
+        }
+
+        await factory.RunJobAsync("shops.status-sweep");
+
+        await FactoryExtensions.EventuallyAsync(async () =>
+        {
+            var tracker = await TrackerAsync();
+            tracker.LastAnnouncedState.ShouldBe(SmartShop.SharedKernel.Scheduling.ShopOpenState.Open);
+            (tracker.NextEvaluationAt is null || tracker.NextEvaluationAt > DateTimeOffset.UtcNow).ShouldBeTrue();
+        }, timeoutMs: 15_000);
+    }
+
+    [Fact]
     public async Task Delivery_options_require_at_least_one_choice()
     {
         var (_, _, owner, shopId) = await factory.CreateShopAsync();

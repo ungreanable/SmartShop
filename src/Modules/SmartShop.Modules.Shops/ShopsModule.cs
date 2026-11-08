@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using SmartShop.Contracts.Shops;
+using SmartShop.Infrastructure.Jobs;
 using SmartShop.Infrastructure.Modules;
 using SmartShop.Infrastructure.Persistence;
 using SmartShop.Modules.Shops.Data;
@@ -25,6 +26,7 @@ public sealed class ShopsModule : IModule
         services.AddScoped<IShopDirectory, ShopDirectory>();
         services.AddScoped<MerchantContext>();
         services.AddScoped<ApplicationEndpoints.ReviewCtx>();
+        services.AddScoped<IRecurringJob, ShopStatusSweepJob>();
     }
 
     public void MapEndpoints(IEndpointRouteBuilder app)
