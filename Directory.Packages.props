@@ -66,7 +66,7 @@
     <PackageVersion Include="MessagePack" Version="2.5.307" />
     <PackageVersion Include="QRCoder" Version="1.8.1" />
     <PackageVersion Include="ZXing.Net" Version="0.16.11" />
-    <PackageVersion Include="SkiaSharp" Version="4.153.1" />
+    <PackageVersion Include="SkiaSharp" Version="4.155.0" />
     <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.153.1" />
     <PackageVersion Include="WebPush" Version="1.0.13" />
     <PackageVersion Include="FirebaseAdmin" Version="3.7.0" />
