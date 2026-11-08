@@ -1,4 +1,6 @@
 using System.Net;
+using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using SmartShop.IntegrationTests.Infrastructure;
 
 namespace SmartShop.IntegrationTests;
@@ -47,6 +49,59 @@ public class HomeFeedTests(SmartShopFactory factory)
         var (_, d) = await ShopAsync(plant, admin, "ร้านดี");
         await FactoryExtensions.EventuallyAsync(async () =>
             (await member.GetAsync<HomeDto>("/api/home")).Shops.Select(s => s.Id).ShouldBe([b, c, a, d]));
+    }
+
+    [Fact]
+    public async Task Shop_opened_by_hand_shows_as_open_on_home_right_away_even_when_home_was_cached()
+    {
+        var (plant, admin) = await factory.CreatePlantAsync();
+        var (owner, shop) = await ShopAsync(plant, admin, "ร้านเปิดมือ");
+        var member = await factory.JoinAsync(plant, admin);
+        await FactoryExtensions.EventuallyAsync(async () => (await member.GetAsync<HomeDto>("/api/home")).Total.ShouldBe(1));
+        (await member.GetAsync<HomeDto>("/api/home")).OpenCount.ShouldBe(0); // the closed state is now cached
+
+        // Villagers reload Home the moment the shop changes state; those requests used to re-cache the closed state
+        // for minutes. Keep requesting while the change goes through.
+        await owner.PostOkAsync($"/api/merchant/shops/{shop}/status", new { action = "open" });
+        for (var i = 0; i < 10; i++) await member.GetRawAsync("/api/home");
+        await FactoryExtensions.EventuallyAsync(async () =>
+        {
+            var home = await member.GetAsync<HomeDto>("/api/home");
+            home.OpenCount.ShouldBe(1);
+            home.Shops.Single().Status.AcceptingOrders.ShouldBeTrue();
+        });
+
+        await owner.PostOkAsync($"/api/merchant/shops/{shop}/status", new { action = "close" });
+        for (var i = 0; i < 10; i++) await member.GetRawAsync("/api/home");
+        await FactoryExtensions.EventuallyAsync(async () =>
+            (await member.GetAsync<HomeDto>("/api/home")).OpenCount.ShouldBe(0));
+    }
+
+    [Fact]
+    public async Task Opening_by_hand_reaches_home_even_when_the_status_evaluator_missed_a_closing_time()
+    {
+        var (plant, admin) = await factory.CreatePlantAsync();
+        var (owner, shop) = await ShopAsync(plant, admin, "ร้านหลังรีดีพลอย");
+        var member = await factory.JoinAsync(plant, admin);
+        await FactoryExtensions.EventuallyAsync(async () => (await member.GetAsync<HomeDto>("/api/home")).Total.ShouldBe(1));
+
+        // As after a redeploy that skipped a scheduled closing time: the evaluator still believes the shop is open,
+        // so opening it by hand is "no change" to it and it announces nothing.
+        var dataSource = factory.Services.GetRequiredService<NpgsqlDataSource>();
+        await FactoryExtensions.EventuallyAsync(async () =>
+        {
+            await using var cmd = dataSource.CreateCommand("update shops.status_trackers set last_announced_state = 'Open' where shop_id = @id");
+            cmd.Parameters.AddWithValue("id", shop);
+            (await cmd.ExecuteNonQueryAsync()).ShouldBe(1);
+        });
+
+        // Let the events from creating the shop finish first: any of them would refresh the home copy by chance.
+        await Task.Delay(TimeSpan.FromSeconds(5));
+        (await member.GetAsync<HomeDto>("/api/home")).OpenCount.ShouldBe(0);
+
+        await owner.PostOkAsync($"/api/merchant/shops/{shop}/status", new { action = "open" });
+        await FactoryExtensions.EventuallyAsync(async () =>
+            (await member.GetAsync<HomeDto>("/api/home")).OpenCount.ShouldBe(1), timeoutMs: 15_000);
     }
 
     [Fact]

@@ -137,14 +137,18 @@ public sealed class SearchModule : IModule
         {
             var listings = await cache.GetOrCreateAsync(CacheKeys.PlantFeed(plant.PlantId),
                 async token => await db.Shops.AsNoTracking().Where(s => s.PlantId == plant.PlantId && s.IsActive).ToListAsync(token),
-                new HybridCacheEntryOptions { Expiration = TimeSpan.FromMinutes(5), LocalCacheExpiration = TimeSpan.FromSeconds(30) },
+                new HybridCacheEntryOptions { Expiration = TimeSpan.FromMinutes(2), LocalCacheExpiration = TimeSpan.FromSeconds(10) },
                 cancellationToken: ct);
+            // Open/closed must never be stale (a shop opened by hand showed as closed until the cached copy expired):
+            // the schedules, which carry the manual open/close override, are read fresh. A few small rows per village.
+            var schedules = await db.Shops.AsNoTracking().Where(s => s.PlantId == plant.PlantId && s.IsActive)
+                .Select(s => new { s.ShopId, s.Schedule }).ToDictionaryAsync(s => s.ShopId, s => s.Schedule, ct);
 
             var now = clock.GetUtcNow();
             // Cards are built for the requested page only; ordering needs just the status, position and rating.
             var ordered = listings
                 .Where(l => category is null || l.Category == category)
-                .Select(l => (Listing: l, Status: ShopScheduleEvaluator.Evaluate(l.Schedule, now)))
+                .Select(l => (Listing: l, Status: ShopScheduleEvaluator.Evaluate(schedules.GetValueOrDefault(l.ShopId) ?? l.Schedule, now)))
                 .Where(x => x.Status.Reason != ShopClosedReason.Vacation) // vacation hides the shop from the feed
                 .OrderBy(x => x.Status.AcceptingOrders ? 0 : 1)
                 .ThenBy(x => x.Listing.DisplayOrder ?? int.MaxValue)
