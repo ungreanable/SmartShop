@@ -47,4 +47,26 @@ public class EventFlowTests(SmartShopFactory factory)
             (await InboxAsync(customer)).ShouldContain(n => n.Type == "order.cancel_declined" && n.Body == "ทำเสร็จแล้วค่ะ"
                                                             && n.Link == $"/orders/{order.Id}"));
     }
+
+    [Fact]
+    public async Task Shop_member_ordering_from_their_own_shop_is_not_alerted_about_their_own_order()
+    {
+        var s = await OpenShopAsync();
+        var manager = await factory.JoinAsync(s.Plant, s.Admin, "ผู้จัดการ");
+        var invite = await s.Owner.PostAsync<InviteDto>($"/api/merchant/shops/{s.ShopId}/invites", new { role = "Manager" });
+        await manager.PostOkAsync($"/api/shop-invites/{invite.Code}/accept");
+
+        var order = await PlaceOrderAsync(s.Owner, s);
+        await s.Owner.PostOkAsync($"/api/orders/{order.Id}/cancel", new { reason = "ลองระบบ" });
+
+        await FactoryExtensions.EventuallyAsync(async () =>
+        {
+            var inbox = await InboxAsync(manager);
+            inbox.ShouldContain(n => n.Type == "order.new" && n.Title.Contains(order.OrderNo));
+            inbox.ShouldContain(n => n.Type == "order.cancelled" && n.Title.Contains(order.OrderNo));
+        });
+        // Same events, other queues: give them the moment the manager's copies needed before checking for an absence.
+        await Task.Delay(TimeSpan.FromSeconds(2));
+        (await InboxAsync(s.Owner)).ShouldNotContain(n => n.Link != null && n.Link.Contains(order.Id.ToString()));
+    }
 }

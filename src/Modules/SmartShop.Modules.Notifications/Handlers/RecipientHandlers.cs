@@ -29,7 +29,7 @@ public static class OrderNotificationHandler
         var customer = (await users.GetProfilesAsync([e.CustomerId], ct)).GetValueOrDefault(e.CustomerId)?.DisplayName ?? "ลูกค้า";
         var when = e.ScheduledFrom is { } f ? $" · รับ {f.ToOffset(TimeSpan.FromHours(7)):dd/MM HH:mm}" : "";
         var how = e.FulfillmentType == FulfillmentType.Delivery ? "ให้ร้านไปส่ง" : "รับที่ร้าน";
-        await d.NotifyAsync(await shops.GetOrderNotificationRecipientsAsync(e.ShopId, ct), e.PlantId, e.EventId,
+        await d.NotifyAsync(await ShopRecipientsAsync(shops, e.ShopId, e.CustomerId, ct), e.PlantId, e.EventId,
             new("order.new", P.High, e.AwaitingQuote ? $"🛎️ ออเดอร์ตามสั่งใหม่ #{e.OrderNo} · รอใส่ราคา" : $"🛎️ ออเดอร์ใหม่ #{e.OrderNo}",
                 $"{customer} · {e.Lines.Sum(l => l.Quantity)} รายการ · {(e.AwaitingQuote ? "ร้านต้องใส่ราคาก่อน" : Links.Baht(e.Total))} · {how}{when}",
                 Links.ShopOrder(e.ShopId, e.OrderId), ExemptFromQuietHours: true), ct);
@@ -41,12 +41,12 @@ public static class OrderNotificationHandler
                 Links.ShopOrder(e.ShopId, e.OrderId), ExemptFromQuietHours: true), ct);
 
     public static async Task Handle(OrderCancellationRequested e, NotificationDispatcher d, IShopDirectory shops, CancellationToken ct) =>
-        await d.NotifyAsync(await shops.GetOrderNotificationRecipientsAsync(e.ShopId, ct), e.PlantId, e.EventId,
+        await d.NotifyAsync(await ShopRecipientsAsync(shops, e.ShopId, e.CustomerId, ct), e.PlantId, e.EventId,
             new("order.cancel_requested", P.High, $"ลูกค้าขอยกเลิกออเดอร์ #{e.OrderNo}", e.Reason ?? "กรุณาตรวจสอบและตอบกลับ",
                 Links.ShopOrder(e.ShopId, e.OrderId)), ct);
 
     public static async Task Handle(OrderQuoteAccepted e, NotificationDispatcher d, IShopDirectory shops, CancellationToken ct) =>
-        await d.NotifyAsync(await shops.GetOrderNotificationRecipientsAsync(e.ShopId, ct), e.PlantId, e.EventId,
+        await d.NotifyAsync(await ShopRecipientsAsync(shops, e.ShopId, e.CustomerId, ct), e.PlantId, e.EventId,
             new("order.quote_accepted", P.High, $"✅ ลูกค้ายอมรับราคา #{e.OrderNo}", $"{Links.Baht(e.Total)} · เริ่มทำได้เลย",
                 Links.ShopOrder(e.ShopId, e.OrderId), ExemptFromQuietHours: true), ct);
 
@@ -81,7 +81,7 @@ public static class OrderNotificationHandler
     public static async Task Handle(OrderCancelled e, NotificationDispatcher d, IShopDirectory shops, CancellationToken ct)
     {
         if (e.ByCustomer)
-            await d.NotifyAsync(await shops.GetOrderNotificationRecipientsAsync(e.ShopId, ct), e.PlantId, e.EventId,
+            await d.NotifyAsync(await ShopRecipientsAsync(shops, e.ShopId, e.CustomerId, ct), e.PlantId, e.EventId,
                 new("order.cancelled", P.Medium, $"ลูกค้ายกเลิกออเดอร์ #{e.OrderNo}", e.Reason ?? "-", Links.ShopOrder(e.ShopId, e.OrderId)), ct);
         else
             await Customer(d, e.CustomerId, e.PlantId, e.EventId, e.OrderId, "order.cancelled", P.High, $"ออเดอร์ #{e.OrderNo} ถูกยกเลิก", e.Reason ?? e.ShopName, ct);
@@ -112,7 +112,7 @@ public static class OrderNotificationHandler
         if (e.FromShop)
             await Customer(d, e.CustomerId, e.PlantId, e.EventId, e.OrderId, "order.message", P.Medium, $"💬 ข้อความจากร้าน (#{e.OrderNo})", e.Preview, ct);
         else
-            await d.NotifyAsync((await shops.GetOrderNotificationRecipientsAsync(e.ShopId, ct)).Where(u => u != e.SenderId), e.PlantId, e.EventId,
+            await d.NotifyAsync(await ShopRecipientsAsync(shops, e.ShopId, e.SenderId, ct), e.PlantId, e.EventId,
                 new("order.message", P.Medium, $"💬 ข้อความจากลูกค้า (#{e.OrderNo})", e.Preview, Links.ShopOrder(e.ShopId, e.OrderId)), ct);
     }
 
@@ -123,6 +123,13 @@ public static class OrderNotificationHandler
     public static Task Handle(OrderReportResolved e, NotificationDispatcher d, CancellationToken ct) =>
         d.NotifyAsync([e.ReporterId], e.PlantId, e.EventId, new("report.resolved", P.Medium, "ผู้ดูแลหมู่บ้านตอบกลับการรายงานแล้ว", e.Resolution, Links.CustomerOrder(e.OrderId)), ct);
 
+    /// <summary>
+    /// The shop's order recipients except the person who caused the event: a shop member may order from their own shop
+    /// and must not be alerted about their own order, slip or cancellation as if a customer had done it.
+    /// </summary>
+    internal static async Task<IEnumerable<Guid>> ShopRecipientsAsync(IShopDirectory shops, Guid shopId, Guid actorId, CancellationToken ct) =>
+        (await shops.GetOrderNotificationRecipientsAsync(shopId, ct)).Where(u => u != actorId);
+
     private static Task Customer(NotificationDispatcher d, Guid customerId, Guid plantId, Guid eventId, Guid orderId, string type, P priority,
         string title, string body, CancellationToken ct) =>
         d.NotifyAsync([customerId], plantId, eventId, new(type, priority, title, body, Links.CustomerOrder(orderId)), ct);
@@ -131,7 +138,7 @@ public static class OrderNotificationHandler
 public static class PaymentNotificationHandler
 {
     public static async Task Handle(PaymentProofUploaded e, NotificationDispatcher d, IShopDirectory shops, CancellationToken ct) =>
-        await d.NotifyAsync(await shops.GetOrderNotificationRecipientsAsync(e.ShopId, ct), e.PlantId, e.EventId,
+        await d.NotifyAsync(await OrderNotificationHandler.ShopRecipientsAsync(shops, e.ShopId, e.CustomerId, ct), e.PlantId, e.EventId,
             new("payment.proof", P.High, $"🧾 ลูกค้าแนบสลิปออเดอร์ #{e.OrderNo}", "กรุณาตรวจสอบการชำระเงิน", Links.ShopOrder(e.ShopId, e.OrderId)), ct);
 
     public static async Task Handle(PaymentDuplicateSlipDetected e, NotificationDispatcher d, IShopDirectory shops, CancellationToken ct) =>
