@@ -51,7 +51,9 @@ public sealed record OrderQuoted(Guid PlantId, Guid OrderId, string OrderNo, Gui
 public sealed record OrderQuoteAccepted(Guid PlantId, Guid OrderId, string OrderNo, Guid ShopId, string ShopName, Guid CustomerId,
     decimal Subtotal, decimal Discount, decimal Total, Guid PaymentMethodId, PaymentMethodType PaymentMethodType) : IntegrationEvent(PlantId);
 
-public sealed record OrderAccepted(Guid PlantId, Guid OrderId, string OrderNo, Guid ShopId, string ShopName, Guid CustomerId, Guid ActorId) : IntegrationEvent(PlantId);
+/// <summary><paramref name="QuoteAccepted"/>: the order went ahead because the customer agreed to the shop's prices.</summary>
+public sealed record OrderAccepted(Guid PlantId, Guid OrderId, string OrderNo, Guid ShopId, string ShopName, Guid CustomerId, Guid ActorId,
+    bool QuoteAccepted = false) : IntegrationEvent(PlantId);
 public sealed record OrderPreparing(Guid PlantId, Guid OrderId, string OrderNo, Guid ShopId, string ShopName, Guid CustomerId) : IntegrationEvent(PlantId);
 public sealed record OrderReady(Guid PlantId, Guid OrderId, string OrderNo, Guid ShopId, string ShopName, Guid CustomerId, FulfillmentType FulfillmentType) : IntegrationEvent(PlantId);
 public sealed record OrderOutForDelivery(Guid PlantId, Guid OrderId, string OrderNo, Guid ShopId, string ShopName, Guid CustomerId) : IntegrationEvent(PlantId);
@@ -66,6 +68,9 @@ public sealed record OrderExpired(Guid PlantId, Guid OrderId, string OrderNo, Gu
     bool QuoteUnanswered = false) : IntegrationEvent(PlantId);
 
 public sealed record OrderCancellationRequested(Guid PlantId, Guid OrderId, string OrderNo, Guid ShopId, Guid CustomerId, string? Reason) : IntegrationEvent(PlantId);
+/// <summary>The shop said no to the customer's cancellation request: the order goes on.</summary>
+public sealed record OrderCancellationDeclined(Guid PlantId, Guid OrderId, string OrderNo, Guid ShopId, string ShopName, Guid CustomerId, Guid ActorId,
+    string? Note) : IntegrationEvent(PlantId);
 public sealed record OrderPendingReminder(Guid PlantId, Guid OrderId, string OrderNo, Guid ShopId, string ShopName, int Attempt) : IntegrationEvent(PlantId);
 public sealed record OrderMessagePosted(Guid PlantId, Guid OrderId, string OrderNo, Guid ShopId, Guid CustomerId, Guid SenderId, bool FromShop, string Preview) : IntegrationEvent(PlantId);
 public sealed record OrderReported(Guid PlantId, Guid OrderId, string OrderNo, Guid ReportId, Guid ReporterId, string Reason) : IntegrationEvent(PlantId);

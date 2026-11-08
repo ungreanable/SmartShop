@@ -352,6 +352,31 @@ public class OrderingTests(SmartShopFactory factory)
     }
 
     [Fact]
+    public async Task Overdue_sweep_expires_an_order_whose_scheduled_expiry_was_lost()
+    {
+        var s = await OpenShopAsync();
+        var item = await AddItemAsync(s, "ขนมครก", 20, stock: 3);
+        var customer = await factory.JoinAsync(s.Plant, s.Admin);
+        await customer.PostOkAsync("/api/cart/items", new { shopId = s.ShopId, itemId = item.Item.Id, quantity = 1 });
+        var order = await CheckoutAsync(customer, s.CashId);
+
+        // The deadline passed ten minutes ago but its scheduled command never ran (lost in a redeploy, dead-lettered):
+        // the scheduled one is still minutes away, so only the sweep can close the order now.
+        var dataSource = factory.Services.GetRequiredService<Npgsql.NpgsqlDataSource>();
+        await using (var cmd = dataSource.CreateCommand("update ordering.orders set expires_at = now() - interval '10 minutes' where id = @id"))
+        {
+            cmd.Parameters.AddWithValue("id", order.Id);
+            (await cmd.ExecuteNonQueryAsync()).ShouldBe(1);
+        }
+
+        await factory.RunJobAsync("ordering.overdue-sweep");
+
+        await FactoryExtensions.EventuallyAsync(async () => (await customer.GetAsync<OrderDto>($"/api/orders/{order.Id}")).Status.ShouldBe("Expired"),
+            timeoutMs: 15_000);
+        await FactoryExtensions.EventuallyAsync(async () => (await StockAsync(s, item.Item.Id)).Available.ShouldBe(3));
+    }
+
+    [Fact]
     public async Task Auto_accept_shops_skip_the_pending_state()
     {
         var s = await OpenShopAsync();

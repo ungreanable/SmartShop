@@ -225,7 +225,9 @@ internal static class MerchantOrderEndpoints
         {
             var order = await a.ForShopAsync(id, ShopRole.Staff, ct);
             order.DeclineCancelRequest(a.UserId, req.Reason, a.Now);
-            await a.SaveAsync(ct);
+            // Without an event the customer was never told and every screen kept showing "cancellation requested".
+            await a.SaveAsync(ct, new OrderCancellationDeclined(order.PlantId, order.Id, order.OrderNo, order.ShopId, order.ShopName, order.CustomerId,
+                a.UserId, string.IsNullOrWhiteSpace(req.Reason) ? null : req.Reason.Trim()));
             return await a.ToDtoAsync(order, "shop", ct);
         });
     }

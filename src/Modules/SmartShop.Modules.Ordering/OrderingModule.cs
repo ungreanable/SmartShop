@@ -29,6 +29,7 @@ public sealed class OrderingModule : IModule
         services.AddScoped<IOrderDirectory, OrderDirectory>();
         services.AddScoped<IPersonalDataContributor, OrderingPersonalData>();
         services.AddScoped<IRecurringJob, StaleCartCleanupJob>();
+        services.AddScoped<IRecurringJob, OverdueOrderSweepJob>();
     }
 
     public void MapEndpoints(IEndpointRouteBuilder app)
@@ -87,5 +88,38 @@ internal sealed class StaleCartCleanupJob(OrderingDbContext db, TimeProvider clo
     {
         var cutoff = clock.GetUtcNow().AddDays(-7);
         await db.Carts.Where(c => c.UpdatedAt < cutoff).ExecuteDeleteAsync(ct);
+    }
+}
+
+/// <summary>
+/// Safety net for the order deadlines that run as scheduled commands (expiry while waiting for the shop or for the customer
+/// to agree to the prices, automatic completion after delivery). A lost or dead-lettered command left the order open
+/// forever: its stock and coupon stayed reserved, the shop kept being asked to accept it. The handlers re-check the
+/// order, so sending a command again is harmless.
+/// </summary>
+internal sealed class OverdueOrderSweepJob(OrderingDbContext db, Wolverine.IMessageBus bus, TimeProvider clock) : IRecurringJob
+{
+    /// <summary>Scheduled commands run a few seconds late (polling); only later than this counts as lost.</summary>
+    public static readonly TimeSpan Grace = TimeSpan.FromMinutes(2);
+
+    public string Name => "ordering.overdue-sweep";
+    public TimeSpan Interval => TimeSpan.FromMinutes(5);
+
+    public async Task RunAsync(CancellationToken ct)
+    {
+        var cutoff = clock.GetUtcNow() - Grace;
+        // Open orders only (closed_at is null): the small partial index, not the order history.
+        var overdue = await db.Orders.AsNoTracking()
+            .Where(o => o.ClosedAt == null)
+            .Where(o => ((o.Status == OrderStatus.PendingAcceptance || o.Status == OrderStatus.AwaitingPriceApproval) && o.ExpiresAt < cutoff)
+                        || (o.Status == OrderStatus.Delivered && o.AutoCompleteAt < cutoff))
+            .Select(o => new { o.Id, o.Status })
+            .ToListAsync(ct);
+        foreach (var order in overdue)
+        {
+            if (order.Status == OrderStatus.PendingAcceptance) await bus.PublishAsync(new ExpireOrderIfNotAccepted(order.Id));
+            else if (order.Status == OrderStatus.AwaitingPriceApproval) await bus.PublishAsync(new ExpireQuoteIfNotAnswered(order.Id));
+            else await bus.PublishAsync(new AutoCompleteOrder(order.Id));
+        }
     }
 }

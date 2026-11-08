@@ -1,9 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Hybrid;
-using Wolverine;
 using SmartShop.Contracts.Catalog;
 using SmartShop.Contracts.Shops;
 using SmartShop.Infrastructure.Caching;
+using Wolverine;
 
 namespace SmartShop.Modules.Search.Handlers;
 
