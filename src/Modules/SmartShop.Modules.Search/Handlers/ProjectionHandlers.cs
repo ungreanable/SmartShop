@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Hybrid;
+using Wolverine;
 using SmartShop.Contracts.Catalog;
 using SmartShop.Contracts.Shops;
 using SmartShop.Infrastructure.Caching;
@@ -12,16 +13,16 @@ namespace SmartShop.Modules.Search.Handlers;
 /// </summary>
 public static class ShopProjectionHandler
 {
-    public static Task Handle(ShopCreated e, SearchDbContext db, IShopDirectory shops, HybridCache cache, TimeProvider clock, CancellationToken ct) => Refresh(e.ShopId, db, shops, cache, clock, ct);
-    public static Task Handle(ShopProfileUpdated e, SearchDbContext db, IShopDirectory shops, HybridCache cache, TimeProvider clock, CancellationToken ct) => Refresh(e.ShopId, db, shops, cache, clock, ct);
-    public static Task Handle(OpeningHoursChanged e, SearchDbContext db, IShopDirectory shops, HybridCache cache, TimeProvider clock, CancellationToken ct) => Refresh(e.ShopId, db, shops, cache, clock, ct);
-    public static Task Handle(ShopStatusChanged e, SearchDbContext db, IShopDirectory shops, HybridCache cache, TimeProvider clock, CancellationToken ct) => Refresh(e.ShopId, db, shops, cache, clock, ct);
-    public static Task Handle(ShopSuspended e, SearchDbContext db, IShopDirectory shops, HybridCache cache, TimeProvider clock, CancellationToken ct) => Refresh(e.ShopId, db, shops, cache, clock, ct);
-    public static Task Handle(ShopReinstated e, SearchDbContext db, IShopDirectory shops, HybridCache cache, TimeProvider clock, CancellationToken ct) => Refresh(e.ShopId, db, shops, cache, clock, ct);
-    public static Task Handle(DeliveryOptionsUpdated e, SearchDbContext db, IShopDirectory shops, HybridCache cache, TimeProvider clock, CancellationToken ct) => Refresh(e.ShopId, db, shops, cache, clock, ct);
-    public static Task Handle(ShopRatingChanged e, SearchDbContext db, IShopDirectory shops, HybridCache cache, TimeProvider clock, CancellationToken ct) => Refresh(e.ShopId, db, shops, cache, clock, ct);
+    public static Task Handle(ShopCreated e, SearchDbContext db, IShopDirectory shops, IMessageBus bus, TimeProvider clock, CancellationToken ct) => Refresh(e.ShopId, db, shops, bus, clock, ct);
+    public static Task Handle(ShopProfileUpdated e, SearchDbContext db, IShopDirectory shops, IMessageBus bus, TimeProvider clock, CancellationToken ct) => Refresh(e.ShopId, db, shops, bus, clock, ct);
+    public static Task Handle(OpeningHoursChanged e, SearchDbContext db, IShopDirectory shops, IMessageBus bus, TimeProvider clock, CancellationToken ct) => Refresh(e.ShopId, db, shops, bus, clock, ct);
+    public static Task Handle(ShopStatusChanged e, SearchDbContext db, IShopDirectory shops, IMessageBus bus, TimeProvider clock, CancellationToken ct) => Refresh(e.ShopId, db, shops, bus, clock, ct);
+    public static Task Handle(ShopSuspended e, SearchDbContext db, IShopDirectory shops, IMessageBus bus, TimeProvider clock, CancellationToken ct) => Refresh(e.ShopId, db, shops, bus, clock, ct);
+    public static Task Handle(ShopReinstated e, SearchDbContext db, IShopDirectory shops, IMessageBus bus, TimeProvider clock, CancellationToken ct) => Refresh(e.ShopId, db, shops, bus, clock, ct);
+    public static Task Handle(DeliveryOptionsUpdated e, SearchDbContext db, IShopDirectory shops, IMessageBus bus, TimeProvider clock, CancellationToken ct) => Refresh(e.ShopId, db, shops, bus, clock, ct);
+    public static Task Handle(ShopRatingChanged e, SearchDbContext db, IShopDirectory shops, IMessageBus bus, TimeProvider clock, CancellationToken ct) => Refresh(e.ShopId, db, shops, bus, clock, ct);
 
-    internal static async Task Refresh(Guid shopId, SearchDbContext db, IShopDirectory shops, HybridCache cache, TimeProvider clock, CancellationToken ct)
+    internal static async Task Refresh(Guid shopId, SearchDbContext db, IShopDirectory shops, IMessageBus bus, TimeProvider clock, CancellationToken ct)
     {
         var snapshot = await shops.GetListingSnapshotAsync(shopId, ct);
         if (snapshot is null) return;
@@ -48,17 +49,17 @@ public static class ShopProjectionHandler
 
         var itemNames = await db.Items.Where(i => i.ShopId == shopId && i.IsVisible).Select(i => i.Name).ToListAsync(ct);
         listing.SearchText = SearchText(listing, itemNames);
-        await cache.RemoveAsync(CacheKeys.PlantFeed(snapshot.PlantId), ct);
+        await bus.PublishAsync(new PlantFeedChanged(snapshot.PlantId));
     }
 
     /// <summary>One event for the whole village: renumber every listing from one query instead of a snapshot per shop.</summary>
-    public static async Task Handle(ShopsReordered e, SearchDbContext db, IShopDirectory shops, HybridCache cache, CancellationToken ct)
+    public static async Task Handle(ShopsReordered e, SearchDbContext db, IShopDirectory shops, IMessageBus bus, CancellationToken ct)
     {
         var order = await shops.GetDisplayOrderAsync(e.PlantId, ct);
         foreach (var listing in await db.Shops.Where(s => s.PlantId == e.PlantId).ToListAsync(ct))
             listing.DisplayOrder = order.GetValueOrDefault(listing.ShopId);
         await db.SaveChangesAsync(ct);
-        await cache.RemoveAsync(CacheKeys.PlantFeed(e.PlantId), ct);
+        await bus.PublishAsync(new PlantFeedChanged(e.PlantId));
     }
 
     internal static string SearchText(ShopListing l, IEnumerable<string> itemNames)
@@ -71,11 +72,11 @@ public static class ShopProjectionHandler
 
 public static class ItemProjectionHandler
 {
-    public static Task Handle(ItemChanged e, SearchDbContext db, ICatalogService catalog, HybridCache cache, CancellationToken ct) => Refresh(e.ItemId, db, catalog, cache, ct);
-    public static Task Handle(ItemSoldOut e, SearchDbContext db, ICatalogService catalog, HybridCache cache, CancellationToken ct) => Refresh(e.ItemId, db, catalog, cache, ct);
-    public static Task Handle(ItemBackInStock e, SearchDbContext db, ICatalogService catalog, HybridCache cache, CancellationToken ct) => Refresh(e.ItemId, db, catalog, cache, ct);
+    public static Task Handle(ItemChanged e, SearchDbContext db, ICatalogService catalog, IMessageBus bus, CancellationToken ct) => Refresh(e.ItemId, db, catalog, bus, ct);
+    public static Task Handle(ItemSoldOut e, SearchDbContext db, ICatalogService catalog, IMessageBus bus, CancellationToken ct) => Refresh(e.ItemId, db, catalog, bus, ct);
+    public static Task Handle(ItemBackInStock e, SearchDbContext db, ICatalogService catalog, IMessageBus bus, CancellationToken ct) => Refresh(e.ItemId, db, catalog, bus, ct);
 
-    private static async Task Refresh(Guid itemId, SearchDbContext db, ICatalogService catalog, HybridCache cache, CancellationToken ct)
+    private static async Task Refresh(Guid itemId, SearchDbContext db, ICatalogService catalog, IMessageBus bus, CancellationToken ct)
     {
         var snapshot = await catalog.GetListingSnapshotAsync(itemId, ct);
         if (snapshot is null) return;
@@ -98,6 +99,18 @@ public static class ItemProjectionHandler
             var names = await db.Items.Where(i => i.ShopId == snapshot.ShopId && i.IsVisible).Select(i => i.Name).ToListAsync(ct);
             shop.SearchText = ShopProjectionHandler.SearchText(shop, names);
         }
-        await cache.RemoveAsync(CacheKeys.PlantFeed(snapshot.PlantId), ct);
+        await bus.PublishAsync(new PlantFeedChanged(snapshot.PlantId));
     }
+}
+
+/// <summary>
+/// The village's cached home feed must be dropped only after the projection is committed: removing it inside the handler
+/// (before the commit) let a home request re-cache the old rows. Messages from a handler are sent after its commit.
+/// </summary>
+public sealed record PlantFeedChanged(Guid PlantId) : SmartShop.Contracts.IAsyncMessage;
+
+public static class PlantFeedChangedHandler
+{
+    public static ValueTask Handle(PlantFeedChanged message, HybridCache cache, CancellationToken ct) =>
+        cache.RemoveAsync(CacheKeys.PlantFeed(message.PlantId), ct);
 }

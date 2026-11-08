@@ -88,7 +88,9 @@ internal static class MerchantEndpoints
             };
             if (mode != OverrideMode.ForceClosed) await ctx.EnsureCanOpenAsync(shop, ct);
             shop.SetOverride(mode, req.Until, ctx.Now);
-            await ctx.SaveAsync(shop, ct, true);
+            // Always refresh the home feed's copy: the status evaluator only announces changes it notices itself, and a
+            // missed schedule boundary (e.g. during a redeploy) left a shop opened by hand listed as closed.
+            await ctx.SaveAsync(shop, ct, true, new ShopProfileUpdated(shop.PlantId, shop.Id));
             return ShopMapper.Status(shop, ctx.Now);
         });
 
@@ -96,7 +98,9 @@ internal static class MerchantEndpoints
         {
             var shop = await ctx.LoadAsync(shopId, ShopRole.Staff, ct);
             shop.SetBusy(req.Minutes, ctx.Now);
-            await ctx.SaveAsync(shop, ct, true);
+            // Always refresh the home feed's copy: the status evaluator only announces changes it notices itself, and a
+            // missed schedule boundary (e.g. during a redeploy) left a shop opened by hand listed as closed.
+            await ctx.SaveAsync(shop, ct, true, new ShopProfileUpdated(shop.PlantId, shop.Id));
             return ShopMapper.Status(shop, ctx.Now);
         });
 
